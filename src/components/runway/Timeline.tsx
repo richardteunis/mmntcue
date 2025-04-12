@@ -77,6 +77,7 @@ export interface TimelineProps {
   selectedCueId?: string | null;
   onCueChange?: (updatedCue: TimelineCue) => void;
   selectedCue?: TimelineCue | null;
+  cues?: TimelineCue[];
 }
 
 interface DeletedCue {
@@ -158,9 +159,49 @@ const Timeline: React.FC<TimelineProps> = ({
   onCueSelect, 
   selectedCueId,
   onCueChange,
-  selectedCue
+  selectedCue,
+  cues
 }) => {
   const [tracks, setTracks] = useState<TimelineTrack[]>(mockTracks);
+  
+  useEffect(() => {
+    if (cues) {
+      const trackMap = new Map<string, TimelineCue[]>();
+      
+      cues.forEach(cue => {
+        const trackName = cue.track || 'Default Track';
+        if (!trackMap.has(trackName)) {
+          trackMap.set(trackName, []);
+        }
+        trackMap.get(trackName)?.push(cue);
+      });
+      
+      const updatedTracks = Array.from(trackMap.entries()).map(([trackName, trackCues]) => {
+        const existingTrack = tracks.find(t => t.name === trackName);
+        
+        let trackType: 'audio' | 'video' | 'lighting' | 'stage' = 'audio';
+        if (trackCues.length > 0) {
+          trackType = trackCues[0].type;
+        } else if (existingTrack) {
+          trackType = existingTrack.type;
+        }
+        
+        return {
+          id: existingTrack?.id || `track-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+          name: trackName,
+          type: trackType,
+          cues: trackCues,
+          expanded: existingTrack?.expanded ?? true,
+          muted: existingTrack?.muted ?? false,
+          solo: existingTrack?.solo ?? false,
+          locked: existingTrack?.locked ?? false,
+        };
+      });
+      
+      setTracks(updatedTracks);
+    }
+  }, [cues]);
+  
   const [currentTime, setCurrentTime] = useState('00:00:00');
   const [isPlaying, setIsPlaying] = useState(false);
   const [timelineScale, setTimelineScale] = useState(1);
@@ -677,7 +718,6 @@ const Timeline: React.FC<TimelineProps> = ({
     });
   };
   
-  // Listen for custom events from the Dashboard component
   useEffect(() => {
     const handleTimelineUndo = () => {
       console.log("Timeline received undo event");
@@ -686,7 +726,6 @@ const Timeline: React.FC<TimelineProps> = ({
     
     const handleTimelineDeleteCue = (e: CustomEvent<{ cueId: string }>) => {
       console.log("Timeline received delete event", e.detail.cueId);
-      // Find which track contains this cue
       let trackId = '';
       tracks.forEach(track => {
         if (track.cues.some(cue => cue.id === e.detail.cueId)) {
@@ -731,9 +770,7 @@ const Timeline: React.FC<TimelineProps> = ({
     };
   }, [tracks, copiedCue]);
   
-  // Enhance the Timeline mode for better mouse control
   const handleTimelineMouseDown = (e: React.MouseEvent) => {
-    // Allow panning with middle mouse button or when pan mode is active
     if (e.button === 1 || (e.button === 0 && isPanModeActive) || e.altKey) {
       e.preventDefault();
       isDraggingTimelineRef.current = true;
@@ -854,7 +891,6 @@ const Timeline: React.FC<TimelineProps> = ({
     isPinchingRef.current = false;
   };
   
-  // Cleanup function for event listeners
   useEffect(() => {
     return () => {
       document.removeEventListener('mousemove', handleTimelineMouseMove);
