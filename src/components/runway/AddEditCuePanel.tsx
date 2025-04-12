@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,7 +47,9 @@ const DEFAULT_CUE: TimelineCue = {
   color: 'bg-runway-teal',
   autoFollow: false,
   notes: '',
-  effects: []
+  effects: [],
+  position: 0,
+  width: 100
 };
 
 const AddEditCuePanel: React.FC<AddEditCuePanelProps> = ({
@@ -63,12 +64,10 @@ const AddEditCuePanel: React.FC<AddEditCuePanelProps> = ({
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
   const [currentCue, setCurrentCue] = useState<TimelineCue>({...DEFAULT_CUE, track: defaultTrack});
 
-  // Setup form
   const form = useForm<TimelineCue>({
     defaultValues: {...DEFAULT_CUE, track: defaultTrack}
   });
 
-  // Set form mode and initialize currentCue based on editingCue
   useEffect(() => {
     if (editingCue) {
       setFormMode('edit');
@@ -114,7 +113,6 @@ const AddEditCuePanel: React.FC<AddEditCuePanelProps> = ({
   };
 
   const onSubmit = (data: TimelineCue) => {
-    // Generate a random ID if this is a new cue
     if (formMode === 'add' && !data.id) {
       data.id = `cue-${Date.now()}`;
     }
