@@ -165,7 +165,7 @@ const Timeline: React.FC<TimelineProps> = ({
   const [tracks, setTracks] = useState<TimelineTrack[]>(mockTracks);
   
   useEffect(() => {
-    if (cues) {
+    if (cues && cues.length > 0) {
       const trackMap = new Map<string, TimelineCue[]>();
       
       cues.forEach(cue => {
@@ -173,7 +173,10 @@ const Timeline: React.FC<TimelineProps> = ({
         if (!trackMap.has(trackName)) {
           trackMap.set(trackName, []);
         }
-        trackMap.get(trackName)?.push(cue);
+        const trackCues = trackMap.get(trackName);
+        if (trackCues) {
+          trackCues.push(cue);
+        }
       });
       
       const updatedTracks = Array.from(trackMap.entries()).map(([trackName, trackCues]) => {
@@ -361,6 +364,9 @@ const Timeline: React.FC<TimelineProps> = ({
     const rect = trackElement.getBoundingClientRect();
     const position = e.clientX - rect.left;
     
+    const track = tracks.find(t => t.id === trackId);
+    if (!track) return;
+    
     const newCue: TimelineCue = {
       id: `cue-${Date.now()}`,
       name: `New ${cueType} Cue`,
@@ -369,13 +375,28 @@ const Timeline: React.FC<TimelineProps> = ({
       duration: '0:30',
       position: position,
       width: 100,
+      track: track.name,
+      effects: [],
+      notes: '',
+      autoFollow: false,
+      color: track.type === 'audio' ? 'bg-runway-teal' : 
+             track.type === 'video' ? 'bg-runway-success' :
+             track.type === 'lighting' ? 'bg-runway-highlight' : 'bg-runway-warning'
     };
     
-    setTracks(tracks.map(track => 
-      track.id === trackId 
-        ? { ...track, cues: [...track.cues, newCue] } 
-        : track
-    ));
+    if (onCueChange) {
+      onCueChange(newCue);
+    } else {
+      setTracks(tracks.map(t => 
+        t.id === trackId 
+          ? { ...t, cues: [...t.cues, newCue] } 
+          : t
+      ));
+    }
+    
+    document.dispatchEvent(new CustomEvent('timeline-add-cue', { 
+      detail: { cue: newCue }
+    }));
     
     toast({
       title: "New cue created",

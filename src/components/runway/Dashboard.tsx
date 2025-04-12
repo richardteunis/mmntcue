@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
@@ -178,13 +179,13 @@ const Dashboard: React.FC = () => {
 
   // Handle save from add/edit panel
   const handleSaveCue = (cue: TimelineCue) => {
-    // If we're editing an existing cue
     if (editingCue) {
+      // If we're editing an existing cue
       setCues(prevCues => 
         prevCues.map(existingCue => existingCue.id === cue.id ? cue : existingCue)
       );
       setSelectedCue(cue);
-      setIsAddEditPanelOpen(false);
+      setSelectedCueId(cue.id);
       toast({
         title: "Cue updated",
         description: `${cue.name} has been updated`,
@@ -192,12 +193,15 @@ const Dashboard: React.FC = () => {
     } else {
       // If we're adding a new cue
       setCues(prevCues => [...prevCues, cue]);
-      setIsAddEditPanelOpen(false);
+      setSelectedCue(cue);
+      setSelectedCueId(cue.id);
       toast({
         title: "Cue added",
         description: `${cue.name} has been added to the timeline`,
       });
     }
+    
+    setIsAddEditPanelOpen(false);
   };
   
   // Listen for custom events from the timeline and cue panel
