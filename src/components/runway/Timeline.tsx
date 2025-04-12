@@ -844,6 +844,208 @@ const Timeline: React.FC<TimelineProps> = ({
     }
   };
   
+  const handleCueMouseDown = (e: React.MouseEvent, cueId: string, position: number) => {
+    e.stopPropagation();
+    
+    // Don't initiate drag if track is locked
+    let isLocked = false;
+    tracks.forEach(track => {
+      if (track.locked && track.cues.some(cue => cue.id === cueId)) {
+        isLocked = true;
+        return;
+      }
+    });
+    
+    if (isLocked) {
+      toast({
+        title: "Track locked",
+        description: "Cannot move cues on a locked track",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setDraggedCue({
+      cueId,
+      startX: e.clientX,
+      initialPosition: position
+    });
+    
+    document.addEventListener('mousemove', handleCueMouseMove);
+    document.addEventListener('mouseup', handleCueMouseUp);
+    
+    // Set the selected cue when starting to drag
+    if (onCueSelect) {
+      let selectedCueDetails: TimelineCue | null = null;
+      
+      tracks.forEach(track => {
+        const found = track.cues.find(cue => cue.id === cueId);
+        if (found) {
+          selectedCueDetails = {
+            ...found,
+            track: track.name
+          };
+        }
+      });
+      
+      if (selectedCueDetails) {
+        onCueSelect(cueId, selectedCueDetails);
+      }
+    }
+  };
+  
+  const handleCueMouseMove = (e: MouseEvent) => {
+    if (!draggedCue || !timelineRef.current) return;
+    
+    const deltaX = e.clientX - draggedCue.startX;
+    let newPosition = Math.max(0, draggedCue.initialPosition + deltaX);
+    
+    // Update the position in the state
+    setTracks(prevTracks => {
+      return prevTracks.map(track => {
+        const cueIndex = track.cues.findIndex(cue => cue.id === draggedCue.cueId);
+        if (cueIndex === -1) return track;
+        
+        const updatedCues = [...track.cues];
+        updatedCues[cueIndex] = {
+          ...updatedCues[cueIndex],
+          position: newPosition,
+          time: calculateTimeFromPosition(newPosition)
+        };
+        
+        return {
+          ...track,
+          cues: updatedCues
+        };
+      });
+    });
+  };
+  
+  const handleCueMouseUp = () => {
+    if (!draggedCue) return;
+    
+    // Find the updated cue
+    let updatedCue: TimelineCue | null = null;
+    let trackName = '';
+    
+    tracks.forEach(track => {
+      track.cues.forEach(cue => {
+        if (cue.id === draggedCue.cueId) {
+          updatedCue = { ...cue, track: track.name };
+          trackName = track.name;
+        }
+      });
+    });
+    
+    // Notify parent about the change
+    if (updatedCue && onCueChange) {
+      onCueChange(updatedCue);
+      
+      toast({
+        title: "Cue moved",
+        description: `${updatedCue.name} moved to ${updatedCue.time}`,
+      });
+    }
+    
+    setDraggedCue(null);
+    
+    document.removeEventListener('mousemove', handleCueMouseMove);
+    document.removeEventListener('mouseup', handleCueMouseUp);
+  };
+  
+  const handleCopyCue = (cueId: string) => {
+    if (!cueId) return;
+    
+    const cue = tracks.flatMap(track => track.cues).find(cue => cue.id === cueId);
+    
+    if (cue) {
+      setCopiedCue({...cue});
+      
+      toast({
+        title: "Cue copied",
+        description: `${cue.name} copied to clipboard`,
+      });
+    }
+  };
+  
+  const handlePasteCue = () => {
+    if (!copiedCue) {
+      toast({
+        title: "Nothing to paste",
+        description: "Copy a cue first before pasting",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const newCue: TimelineCue = {
+      ...copiedCue,
+      id: `cue-${Date.now()}`,
+      name: `${copiedCue.name} (copy)`,
+      position: copiedCue.position + 20,
+    };
+    
+    setTracks(prevTracks => {
+      return prevTracks.map(track => {
+        if (track.name === copiedCue.track) {
+          return {
+            ...track,
+            cues: [...track.cues, newCue]
+          };
+        }
+        return track;
+      });
+    });
+    
+    toast({
+      title: "Cue pasted",
+      description: `${newCue.name} added to timeline`,
+    });
+  };
+  
+  const handleMouseWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        handleZoomIn();
+      } else {
+        handleZoomOut();
+      }
+    }
+  };
+  
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // Don't process key commands if user is in edit mode (typing in input fields)
+    if (setIsInEditMode && document.activeElement && 
+        (document.activeElement.tagName === 'INPUT' || 
+         document.activeElement.tagName === 'TEXTAREA')) {
+      return;
+    }
+    
+    if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleUndoDelete();
+    }
+    
+    if (e.key === 'c' && (e.ctrlKey || e.metaKey) && selectedCueId) {
+      e.preventDefault();
+      handleCopyCue(selectedCueId);
+      
+      document.dispatchEvent(new CustomEvent('timeline-copy-cue', {
+        detail: { cue: selectedCue }
+      }));
+    }
+    
+    if (e.key === 'v' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handlePasteCue();
+      
+      document.dispatchEvent(new CustomEvent('timeline-paste-cue', {
+        detail: { cue: copiedCue }
+      }));
+    }
+  };
+  
   useEffect(() => {
     const handleTimelineUndo = () => {
       console.log("Timeline received undo event");
@@ -911,10 +1113,10 @@ const Timeline: React.FC<TimelineProps> = ({
   const handleTimelineMouseMove = (e: MouseEvent) => {
     if (!isDraggingTimelineRef.current || !scrollAreaRef.current) return;
     
-    const deltaX = lastClientXRef.current - e.clientX;
+    const deltaX = e.clientX - lastClientXRef.current;
     lastClientXRef.current = e.clientX;
     
-    scrollAreaRef.current.scrollLeft += deltaX;
+    scrollAreaRef.current.scrollLeft -= deltaX;
   };
   
   const handleTimelineMouseUp = () => {
@@ -928,9 +1130,9 @@ const Timeline: React.FC<TimelineProps> = ({
   const handlePasteCue = () => {
     if (!copiedCue) {
       toast({
-        title: "No cue to paste",
+        title: "Nothing to paste",
         description: "Copy a cue first before pasting",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
@@ -938,39 +1140,21 @@ const Timeline: React.FC<TimelineProps> = ({
     const newCue: TimelineCue = {
       ...copiedCue,
       id: `cue-${Date.now()}`,
-      name: `${copiedCue.name} (Copy)`,
+      name: `${copiedCue.name} (copy)`,
       position: copiedCue.position + 20,
     };
     
-    if (onCueChange) {
-      onCueChange(newCue);
-    } else {
-      // Find the track that matches the copied cue's track name
-      const trackToAddTo = tracks.find(t => t.name === newCue.track);
-      
-      if (trackToAddTo) {
-        setTracks(prevTracks => 
-          prevTracks.map(track => 
-            track.id === trackToAddTo.id
-              ? { ...track, cues: [...track.cues, newCue] }
-              : track
-          )
-        );
-      } else {
-        // If track not found, add to first track
-        setTracks(prevTracks => {
-          if (prevTracks.length === 0) return prevTracks;
-          
-          const updatedTracks = [...prevTracks];
-          updatedTracks[0] = {
-            ...updatedTracks[0],
-            cues: [...updatedTracks[0].cues, newCue]
+    setTracks(prevTracks => {
+      return prevTracks.map(track => {
+        if (track.name === copiedCue.track) {
+          return {
+            ...track,
+            cues: [...track.cues, newCue]
           };
-          
-          return updatedTracks;
-        });
-      }
-    }
+        }
+        return track;
+      });
+    });
     
     toast({
       title: "Cue pasted",
@@ -1242,6 +1426,7 @@ const Timeline: React.FC<TimelineProps> = ({
             ref={timelineRef}
             onClick={handleTimelineClick}
             onMouseDown={handleTimelineMouseDown}
+            onWheel={handleMouseWheel}
           >
             <div className="min-w-[2000px]">
               {tracks.map(track => renderTrack(track))}
