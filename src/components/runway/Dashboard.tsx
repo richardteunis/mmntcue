@@ -4,10 +4,13 @@ import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import Timeline, { TimelineCue } from './Timeline';
 import CuePanel from './CuePanel';
+import AddEditCuePanel from './AddEditCuePanel';
 import CollaborationIndicator from './CollaborationIndicator';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
+import { Button } from '@/components/ui/button';
+import { PlusCircle, Edit } from 'lucide-react';
 
 // Define a proper type for users that includes position
 type CollaborationUser = {
@@ -51,12 +54,17 @@ const mockUsers: CollaborationUser[] = [
   }
 ];
 
+// Available tracks for cues
+const availableTracks = ['audio', 'video', 'lighting', 'stage', 'effects'];
+
 const Dashboard: React.FC = () => {
   const [showName, setShowName] = useState('Summer Festival 2025');
   const [users, setUsers] = useState<CollaborationUser[]>(mockUsers);
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
   const [selectedCue, setSelectedCue] = useState<TimelineCue | null>(null);
   const [copiedCue, setCopiedCue] = useState<TimelineCue | null>(null);
+  const [isAddEditPanelOpen, setIsAddEditPanelOpen] = useState(false);
+  const [editingCue, setEditingCue] = useState<TimelineCue | null>(null);
   const { toast } = useToast();
   
   // Handle cue selection
@@ -95,6 +103,61 @@ const Dashboard: React.FC = () => {
       description: `A copy of the cue has been created`,
     });
   };
+
+  // Open add cue panel
+  const handleAddCue = () => {
+    setEditingCue(null);
+    setIsAddEditPanelOpen(true);
+  };
+
+  // Open edit cue panel
+  const handleEditCue = () => {
+    if (selectedCue) {
+      setEditingCue(selectedCue);
+      setIsAddEditPanelOpen(true);
+    } else {
+      toast({
+        title: "No cue selected",
+        description: "Please select a cue to edit",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle save from add/edit panel
+  const handleSaveCue = (cue: TimelineCue) => {
+    // If we're editing an existing cue
+    if (editingCue) {
+      setSelectedCue(cue);
+      // Dispatch an event to tell Timeline to update the cue
+      document.dispatchEvent(new CustomEvent("timeline-update-cue", { 
+        detail: { cue } 
+      }));
+    } else {
+      // If we're adding a new cue
+      // Dispatch an event to tell Timeline to add the cue
+      document.dispatchEvent(new CustomEvent("timeline-add-cue", { 
+        detail: { cue } 
+      }));
+    }
+  };
+  
+  // Listen for custom events from the timeline and cue panel
+  useEffect(() => {
+    const handleEditCueEvent = (e: Event) => {
+      if (e instanceof CustomEvent) {
+        const { cue } = e.detail;
+        setEditingCue(cue);
+        setIsAddEditPanelOpen(true);
+      }
+    };
+    
+    document.addEventListener('timeline-edit-cue', handleEditCueEvent);
+    
+    return () => {
+      document.removeEventListener('timeline-edit-cue', handleEditCueEvent);
+    };
+  }, []);
   
   // Handle keyboard shortcuts at the Dashboard level to ensure they work globally
   useEffect(() => {
@@ -145,6 +208,20 @@ const Dashboard: React.FC = () => {
         document.dispatchEvent(new CustomEvent("timeline-paste-cue", { 
           detail: { cue: copiedCue } 
         }));
+      }
+
+      // Add cue shortcut (n key)
+      if (e.key === "n" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        console.log("Add cue shortcut detected");
+        handleAddCue();
+      }
+
+      // Edit cue shortcut (e key)
+      if (e.key === "e" && (e.ctrlKey || e.metaKey) && selectedCue) {
+        e.preventDefault();
+        console.log("Edit cue shortcut detected");
+        handleEditCue();
       }
     };
     
@@ -259,13 +336,25 @@ const Dashboard: React.FC = () => {
           <div className="flex flex-1 overflow-hidden relative">
             <ResizablePanelGroup direction="horizontal">
               <ResizablePanel defaultSize={75} minSize={50} id="timeline-panel">
-                <Timeline 
-                  className="h-full" 
-                  onCueSelect={handleCueSelect}
-                  selectedCueId={selectedCueId}
-                  onCueChange={handleCueUpdate}
-                  selectedCue={selectedCue}
-                />
+                <div className="h-full flex flex-col">
+                  <div className="p-2 border-b border-border flex items-center gap-2">
+                    <Button onClick={handleAddCue} size="sm">
+                      <PlusCircle size={16} className="mr-1.5" /> Add Cue
+                    </Button>
+                    {selectedCue && (
+                      <Button onClick={handleEditCue} size="sm" variant="outline">
+                        <Edit size={16} className="mr-1.5" /> Edit Cue
+                      </Button>
+                    )}
+                  </div>
+                  <Timeline 
+                    className="flex-1" 
+                    onCueSelect={handleCueSelect}
+                    selectedCueId={selectedCueId}
+                    onCueChange={handleCueUpdate}
+                    selectedCue={selectedCue}
+                  />
+                </div>
               </ResizablePanel>
               
               {selectedCueId && (
@@ -294,6 +383,15 @@ const Dashboard: React.FC = () => {
             ))}
           </div>
         </div>
+        
+        {/* Add/Edit Cue Panel */}
+        <AddEditCuePanel 
+          isOpen={isAddEditPanelOpen}
+          onClose={() => setIsAddEditPanelOpen(false)}
+          onSave={handleSaveCue}
+          editingCue={editingCue}
+          tracks={availableTracks}
+        />
       </div>
     </TooltipProvider>
   );

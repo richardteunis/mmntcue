@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Trash2, Scissors, Clock, Copy, ClipboardCopy } from 'lucide-react';
+import { PlusCircle, Trash2, Scissors, Clock, Copy, ClipboardCopy, Edit } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TimelineCue } from './Timeline';
 import { useToast } from '@/hooks/use-toast';
@@ -104,9 +104,6 @@ const CuePanel: React.FC<CuePanelProps> = ({
   const handleCopyCue = () => {
     if (!selectedCueId) return;
     
-    // We'll handle the actual copy logic in the Timeline component
-    // This just informs the user about the copy action via toast
-    
     toast({
       title: "Cue copied",
       description: `${selectedCue.name} copied to clipboard`
@@ -117,6 +114,13 @@ const CuePanel: React.FC<CuePanelProps> = ({
     navigator.clipboard.writeText(cueData).catch(err => {
       console.error("Could not copy to clipboard:", err);
     });
+  };
+
+  const handleEditCue = () => {
+    // Trigger the edit cue panel via a custom event
+    document.dispatchEvent(new CustomEvent("timeline-edit-cue", { 
+      detail: { cue: selectedCue } 
+    }));
   };
   
   const getTypeColor = (type: string) => {
@@ -157,6 +161,9 @@ const CuePanel: React.FC<CuePanelProps> = ({
             </Button>
             <Button size="sm" variant="ghost" onClick={handleDuplicateCue}>
               <Copy size={16} />
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleEditCue}>
+              <Edit size={16} />
             </Button>
             <Button size="sm" variant="ghost" className="text-destructive" onClick={handleDeleteCue}>
               <Trash2 size={16} />
