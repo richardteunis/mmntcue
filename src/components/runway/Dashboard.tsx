@@ -7,6 +7,7 @@ import CuePanel from './CuePanel';
 import CollaborationIndicator from './CollaborationIndicator';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 
 // Define a proper type for users that includes position
 type CollaborationUser = {
@@ -110,8 +111,15 @@ const Dashboard: React.FC = () => {
           <TopBar showName={showName} />
           
           <div className="flex flex-1 overflow-hidden relative">
-            <Timeline className="flex-1" />
-            <CuePanel />
+            <ResizablePanelGroup direction="horizontal">
+              <ResizablePanel defaultSize={80} minSize={60}>
+                <Timeline className="h-full" />
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={20} minSize={15}>
+                <CuePanel />
+              </ResizablePanel>
+            </ResizablePanelGroup>
             
             {/* Collaboration indicators */}
             {users.map(user => (

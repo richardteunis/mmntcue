@@ -11,13 +11,35 @@ import {
   RotateCcw,
   Scissors,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  Save,
+  Copy,
+  Trash2,
+  PlusCircle,
+  Layers,
+  Zap,
+  Wand2,
+  PenLine,
+  Filter
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
+} from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
 
 interface TimelineCue {
   id: string;
@@ -27,6 +49,7 @@ interface TimelineCue {
   duration: string;
   position: number;
   width: number;
+  notes?: string;
 }
 
 interface TimelineTrack {
@@ -35,6 +58,9 @@ interface TimelineTrack {
   type: 'audio' | 'video' | 'lighting' | 'stage';
   cues: TimelineCue[];
   expanded: boolean;
+  muted?: boolean;
+  solo?: boolean;
+  locked?: boolean;
 }
 
 interface TimelineProps {
@@ -90,6 +116,10 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedCue, setSelectedCue] = useState<string | null>(null);
   const [timelineScale, setTimelineScale] = useState(1);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [trackFilters, setTrackFilters] = useState<string[]>([]);
+  const [showTimelineGrid, setShowTimelineGrid] = useState(true);
+  const [snapToGrid, setSnapToGrid] = useState(true);
   const timelineRef = useRef<HTMLDivElement>(null);
   const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeInSecondsRef = useRef(0);
@@ -341,11 +371,180 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
   };
   
   const handleZoomIn = () => {
-    setTimelineScale(prev => Math.min(prev * 1.2, 3));
+    setTimelineScale(prev => {
+      const newScale = Math.min(prev * 1.2, 3);
+      toast({
+        title: "Timeline zoomed in",
+        description: `Current zoom: ${Math.round(newScale * 100)}%`,
+      });
+      return newScale;
+    });
   };
   
   const handleZoomOut = () => {
-    setTimelineScale(prev => Math.max(prev / 1.2, 0.5));
+    setTimelineScale(prev => {
+      const newScale = Math.max(prev / 1.2, 0.5);
+      toast({
+        title: "Timeline zoomed out",
+        description: `Current zoom: ${Math.round(newScale * 100)}%`,
+      });
+      return newScale;
+    });
+  };
+  
+  const toggleTrackMute = (trackId: string) => {
+    setTracks(tracks.map(track => 
+      track.id === trackId ? { ...track, muted: !track.muted } : track
+    ));
+    
+    const trackName = tracks.find(track => track.id === trackId)?.name;
+    toast({
+      title: "Track muted",
+      description: `${trackName} ${tracks.find(track => track.id === trackId)?.muted ? 'unmuted' : 'muted'}`,
+    });
+  };
+  
+  const toggleTrackSolo = (trackId: string) => {
+    setTracks(tracks.map(track => 
+      track.id === trackId ? { ...track, solo: !track.solo } : track
+    ));
+    
+    const trackName = tracks.find(track => track.id === trackId)?.name;
+    toast({
+      title: "Track soloed",
+      description: `${trackName} ${tracks.find(track => track.id === trackId)?.solo ? 'unsoloed' : 'soloed'}`,
+    });
+  };
+  
+  const toggleTrackLock = (trackId: string) => {
+    setTracks(tracks.map(track => 
+      track.id === trackId ? { ...track, locked: !track.locked } : track
+    ));
+    
+    const trackName = tracks.find(track => track.id === trackId)?.name;
+    toast({
+      title: "Track locked",
+      description: `${trackName} ${tracks.find(track => track.id === trackId)?.locked ? 'unlocked' : 'locked'}`,
+    });
+  };
+  
+  const duplicateCue = (cueId: string) => {
+    if (!cueId) return;
+    
+    setTracks(currentTracks => {
+      return currentTracks.map(track => {
+        const cueIndex = track.cues.findIndex(cue => cue.id === cueId);
+        if (cueIndex === -1) return track;
+        
+        const cue = track.cues[cueIndex];
+        const newCue = {
+          ...cue,
+          id: `cue-${Date.now()}`,
+          name: `${cue.name} (copy)`,
+          position: cue.position + cue.width + 10
+        };
+        
+        return {
+          ...track,
+          cues: [...track.cues, newCue]
+        };
+      });
+    });
+    
+    toast({
+      title: "Cue duplicated",
+      description: "A copy of the cue has been created",
+    });
+  };
+  
+  const deleteCue = (cueId: string) => {
+    if (!cueId) return;
+    
+    let deletedCueName = '';
+    
+    setTracks(currentTracks => {
+      return currentTracks.map(track => {
+        const cueIndex = track.cues.findIndex(cue => cue.id === cueId);
+        if (cueIndex === -1) return track;
+        
+        deletedCueName = track.cues[cueIndex].name;
+        
+        return {
+          ...track,
+          cues: track.cues.filter(cue => cue.id !== cueId)
+        };
+      });
+    });
+    
+    if (selectedCue === cueId) {
+      setSelectedCue(null);
+    }
+    
+    toast({
+      title: "Cue deleted",
+      description: `${deletedCueName} has been removed`,
+      variant: "destructive",
+    });
+  };
+  
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (!selectedCue) return;
+    
+    if (e.key === "Delete") {
+      deleteCue(selectedCue);
+    }
+    
+    if (e.key === "d" && e.ctrlKey) {
+      e.preventDefault();
+      duplicateCue(selectedCue);
+    }
+    
+    if (e.key === "x" && e.ctrlKey) {
+      deleteCue(selectedCue);
+    }
+  };
+  
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedCue]);
+  
+  const filteredTracks = tracks.filter(track => {
+    const matchesSearch = searchFilter === '' || 
+      track.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      track.cues.some(cue => cue.name.toLowerCase().includes(searchFilter.toLowerCase()));
+    
+    const matchesType = trackFilters.length === 0 || trackFilters.includes(track.type);
+    
+    return matchesSearch && matchesType;
+  });
+  
+  const toggleTrackFilter = (type: 'audio' | 'video' | 'lighting' | 'stage') => {
+    setTrackFilters(current => {
+      if (current.includes(type)) {
+        return current.filter(t => t !== type);
+      } else {
+        return [...current, type];
+      }
+    });
+  };
+  
+  const getFilterButtonClass = (type: 'audio' | 'video' | 'lighting' | 'stage') => {
+    const baseClass = "px-2 py-1 text-xs rounded";
+    const isActive = trackFilters.includes(type);
+    
+    switch (type) {
+      case 'audio':
+        return cn(baseClass, isActive ? "bg-runway-teal text-white" : "bg-runway-teal/20 hover:bg-runway-teal/30");
+      case 'video':
+        return cn(baseClass, isActive ? "bg-runway-success text-white" : "bg-runway-success/20 hover:bg-runway-success/30");
+      case 'lighting':
+        return cn(baseClass, isActive ? "bg-runway-highlight text-white" : "bg-runway-highlight/20 hover:bg-runway-highlight/30");
+      case 'stage':
+        return cn(baseClass, isActive ? "bg-runway-warning text-white" : "bg-runway-warning/20 hover:bg-runway-warning/30");
+    }
   };
   
   const getPlayheadPosition = () => {
@@ -366,57 +565,142 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
             {isPlaying ? 'Pause' : 'Play'}
           </Button>
           
-          <Button 
-            size="sm" 
-            variant="outline" 
-            className="gap-1"
-            onClick={handleNextCue}
-          >
-            <SkipForward size={14} />
-            Next Cue
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="gap-1"
+                onClick={handleNextCue}
+              >
+                <SkipForward size={14} />
+                Next Cue
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Jump to next cue (Shift+Right)</TooltipContent>
+          </Tooltip>
           
-          <Button 
-            size="sm" 
-            variant="outline" 
-            className="gap-1"
-            onClick={handleReset}
-          >
-            <RotateCcw size={14} />
-            Reset
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="gap-1"
+                onClick={handleReset}
+              >
+                <RotateCcw size={14} />
+                Reset
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Reset timeline (Home)</TooltipContent>
+          </Tooltip>
           
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1"
-            onClick={handleSplitCue}
-          >
-            <Scissors size={14} />
-            Split
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                onClick={handleSplitCue}
+              >
+                <Scissors size={14} />
+                Split
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Split selected cue at current time (S)</TooltipContent>
+          </Tooltip>
         </div>
         
         <Separator orientation="vertical" className="h-6" />
         
         <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleZoomOut}
-          >
-            <ZoomOut size={14} />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleZoomIn}
-          >
-            <ZoomIn size={14} />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleZoomOut}
+              >
+                <ZoomOut size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Zoom out (Ctrl+-)</TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleZoomIn}
+              >
+                <ZoomIn size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Zoom in (Ctrl++)</TooltipContent>
+          </Tooltip>
         </div>
         
         <div className="flex-1" />
+        
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Input
+              placeholder="Search tracks and cues..."
+              className="h-8 w-64 pl-8"
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+            />
+            <Filter size={14} className="absolute left-2.5 top-2 text-muted-foreground" />
+            {searchFilter && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-1 top-1 h-6 w-6 p-0"
+                onClick={() => setSearchFilter('')}
+              >
+                <ChevronDown size={14} />
+              </Button>
+            )}
+          </div>
+          
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              className={getFilterButtonClass('audio')}
+              onClick={() => toggleTrackFilter('audio')}
+            >
+              Audio
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className={getFilterButtonClass('video')}
+              onClick={() => toggleTrackFilter('video')}
+            >
+              Video
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className={getFilterButtonClass('lighting')}
+              onClick={() => toggleTrackFilter('lighting')}
+            >
+              Lighting
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className={getFilterButtonClass('stage')}
+              onClick={() => toggleTrackFilter('stage')}
+            >
+              Stage
+            </Button>
+          </div>
+        </div>
+        
+        <Separator orientation="vertical" className="h-6" />
         
         <div className="flex items-center gap-1">
           <Clock size={16} className="text-muted-foreground" />
@@ -426,23 +710,124 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
       
       <div className="flex flex-1 overflow-hidden">
         <div className="w-56 border-r border-border overflow-y-auto">
-          {tracks.map(track => (
+          <div className="sticky top-0 z-10 bg-background backdrop-blur bg-opacity-80">
+            <div className="flex justify-between items-center px-3 py-2 border-b border-border">
+              <span className="font-semibold">Tracks</span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                    <PlusCircle size={14} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => addNewTrack('audio')}>
+                    <div className="w-2 h-2 rounded-full bg-runway-teal mr-2" />
+                    Audio Track
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => addNewTrack('video')}>
+                    <div className="w-2 h-2 rounded-full bg-runway-success mr-2" />
+                    Video Track
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => addNewTrack('lighting')}>
+                    <div className="w-2 h-2 rounded-full bg-runway-highlight mr-2" />
+                    Lighting Track
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => addNewTrack('stage')}>
+                    <div className="w-2 h-2 rounded-full bg-runway-warning mr-2" />
+                    Stage Track
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+          
+          {filteredTracks.map(track => (
             <div key={track.id} className="border-b border-border">
               <div 
                 className={cn(
                   "flex items-center px-3 py-2 hover:bg-muted cursor-pointer",
                   track.expanded ? "bg-muted/50" : ""
                 )}
-                onClick={() => toggleTrackExpand(track.id)}
               >
-                {track.expanded ? 
-                  <ChevronDown size={16} className="mr-2 text-muted-foreground" /> : 
-                  <ChevronRight size={16} className="mr-2 text-muted-foreground" />
-                }
-                <span className="font-medium">{track.name}</span>
+                <div 
+                  className="flex-1 flex items-center"
+                  onClick={() => toggleTrackExpand(track.id)}
+                >
+                  {track.expanded ? 
+                    <ChevronDown size={16} className="mr-2 text-muted-foreground" /> : 
+                    <ChevronRight size={16} className="mr-2 text-muted-foreground" />
+                  }
+                  <div
+                    className={cn(
+                      "w-2 h-2 rounded-full mr-2",
+                      track.type === 'audio' && "bg-runway-teal",
+                      track.type === 'video' && "bg-runway-success",
+                      track.type === 'lighting' && "bg-runway-highlight",
+                      track.type === 'stage' && "bg-runway-warning",
+                    )}
+                  />
+                  <span className={cn(
+                    "font-medium",
+                    track.muted && "text-muted-foreground line-through",
+                    track.locked && "text-muted-foreground"
+                  )}>
+                    {track.name}
+                  </span>
+                </div>
+                
+                <div className="flex gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={cn("h-6 w-6 p-0", track.muted && "text-destructive")}
+                        onClick={() => toggleTrackMute(track.id)}
+                      >
+                        <Zap size={14} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{track.muted ? "Unmute" : "Mute"}</TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={cn("h-6 w-6 p-0", track.solo && "text-amber-400")}
+                        onClick={() => toggleTrackSolo(track.id)}
+                      >
+                        <Wand2 size={14} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{track.solo ? "Unsolo" : "Solo"}</TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={cn("h-6 w-6 p-0", track.locked && "text-amber-500")}
+                        onClick={() => toggleTrackLock(track.id)}
+                      >
+                        <PenLine size={14} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{track.locked ? "Unlock" : "Lock"}</TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
+              
+              {track.expanded && (
+                <div className="pl-8 pr-2 py-1 bg-muted/30 text-xs text-muted-foreground">
+                  {track.cues.length} cues · {track.type}
+                </div>
+              )}
             </div>
           ))}
+          
           <Button 
             variant="ghost" 
             className="w-full justify-start mt-2 ml-2"
@@ -453,7 +838,7 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
           </Button>
         </div>
         
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden relative">
           <div className="h-8 border-b border-border sticky top-0 bg-background pl-2 flex items-end text-xs text-muted-foreground">
             {Array.from({ length: 10 }).map((_, i) => (
               <div key={i} className="absolute" style={{ 
@@ -476,7 +861,7 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
             
             <ScrollArea className="h-[calc(100vh-12rem)]" onClick={handleTimelineClick}>
               <div ref={timelineRef} className="relative min-h-full min-w-[1000px]">
-                {tracks.map(track => (
+                {filteredTracks.map(track => (
                   <div key={track.id} className="relative">
                     <div 
                       className={cn(
@@ -484,7 +869,9 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
                         track.type === 'audio' && "bg-runway-teal/10",
                         track.type === 'video' && "bg-runway-success/10",
                         track.type === 'lighting' && "bg-runway-highlight/10",
-                        track.type === 'stage' && "bg-runway-warning/10"
+                        track.type === 'stage' && "bg-runway-warning/10",
+                        track.muted && "opacity-50",
+                        track.locked && "bg-muted/20"
                       )}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleTrackDrop(e, track.id)}
@@ -509,11 +896,27 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
                             e.stopPropagation();
                             handleCueClick(cue.id);
                           }}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            handleCueClick(cue.id);
+                          }}
                         >
                           <div className="font-medium truncate">{cue.name}</div>
                           <div className="text-xs opacity-90 truncate">{cue.time} ({cue.duration})</div>
                         </div>
                       ))}
+                      
+                      {showTimelineGrid && (
+                        <div className="absolute inset-0 pointer-events-none">
+                          {Array.from({ length: 30 }).map((_, i) => (
+                            <div 
+                              key={i}
+                              className="absolute h-full border-l border-border/20"
+                              style={{ left: `${i * 30 * timelineScale}px` }}
+                            ></div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
