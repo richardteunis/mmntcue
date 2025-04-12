@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import Timeline, { TimelineCue } from './Timeline';
 import CuePanel from './CuePanel';
 import AddEditCuePanel from './AddEditCuePanel';
+import TrackEditPanel from './TrackEditPanel';
 import CollaborationIndicator from './CollaborationIndicator';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +23,19 @@ type CollaborationUser = {
   position?: { x: number; y: number };
   targetPosition?: { x: number; y: number };
 };
+
+// Define Timeline Track
+export interface TimelineTrack {
+  id: string;
+  name: string;
+  type: 'audio' | 'video' | 'lighting' | 'stage';
+  cues: TimelineCue[];
+  expanded: boolean;
+  muted?: boolean;
+  solo?: boolean;
+  locked?: boolean;
+  color?: string;
+}
 
 const mockUsers: CollaborationUser[] = [
   { 
@@ -89,6 +102,42 @@ const initialCues: TimelineCue[] = [
   }
 ];
 
+// Initial tracks
+const initialTracks: TimelineTrack[] = [
+  {
+    id: 'track-1',
+    name: 'Audio Main',
+    type: 'audio',
+    expanded: true,
+    cues: [],
+    color: 'bg-runway-teal'
+  },
+  {
+    id: 'track-2',
+    name: 'Video Wall',
+    type: 'video',
+    expanded: true,
+    cues: [],
+    color: 'bg-runway-success'
+  },
+  {
+    id: 'track-3',
+    name: 'Stage Lighting',
+    type: 'lighting',
+    expanded: true,
+    cues: [],
+    color: 'bg-runway-highlight'
+  },
+  {
+    id: 'track-4',
+    name: 'Stage Direction',
+    type: 'stage',
+    expanded: true,
+    cues: [],
+    color: 'bg-runway-warning'
+  },
+];
+
 const Dashboard: React.FC = () => {
   const [showName, setShowName] = useState('Summer Festival 2025');
   const [users, setUsers] = useState<CollaborationUser[]>(mockUsers);
@@ -96,8 +145,12 @@ const Dashboard: React.FC = () => {
   const [selectedCue, setSelectedCue] = useState<TimelineCue | null>(null);
   const [copiedCue, setCopiedCue] = useState<TimelineCue | null>(null);
   const [isAddEditPanelOpen, setIsAddEditPanelOpen] = useState(false);
+  const [isTrackEditPanelOpen, setIsTrackEditPanelOpen] = useState(false);
   const [editingCue, setEditingCue] = useState<TimelineCue | null>(null);
+  const [editingTrack, setEditingTrack] = useState<TimelineTrack | null>(null);
   const [cues, setCues] = useState<TimelineCue[]>(initialCues);
+  const [tracks, setTracks] = useState<TimelineTrack[]>(initialTracks);
+  const [isInEditMode, setIsInEditMode] = useState(false);
   const { toast } = useToast();
   
   // Handle cue selection
@@ -168,6 +221,7 @@ const Dashboard: React.FC = () => {
     if (selectedCue) {
       setEditingCue(selectedCue);
       setIsAddEditPanelOpen(true);
+      setIsInEditMode(true);
     } else {
       toast({
         title: "No cue selected",
@@ -175,6 +229,44 @@ const Dashboard: React.FC = () => {
         variant: "destructive",
       });
     }
+  };
+
+  // Open add track panel
+  const handleAddTrack = () => {
+    setEditingTrack(null);
+    setIsTrackEditPanelOpen(true);
+  };
+
+  // Open edit track panel
+  const handleEditTrack = (trackId: string) => {
+    const track = tracks.find(t => t.id === trackId);
+    if (track) {
+      setEditingTrack(track);
+      setIsTrackEditPanelOpen(true);
+    }
+  };
+
+  // Handle save from add/edit track panel
+  const handleSaveTrack = (track: TimelineTrack) => {
+    if (editingTrack) {
+      // If we're editing an existing track
+      setTracks(prevTracks => 
+        prevTracks.map(existingTrack => existingTrack.id === track.id ? track : existingTrack)
+      );
+      toast({
+        title: "Track updated",
+        description: `${track.name} has been updated`,
+      });
+    } else {
+      // If we're adding a new track
+      setTracks(prevTracks => [...prevTracks, track]);
+      toast({
+        title: "Track added",
+        description: `${track.name} has been added to the timeline`,
+      });
+    }
+    
+    setIsTrackEditPanelOpen(false);
   };
 
   // Handle save from add/edit panel
@@ -202,6 +294,7 @@ const Dashboard: React.FC = () => {
     }
     
     setIsAddEditPanelOpen(false);
+    setIsInEditMode(false);
   };
   
   // Listen for custom events from the timeline and cue panel
@@ -269,9 +362,9 @@ const Dashboard: React.FC = () => {
         document.dispatchEvent(new CustomEvent("timeline-undo"));
       }
       
-      if (!selectedCue) return;
+      if (!selectedCue || isInEditMode) return;
       
-      // Shortcuts that require a selected cue
+      // Shortcuts that require a selected cue and NOT in edit mode
       if (e.key === "Delete" || e.key === "Backspace") {
         console.log("Delete shortcut detected");
         handleCueDelete(selectedCue.id);
@@ -329,7 +422,7 @@ const Dashboard: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedCue, copiedCue]);
+  }, [selectedCue, copiedCue, isInEditMode]);
   
   // Simulate user movements with more realistic, smoother paths
   useEffect(() => {
@@ -453,6 +546,10 @@ const Dashboard: React.FC = () => {
                     onCueChange={handleCueUpdate}
                     selectedCue={selectedCue}
                     cues={cues}
+                    tracks={tracks}
+                    onTrackEdit={handleEditTrack}
+                    onAddTrack={handleAddTrack}
+                    setIsInEditMode={setIsInEditMode}
                   />
                 </div>
               </ResizablePanel>
@@ -467,6 +564,7 @@ const Dashboard: React.FC = () => {
                       onCueUpdate={handleCueUpdate}
                       onCueDelete={handleCueDelete}
                       onCueDuplicate={handleCueDuplicate}
+                      setIsInEditMode={setIsInEditMode}
                     />
                   </ResizablePanel>
                 </>
@@ -487,10 +585,21 @@ const Dashboard: React.FC = () => {
         {/* Add/Edit Cue Panel */}
         <AddEditCuePanel 
           isOpen={isAddEditPanelOpen}
-          onClose={() => setIsAddEditPanelOpen(false)}
+          onClose={() => {
+            setIsAddEditPanelOpen(false);
+            setIsInEditMode(false);
+          }}
           onSave={handleSaveCue}
           editingCue={editingCue}
           tracks={availableTracks}
+        />
+
+        {/* Add/Edit Track Panel */}
+        <TrackEditPanel
+          isOpen={isTrackEditPanelOpen}
+          onClose={() => setIsTrackEditPanelOpen(false)}
+          onSave={handleSaveTrack}
+          editingTrack={editingTrack}
         />
       </div>
     </TooltipProvider>
