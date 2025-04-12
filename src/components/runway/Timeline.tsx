@@ -20,7 +20,8 @@ import {
   Zap,
   Wand2,
   PenLine,
-  Filter
+  Filter,
+  Move
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -164,6 +165,14 @@ const Timeline: React.FC<TimelineProps> = ({
   const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeInSecondsRef = useRef(0);
   const animationFrameRef = useRef<number | null>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const timelineContainerRef = useRef<HTMLDivElement>(null);
+  const isDraggingTimelineRef = useRef(false);
+  const lastClientXRef = useRef(0);
+  const touchStartXRef = useRef(0);
+  const touchStartYRef = useRef(0);
+  const lastPinchDistanceRef = useRef(0);
+  const isPinchingRef = useRef(false);
   const { toast } = useToast();
   
   const timeToSeconds = (timeString: string): number => {
@@ -641,6 +650,124 @@ const Timeline: React.FC<TimelineProps> = ({
     return timeInSecondsRef.current * (100 * timelineScale / 60);
   };
   
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    
+    if (e.ctrlKey) {
+      const scaleFactor = e.deltaY < 0 ? 1.1 : 0.9;
+      
+      setTimelineScale(prevScale => {
+        const newScale = Math.max(0.5, Math.min(3, prevScale * scaleFactor));
+        return newScale;
+      });
+      
+      toast({
+        title: e.deltaY < 0 ? "Zooming in" : "Zooming out",
+        description: "Use Ctrl+wheel to zoom, or trackpad pinch gesture",
+      });
+    } else {
+      if (scrollAreaRef.current) {
+        scrollAreaRef.current.scrollLeft += e.deltaX;
+        
+        if (e.shiftKey) {
+          scrollAreaRef.current.scrollLeft += e.deltaY;
+        }
+      }
+    }
+  };
+  
+  const handleTimelineMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 1 || e.altKey) {
+      e.preventDefault();
+      isDraggingTimelineRef.current = true;
+      lastClientXRef.current = e.clientX;
+      document.body.style.cursor = 'grabbing';
+      
+      document.addEventListener('mousemove', handleTimelineMouseMove);
+      document.addEventListener('mouseup', handleTimelineMouseUp);
+    }
+  };
+  
+  const handleTimelineMouseMove = (e: MouseEvent) => {
+    if (!isDraggingTimelineRef.current || !scrollAreaRef.current) return;
+    
+    const deltaX = e.clientX - lastClientXRef.current;
+    scrollAreaRef.current.scrollLeft -= deltaX;
+    lastClientXRef.current = e.clientX;
+  };
+  
+  const handleTimelineMouseUp = () => {
+    isDraggingTimelineRef.current = false;
+    document.body.style.cursor = 'default';
+    
+    document.removeEventListener('mousemove', handleTimelineMouseMove);
+    document.removeEventListener('mouseup', handleTimelineMouseUp);
+  };
+  
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY;
+    } else if (e.touches.length === 2) {
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const distance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+      
+      lastPinchDistanceRef.current = distance;
+      isPinchingRef.current = true;
+    }
+  };
+  
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault();
+    
+    if (e.touches.length === 1 && !isPinchingRef.current) {
+      const touchX = e.touches[0].clientX;
+      const touchY = e.touches[0].clientY;
+      
+      const deltaX = touchX - touchStartXRef.current;
+      const deltaY = touchY - touchStartYRef.current;
+      
+      touchStartXRef.current = touchX;
+      touchStartYRef.current = touchY;
+      
+      if (scrollAreaRef.current) {
+        scrollAreaRef.current.scrollLeft -= deltaX;
+      }
+    } else if (e.touches.length === 2) {
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const distance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+      
+      const delta = distance - lastPinchDistanceRef.current;
+      const zoomFactor = delta > 0 ? 1.02 : 0.98;
+      
+      setTimelineScale(prevScale => {
+        const newScale = Math.max(0.5, Math.min(3, prevScale * zoomFactor));
+        return newScale;
+      });
+      
+      lastPinchDistanceRef.current = distance;
+    }
+  };
+  
+  const handleTouchEnd = () => {
+    isPinchingRef.current = false;
+  };
+  
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleTimelineMouseMove);
+      document.removeEventListener('mouseup', handleTimelineMouseUp);
+    };
+  }, []);
+  
   return (
     <div className={cn("flex flex-col h-full", className)}>
       <div className="flex items-center gap-2 p-2 border-b border-border">
@@ -714,7 +841,7 @@ const Timeline: React.FC<TimelineProps> = ({
                 <ZoomOut size={14} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Zoom out (Ctrl+-)</TooltipContent>
+            <TooltipContent>Zoom out (Ctrl+wheel or pinch)</TooltipContent>
           </Tooltip>
           
           <Tooltip>
@@ -727,7 +854,26 @@ const Timeline: React.FC<TimelineProps> = ({
                 <ZoomIn size={14} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Zoom in (Ctrl++)</TooltipContent>
+            <TooltipContent>Zoom in (Ctrl+wheel or pinch)</TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 w-8"
+                onClick={() => {
+                  toast({
+                    title: "Timeline navigation",
+                    description: "Drag with Alt+mouse or middle-click, or use trackpad swipe to navigate",
+                  });
+                }}
+              >
+                <Move size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Pan timeline (Alt+drag or swipe)</TooltipContent>
           </Tooltip>
         </div>
         
@@ -953,8 +1099,20 @@ const Timeline: React.FC<TimelineProps> = ({
               <div className="w-4 h-4 bg-red-500 rounded-full absolute -left-2 -top-2" />
             </div>
             
-            <ScrollArea className="h-[calc(100vh-12rem)]" onClick={handleTimelineClick}>
-              <div ref={timelineRef} className="relative min-h-full min-w-[1000px]">
+            <div 
+              ref={scrollAreaRef}
+              className="h-[calc(100vh-12rem)] overflow-auto"
+              onWheel={handleWheel}
+              onMouseDown={handleTimelineMouseDown}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onClick={handleTimelineClick}
+            >
+              <div 
+                ref={timelineRef} 
+                className="relative min-h-full min-w-[1000px]"
+              >
                 {filteredTracks.map(track => (
                   <div key={track.id} className="relative">
                     <div 
@@ -1020,7 +1178,7 @@ const Timeline: React.FC<TimelineProps> = ({
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
           </div>
         </div>
       </div>
