@@ -1,11 +1,11 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { TimelineCue } from './TrackList';
+import { TimelineCue, TimelineTrack } from './TrackList';
 
 interface CueTimelineProps {
-  tracks: any[];
+  tracks: TimelineTrack[];
   timelineScale: number;
   selectedCue: string | null;
   currentTime: string;
@@ -30,7 +30,8 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
   onTimelineClick
 }) => {
   const timelineRef = useRef<HTMLDivElement>(null);
-
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  
   // Helper to show grid lines - we need to display more for the snap functionality
   const gridLines = () => {
     const lines = [];
@@ -96,7 +97,7 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
         />
 
         {/* Cue tracks */}
-        <ScrollArea className="h-full">
+        <ScrollArea className="h-full" ref={scrollAreaRef}>
           <div className="p-4 space-y-4" style={{ minWidth: '1500px' }}>
             {tracks.map(track => (
               <div 
@@ -106,6 +107,7 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
                   track.expanded ? "h-16" : "h-8",
                   "bg-muted/30"
                 )}
+                data-track-id={track.id}
               >
                 <div className="absolute inset-0 overflow-hidden">
                   {/* Time grid lines */}
@@ -116,21 +118,24 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
                     <div
                       key={cue.id}
                       className={cn(
-                        "absolute rounded-md border cursor-pointer flex items-center px-2 overflow-hidden transition-all",
+                        "absolute rounded-md border cursor-move flex items-center px-2 overflow-hidden transition-all",
                         selectedCue === cue.id ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/50",
                         cue.type === 'audio' && "bg-runway-teal/20 border-runway-teal",
                         cue.type === 'video' && "bg-runway-success/20 border-runway-success",
                         cue.type === 'lighting' && "bg-runway-highlight/20 border-runway-highlight",
                         cue.type === 'stage' && "bg-runway-warning/20 border-runway-warning",
-                        // Conditionally adjust height based on track expanded state
-                        track.expanded ? "top-2 h-12" : "top-1 h-6"
                       )}
                       style={{
                         left: `${cue.position}px`,
                         width: `${cue.width * timelineScale}px`,
-                        minWidth: '50px'
+                        minWidth: '50px',
+                        top: '4px',
+                        height: track.expanded ? 'calc(100% - 8px)' : 'calc(100% - 8px)',
                       }}
-                      onClick={() => onCueClick(cue.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCueClick(cue.id);
+                      }}
                       draggable
                       onDragStart={(e) => onCueDragStart(e, cue.id, track.id)}
                       onDragEnd={onCueDragEnd}
