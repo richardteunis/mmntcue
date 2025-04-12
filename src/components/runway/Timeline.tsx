@@ -22,7 +22,9 @@ import {
   PenLine,
   Filter,
   Move,
-  Undo2
+  Undo2,
+  ClipboardCopy,
+  ClipboardPaste
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -183,6 +185,7 @@ const Timeline: React.FC<TimelineProps> = ({
   const { toast } = useToast();
   const [deletedCues, setDeletedCues] = useState<DeletedCue[]>([]);
   const [canUndo, setCanUndo] = useState(false);
+  const [copiedCue, setCopiedCue] = useState<TimelineCue | null>(null);
   
   useEffect(() => {
     setCanUndo(deletedCues.length > 0);
@@ -685,6 +688,16 @@ const Timeline: React.FC<TimelineProps> = ({
       deleteCue(selectedCue.id);
     }
     
+    if (e.key === "c" && e.ctrlKey) {
+      e.preventDefault();
+      handleCopyCue();
+    }
+    
+    if (e.key === "v" && e.ctrlKey) {
+      e.preventDefault();
+      handlePasteCue();
+    }
+    
     if (e.key === "z" && e.ctrlKey) {
       e.preventDefault();
       handleUndoDelete();
@@ -856,6 +869,83 @@ const Timeline: React.FC<TimelineProps> = ({
     };
   }, []);
   
+  const handleCopyCue = () => {
+    if (!selectedCue) {
+      toast({
+        title: "No cue selected",
+        description: "Select a cue first to copy it",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setCopiedCue({...selectedCue});
+    
+    toast({
+      title: "Cue copied",
+      description: `${selectedCue.name} copied to clipboard`,
+    });
+  };
+  
+  const handlePasteCue = () => {
+    if (!copiedCue) {
+      toast({
+        title: "Nothing to paste",
+        description: "Copy a cue first",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    let targetTrackId = '';
+    tracks.forEach(track => {
+      if (track.type === copiedCue.type) {
+        targetTrackId = track.id;
+      }
+    });
+    
+    if (!targetTrackId) {
+      if (tracks.length > 0) {
+        targetTrackId = tracks[0].id;
+      } else {
+        toast({
+          title: "No tracks available",
+          description: "Add a track first",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
+    const newCue: TimelineCue = {
+      ...copiedCue,
+      id: `cue-${Date.now()}`,
+      name: `${copiedCue.name} (copy)`,
+      position: copiedCue.position + copiedCue.width + 10,
+    };
+    
+    setTracks(currentTracks => {
+      return currentTracks.map(track => {
+        if (track.id === targetTrackId) {
+          return {
+            ...track,
+            cues: [...track.cues, newCue]
+          };
+        }
+        return track;
+      });
+    });
+    
+    toast({
+      title: "Cue pasted",
+      description: `${newCue.name} pasted to timeline`,
+    });
+    
+    if (onCueSelect) {
+      onCueSelect(newCue.id, newCue);
+    }
+  };
+  
   return (
     <div className={cn("flex flex-col h-full", className)}>
       <div className="flex items-center gap-2 p-2 border-b border-border">
@@ -913,6 +1003,37 @@ const Timeline: React.FC<TimelineProps> = ({
               </Button>
             </TooltipTrigger>
             <TooltipContent>Split selected cue at current time (S)</TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                onClick={handleCopyCue}
+              >
+                <ClipboardCopy size={14} />
+                Copy
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Copy selected cue (Ctrl+C)</TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                onClick={handlePasteCue}
+                disabled={!copiedCue}
+              >
+                <ClipboardPaste size={14} />
+                Paste
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Paste copied cue (Ctrl+V)</TooltipContent>
           </Tooltip>
           
           <Tooltip>

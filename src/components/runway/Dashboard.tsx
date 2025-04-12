@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
@@ -56,6 +55,7 @@ const Dashboard: React.FC = () => {
   const [users, setUsers] = useState<CollaborationUser[]>(mockUsers);
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
   const [selectedCue, setSelectedCue] = useState<TimelineCue | null>(null);
+  const [copiedCue, setCopiedCue] = useState<TimelineCue | null>(null);
   const { toast } = useToast();
   
   // Handle cue selection
@@ -68,6 +68,7 @@ const Dashboard: React.FC = () => {
   const handleCueUpdate = (updatedCue: TimelineCue) => {
     // Updated cue gets passed back to Timeline component
     if (selectedCue) {
+      setSelectedCue(updatedCue);
       toast({
         title: "Cue updated",
         description: `${updatedCue.name} has been updated`,
@@ -93,6 +94,43 @@ const Dashboard: React.FC = () => {
       description: `A copy of the cue has been created`,
     });
   };
+  
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Global keyboard shortcuts (not dependent on selectedCue)
+      if (e.key === "z" && e.ctrlKey) {
+        // Handled by Timeline component
+      }
+      
+      if (!selectedCue) return;
+      
+      // Shortcuts that require a selected cue
+      if (e.key === "Delete" || e.key === "Backspace") {
+        handleCueDelete(selectedCue.id);
+      }
+      
+      if (e.key === "d" && e.ctrlKey) {
+        e.preventDefault();
+        handleCueDuplicate(selectedCue.id);
+      }
+      
+      if (e.key === "c" && e.ctrlKey) {
+        e.preventDefault();
+        setCopiedCue({...selectedCue});
+        toast({
+          title: "Cue copied",
+          description: `${selectedCue.name} copied to clipboard`,
+        });
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedCue]);
   
   // Simulate smooth user movement with animation frames
   useEffect(() => {
