@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -88,19 +87,47 @@ const TrackList: React.FC<TrackListProps> = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onAddNewTrack('audio')}>
+              <DropdownMenuItem 
+                onClick={() => onAddNewTrack('audio')}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('cueType', 'audio');
+                  e.dataTransfer.effectAllowed = 'copy';
+                }}
+              >
                 <div className="w-2 h-2 rounded-full bg-runway-teal mr-2" />
                 Audio Track
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onAddNewTrack('video')}>
+              <DropdownMenuItem 
+                onClick={() => onAddNewTrack('video')}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('cueType', 'video');
+                  e.dataTransfer.effectAllowed = 'copy';
+                }}
+              >
                 <div className="w-2 h-2 rounded-full bg-runway-success mr-2" />
                 Video Track
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onAddNewTrack('lighting')}>
+              <DropdownMenuItem 
+                onClick={() => onAddNewTrack('lighting')}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('cueType', 'lighting');
+                  e.dataTransfer.effectAllowed = 'copy';
+                }}
+              >
                 <div className="w-2 h-2 rounded-full bg-runway-highlight mr-2" />
                 Lighting Track
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onAddNewTrack('stage')}>
+              <DropdownMenuItem 
+                onClick={() => onAddNewTrack('stage')}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('cueType', 'stage');
+                  e.dataTransfer.effectAllowed = 'copy';
+                }}
+              >
                 <div className="w-2 h-2 rounded-full bg-runway-warning mr-2" />
                 Stage Track
               </DropdownMenuItem>
@@ -122,7 +149,13 @@ const TrackList: React.FC<TrackListProps> = ({
           onDrop={(e) => {
             e.preventDefault();
             console.log('Drop on track in TrackList:', track.id);
-            onCueDropOnTrack(e, track.id);
+            
+            const cueType = e.dataTransfer.getData('cueType');
+            if (cueType) {
+              onTrackDrop(e, track.id);
+            } else {
+              onCueDropOnTrack(e, track.id);
+            }
           }}
         >
           <div 
@@ -205,10 +238,15 @@ const TrackList: React.FC<TrackListProps> = ({
                     e.stopPropagation();
                     onCueClick(cue.id);
                   }}
-                  draggable={true}
+                  draggable
                   onDragStart={(e) => {
                     e.stopPropagation();
                     console.log('Drag start in TrackList for cue:', cue.id, 'on track:', track.id);
+                    
+                    e.dataTransfer.setData('cueId', cue.id);
+                    e.dataTransfer.setData('sourceTrackId', track.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    
                     onCueDragStart(e, cue.id, track.id);
                   }}
                   onDragEnd={(e) => {
@@ -230,7 +268,16 @@ const TrackList: React.FC<TrackListProps> = ({
               ))}
               
               {track.cues.length === 0 && (
-                <div className="text-xs text-muted-foreground py-2 text-center italic">
+                <div 
+                  className="text-xs text-muted-foreground py-2 text-center italic"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.add('bg-muted/50');
+                  }}
+                  onDragLeave={(e) => {
+                    e.currentTarget.classList.remove('bg-muted/50');
+                  }}
+                >
                   Drag cues here
                 </div>
               )}

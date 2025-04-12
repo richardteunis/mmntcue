@@ -191,13 +191,19 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
       
       console.log('Dropping cue type:', cueType, 'on track:', trackId, 'at position:', position);
       
+      let adjustedPosition = position;
+      if (snapToGrid) {
+        const gridSize = 20 * timelineScale;
+        adjustedPosition = Math.round(position / gridSize) * gridSize;
+      }
+      
       const newCue: TimelineCue = {
         id: `cue-${Date.now()}`,
         name: `New ${cueType} Cue`,
         type: cueType as 'audio' | 'video' | 'lighting' | 'stage',
-        time: calculateTimeFromPosition(position),
+        time: calculateTimeFromPosition(adjustedPosition),
         duration: '0:30',
-        position: position,
+        position: adjustedPosition,
         width: 100,
       };
       
@@ -303,10 +309,16 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
     
     const cueId = e.dataTransfer.getData('cueId');
     const sourceTrackId = e.dataTransfer.getData('sourceTrackId');
+    const cueType = e.dataTransfer.getData('cueType');
     
     console.log('Dropping cue:', cueId, 'from track:', sourceTrackId, 'to track:', targetTrackId);
     
-    if (!cueId) return;
+    if (cueType) {
+      handleTrackDrop(e, targetTrackId);
+      return;
+    }
+    
+    if (!cueId || !sourceTrackId) return;
     
     const trackElement = e.currentTarget as HTMLElement;
     const rect = trackElement.getBoundingClientRect();
@@ -315,14 +327,13 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
     setTracks(prevTracks => {
       let cueToMove: TimelineCue | undefined;
       
-      prevTracks.forEach(track => {
-        if (track.id === sourceTrackId) {
-          const cue = track.cues.find(c => c.id === cueId);
-          if (cue) {
-            cueToMove = {...cue};
-          }
+      const sourceTrack = prevTracks.find(track => track.id === sourceTrackId);
+      if (sourceTrack) {
+        const cue = sourceTrack.cues.find(c => c.id === cueId);
+        if (cue) {
+          cueToMove = {...cue};
         }
-      });
+      }
       
       if (!cueToMove) return prevTracks;
       

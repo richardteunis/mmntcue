@@ -57,12 +57,11 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-hidden relative">
-      <div
-        ref={timelineRef}
-        className="h-full relative"
-        onClick={onTimelineClick}
-      >
+    <div 
+      className="flex-1 overflow-hidden relative" 
+      ref={timelineRef}
+    >
+      <div className="h-full relative">
         {/* Timeline header with time markers */}
         <div className="h-8 border-b border-border sticky top-0 z-10 bg-background flex items-end px-4">
           {Array.from({ length: 60 }).map((_, i) => (
@@ -98,7 +97,11 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
 
         {/* Cue tracks */}
         <ScrollArea className="h-full" ref={scrollAreaRef}>
-          <div className="p-4 space-y-4" style={{ minWidth: '1500px' }}>
+          <div 
+            className="p-4 space-y-4" 
+            style={{ minWidth: '1500px' }}
+            onClick={onTimelineClick}
+          >
             {tracks.map(track => (
               <div 
                 key={track.id} 
@@ -113,21 +116,23 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
                 }}
                 onDrop={(e) => {
                   e.preventDefault();
+                  console.log('Drop event on track:', track.id);
+                  
                   const cueType = e.dataTransfer.getData('cueType');
                   const cueId = e.dataTransfer.getData('cueId');
                   const sourceTrackId = e.dataTransfer.getData('sourceTrackId');
                   
-                  if (cueType || (cueId && sourceTrackId)) {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const newPosition = e.clientX - rect.left;
-                    
-                    if (cueType) {
-                      // Create a new cue
-                      console.log('Creating new cue of type:', cueType, 'at position:', newPosition, 'on track:', track.id);
-                    } else if (cueId && sourceTrackId) {
-                      // Move existing cue
-                      console.log('Moving cue:', cueId, 'from track:', sourceTrackId, 'to track:', track.id, 'at position:', newPosition);
-                    }
+                  console.log('Drop data:', { cueType, cueId, sourceTrackId });
+                  
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const newPosition = e.clientX - rect.left;
+                  
+                  if (cueType) {
+                    // Create a new cue
+                    console.log('Creating new cue of type:', cueType, 'at position:', newPosition, 'on track:', track.id);
+                  } else if (cueId && sourceTrackId) {
+                    // Move existing cue
+                    console.log('Moving cue:', cueId, 'from track:', sourceTrackId, 'to track:', track.id, 'at position:', newPosition);
                   }
                 }}
               >
@@ -158,7 +163,7 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
                         e.stopPropagation();
                         onCueClick(cue.id);
                       }}
-                      draggable={true}
+                      draggable
                       onDragStart={(e) => {
                         e.stopPropagation();
                         console.log('Drag start for cue:', cue.id, 'on track:', track.id);
