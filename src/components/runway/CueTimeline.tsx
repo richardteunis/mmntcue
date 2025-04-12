@@ -110,7 +110,25 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
                 data-track-id={track.id}
                 onDragOver={(e) => {
                   e.preventDefault();
-                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const cueType = e.dataTransfer.getData('cueType');
+                  const cueId = e.dataTransfer.getData('cueId');
+                  const sourceTrackId = e.dataTransfer.getData('sourceTrackId');
+                  
+                  if (cueType || (cueId && sourceTrackId)) {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const newPosition = e.clientX - rect.left;
+                    
+                    if (cueType) {
+                      // Create a new cue
+                      console.log('Creating new cue of type:', cueType, 'at position:', newPosition, 'on track:', track.id);
+                    } else if (cueId && sourceTrackId) {
+                      // Move existing cue
+                      console.log('Moving cue:', cueId, 'from track:', sourceTrackId, 'to track:', track.id, 'at position:', newPosition);
+                    }
+                  }
                 }}
               >
                 <div className="absolute inset-0 overflow-hidden">
@@ -140,13 +158,18 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
                         e.stopPropagation();
                         onCueClick(cue.id);
                       }}
-                      draggable="true"
+                      draggable={true}
                       onDragStart={(e) => {
                         e.stopPropagation();
+                        console.log('Drag start for cue:', cue.id, 'on track:', track.id);
+                        e.dataTransfer.setData('cueId', cue.id);
+                        e.dataTransfer.setData('sourceTrackId', track.id);
+                        e.dataTransfer.effectAllowed = 'move';
                         onCueDragStart(e, cue.id, track.id);
                       }}
                       onDragEnd={(e) => {
                         e.stopPropagation();
+                        console.log('Drag end');
                         onCueDragEnd(e);
                       }}
                     >

@@ -189,6 +189,8 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
       const rect = trackElement.getBoundingClientRect();
       const position = e.clientX - rect.left;
       
+      console.log('Dropping cue type:', cueType, 'on track:', trackId, 'at position:', position);
+      
       const newCue: TimelineCue = {
         id: `cue-${Date.now()}`,
         name: `New ${cueType} Cue`,
@@ -230,13 +232,12 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.stopPropagation();
     
     if (draggedCue) {
       const trackElement = e.currentTarget as HTMLElement;
-      if (!trackElement || !trackElement.id) return;
+      if (!trackElement || !trackElement.dataset.trackId) return;
       
-      const trackId = trackElement.id;
+      const trackId = trackElement.dataset.trackId;
       const rect = trackElement.getBoundingClientRect();
       let newPosition = e.clientX - rect.left;
       
@@ -247,36 +248,33 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
       
       setTracks(prevTracks => {
         return prevTracks.map(track => {
+          if (track.id !== trackId) return track;
+          
           const trackWithCue = prevTracks.find(t => 
             t.cues.some(c => c.id === draggedCue.id)
           );
           
           if (!trackWithCue) return track;
           
-          const cueToUpdate = trackWithCue.cues.find(c => c.id === draggedCue.id);
+          const cueToMove = trackWithCue.cues.find(c => c.id === draggedCue.id);
           
-          if (!cueToUpdate) return track;
+          if (!cueToMove) return track;
           
-          if (track.id === trackId) {
-            if (trackWithCue.id === track.id) {
-              return {
-                ...track,
-                cues: track.cues.map(cue => {
-                  if (cue.id === draggedCue.id) {
-                    const newTime = calculateTimeFromPosition(newPosition);
-                    return {
-                      ...cue,
-                      position: newPosition,
-                      time: newTime
-                    };
-                  }
-                  return cue;
-                })
-              };
-            } 
-            else if (trackWithCue.id !== track.id) {
-              return track;
-            }
+          if (trackWithCue.id === trackId) {
+            return {
+              ...track,
+              cues: track.cues.map(cue => {
+                if (cue.id === draggedCue.id) {
+                  const newTime = calculateTimeFromPosition(newPosition);
+                  return {
+                    ...cue,
+                    position: newPosition,
+                    time: newTime
+                  };
+                }
+                return cue;
+              })
+            };
           }
           return track;
         });
@@ -285,7 +283,8 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   };
   
   const handleCueDragStart = (e: React.DragEvent, cueId: string, trackId: string) => {
-    e.stopPropagation();
+    console.log('Drag start in Timeline component for cue:', cueId, 'on track:', trackId);
+    
     const initialX = e.clientX;
     setDraggedCue({ id: cueId, initialX, trackId });
     
@@ -295,16 +294,17 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   };
   
   const handleCueDragEnd = (e: React.DragEvent) => {
-    e.stopPropagation();
+    console.log('Drag end in Timeline component');
     setDraggedCue(null);
   };
   
   const handleCueDropOnTrack = (e: React.DragEvent, targetTrackId: string) => {
     e.preventDefault();
-    e.stopPropagation();
     
     const cueId = e.dataTransfer.getData('cueId');
     const sourceTrackId = e.dataTransfer.getData('sourceTrackId');
+    
+    console.log('Dropping cue:', cueId, 'from track:', sourceTrackId, 'to track:', targetTrackId);
     
     if (!cueId) return;
     
@@ -314,13 +314,13 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
     
     setTracks(prevTracks => {
       let cueToMove: TimelineCue | undefined;
-      let sourceTrack: TimelineTrack | undefined;
       
       prevTracks.forEach(track => {
-        const cue = track.cues.find(c => c.id === cueId);
-        if (cue && track.id === sourceTrackId) {
-          cueToMove = {...cue};
-          sourceTrack = track;
+        if (track.id === sourceTrackId) {
+          const cue = track.cues.find(c => c.id === cueId);
+          if (cue) {
+            cueToMove = {...cue};
+          }
         }
       });
       

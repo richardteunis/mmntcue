@@ -114,8 +114,16 @@ const TrackList: React.FC<TrackListProps> = ({
           key={track.id} 
           className="border-b border-border"
           id={track.id}
-          onDragOver={onDragOver}
-          onDrop={(e) => onCueDropOnTrack(e, track.id)}
+          data-track-id={track.id}
+          onDragOver={(e) => {
+            e.preventDefault();
+            onDragOver(e);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            console.log('Drop on track in TrackList:', track.id);
+            onCueDropOnTrack(e, track.id);
+          }}
         >
           <div 
             className={cn(
@@ -193,10 +201,21 @@ const TrackList: React.FC<TrackListProps> = ({
                     cue.type === 'lighting' && "text-runway-highlight",
                     cue.type === 'stage' && "text-runway-warning"
                   )}
-                  onClick={() => onCueClick(cue.id)}
-                  draggable
-                  onDragStart={(e) => onCueDragStart(e, cue.id, track.id)}
-                  onDragEnd={onCueDragEnd}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCueClick(cue.id);
+                  }}
+                  draggable={true}
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    console.log('Drag start in TrackList for cue:', cue.id, 'on track:', track.id);
+                    onCueDragStart(e, cue.id, track.id);
+                  }}
+                  onDragEnd={(e) => {
+                    e.stopPropagation();
+                    console.log('Drag end in TrackList');
+                    onCueDragEnd(e);
+                  }}
                 >
                   <div className={cn(
                     "w-2 h-2 rounded-full mr-2",
