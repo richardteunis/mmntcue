@@ -30,10 +30,15 @@ const CollaborationIndicator: React.FC<CollaborationIndicatorProps> = ({
         <TooltipTrigger asChild>
           <div 
             className={cn(
-              "absolute z-10 animate-pulse-subtle", 
+              "absolute z-10 transform transition-transform duration-100 ease-out", 
               className
             )}
-            style={position ? { left: `${position.x}px`, top: `${position.y}px` } : undefined}
+            style={position ? 
+              { 
+                left: `${position.x}px`, 
+                top: `${position.y}px`,
+                transform: 'translate(-50%, -50%)'
+              } : undefined}
           >
             <Avatar className={cn("h-6 w-6 border-2 border-background", user.color)}>
               <AvatarFallback className="text-xs">{user.initials}</AvatarFallback>

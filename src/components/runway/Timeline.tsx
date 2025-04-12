@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { 
@@ -159,9 +158,12 @@ const Timeline: React.FC<TimelineProps> = ({
   const [trackFilters, setTrackFilters] = useState<string[]>([]);
   const [showTimelineGrid, setShowTimelineGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
+  const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const playheadRef = useRef<HTMLDivElement>(null);
   const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeInSecondsRef = useRef(0);
+  const animationFrameRef = useRef<number | null>(null);
   const { toast } = useToast();
   
   const timeToSeconds = (timeString: string): number => {
@@ -178,18 +180,27 @@ const Timeline: React.FC<TimelineProps> = ({
   
   useEffect(() => {
     if (isPlaying) {
-      playIntervalRef.current = setInterval(() => {
-        timeInSecondsRef.current += 0.1;
+      let lastTimestamp = performance.now();
+      
+      const animate = (timestamp: number) => {
+        const deltaTime = timestamp - lastTimestamp;
+        lastTimestamp = timestamp;
+        
+        timeInSecondsRef.current += deltaTime / 1000;
         setCurrentTime(secondsToTime(timeInSecondsRef.current));
-      }, 100);
-    } else if (playIntervalRef.current) {
-      clearInterval(playIntervalRef.current);
-      playIntervalRef.current = null;
+        
+        animationFrameRef.current = requestAnimationFrame(animate);
+      };
+      
+      animationFrameRef.current = requestAnimationFrame(animate);
+    } else if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
     
     return () => {
-      if (playIntervalRef.current) {
-        clearInterval(playIntervalRef.current);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
     };
   }, [isPlaying]);
@@ -328,6 +339,39 @@ const Timeline: React.FC<TimelineProps> = ({
     
     timeInSecondsRef.current = seconds;
     setCurrentTime(secondsToTime(seconds));
+  };
+  
+  const handlePlayheadMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDraggingPlayhead(true);
+    setIsPlaying(false);
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    document.addEventListener('mousemove', handlePlayheadMouseMove);
+    document.addEventListener('mouseup', handlePlayheadMouseUp);
+  };
+  
+  const handlePlayheadMouseMove = (e: MouseEvent) => {
+    if (!isDraggingPlayhead || !timelineRef.current) return;
+    
+    const rect = timelineRef.current.getBoundingClientRect();
+    const moveX = Math.max(0, e.clientX - rect.left);
+    
+    const secondsPerPixel = 0.6 / timelineScale;
+    const seconds = moveX * secondsPerPixel;
+    
+    timeInSecondsRef.current = seconds;
+    setCurrentTime(secondsToTime(seconds));
+  };
+  
+  const handlePlayheadMouseUp = () => {
+    setIsDraggingPlayhead(false);
+    
+    document.removeEventListener('mousemove', handlePlayheadMouseMove);
+    document.removeEventListener('mouseup', handlePlayheadMouseUp);
   };
   
   const handleSplitCue = () => {
@@ -522,7 +566,6 @@ const Timeline: React.FC<TimelineProps> = ({
       });
     });
     
-    // Fix: Check if selectedCue exists and matches cueId before calling onCueSelect
     if (selectedCue && selectedCue.id === cueId && onCueSelect) {
       onCueSelect(null, null);
     }
@@ -899,12 +942,16 @@ const Timeline: React.FC<TimelineProps> = ({
           
           <div className="relative">
             <div 
-              className="absolute h-full border-l-2 border-red-500 z-10 pointer-events-none" 
+              ref={playheadRef}
+              className="absolute h-full border-l-2 border-red-500 z-10 cursor-ew-resize" 
               style={{ 
                 left: `${getPlayheadPosition()}px`,
                 top: '0'
               }}
-            />
+              onMouseDown={handlePlayheadMouseDown}
+            >
+              <div className="w-4 h-4 bg-red-500 rounded-full absolute -left-2 -top-2" />
+            </div>
             
             <ScrollArea className="h-[calc(100vh-12rem)]" onClick={handleTimelineClick}>
               <div ref={timelineRef} className="relative min-h-full min-w-[1000px]">

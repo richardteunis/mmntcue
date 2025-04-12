@@ -18,6 +18,7 @@ type CollaborationUser = {
   lastActive: Date;
   area: 'timeline' | 'cue-panel' | 'library';
   position?: { x: number; y: number };
+  targetPosition?: { x: number; y: number };
 };
 
 const mockUsers: CollaborationUser[] = [
@@ -28,6 +29,7 @@ const mockUsers: CollaborationUser[] = [
     color: 'bg-blue-500',
     lastActive: new Date(),
     area: 'timeline',
+    position: { x: 100, y: 100 },
   },
   { 
     id: '2', 
@@ -36,6 +38,7 @@ const mockUsers: CollaborationUser[] = [
     color: 'bg-green-500',
     lastActive: new Date(),
     area: 'cue-panel',
+    position: { x: 500, y: 200 },
   },
   { 
     id: '3',
@@ -44,6 +47,7 @@ const mockUsers: CollaborationUser[] = [
     color: 'bg-purple-500',
     lastActive: new Date(),
     area: 'timeline',
+    position: { x: 300, y: 150 },
   }
 ];
 
@@ -90,7 +94,7 @@ const Dashboard: React.FC = () => {
     });
   };
   
-  // Simulate user movement
+  // Simulate smooth user movement with animation frames
   useEffect(() => {
     // Initial user join notification
     toast({
@@ -98,21 +102,52 @@ const Dashboard: React.FC = () => {
       description: `${users.map(u => u.name).join(', ')} joined the project`,
     });
     
-    const moveInterval = setInterval(() => {
+    // Function to generate new target positions
+    const updateTargetPositions = () => {
       setUsers(prevUsers => {
         return prevUsers.map(user => {
-          // Randomly update positions to simulate movement
           return {
             ...user,
             lastActive: new Date(),
-            position: { 
+            targetPosition: { 
               x: 100 + Math.random() * 800, 
               y: 100 + Math.random() * 300 
             }
           };
         });
       });
-    }, 5000);
+    };
+    
+    // Set initial target positions
+    updateTargetPositions();
+    
+    // Update target positions periodically
+    const targetUpdateInterval = setInterval(updateTargetPositions, 5000);
+    
+    // Animate user movements smoothly using requestAnimationFrame
+    let animationFrameId: number;
+    
+    const animateUsers = () => {
+      setUsers(prevUsers => {
+        return prevUsers.map(user => {
+          if (!user.position || !user.targetPosition) return user;
+          
+          // Calculate the next position with smooth interpolation
+          const newX = user.position.x + (user.targetPosition.x - user.position.x) * 0.05;
+          const newY = user.position.y + (user.targetPosition.y - user.position.y) * 0.05;
+          
+          return {
+            ...user,
+            position: { x: newX, y: newY }
+          };
+        });
+      });
+      
+      animationFrameId = requestAnimationFrame(animateUsers);
+    };
+    
+    // Start the animation
+    animationFrameId = requestAnimationFrame(animateUsers);
     
     // Simulate a new user joining after a delay
     const joinTimeout = setTimeout(() => {
@@ -123,7 +158,8 @@ const Dashboard: React.FC = () => {
         color: 'bg-amber-500',
         lastActive: new Date(),
         area: 'timeline',
-        position: { x: 400, y: 200 }
+        position: { x: 400, y: 200 },
+        targetPosition: { x: 400, y: 200 }
       };
       
       setUsers(prev => [...prev, newUser]);
@@ -135,8 +171,9 @@ const Dashboard: React.FC = () => {
     }, 12000);
     
     return () => {
-      clearInterval(moveInterval);
+      clearInterval(targetUpdateInterval);
       clearTimeout(joinTimeout);
+      cancelAnimationFrame(animationFrameId);
     };
   }, []);
   
