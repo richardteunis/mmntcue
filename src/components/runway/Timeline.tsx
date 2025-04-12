@@ -831,7 +831,7 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
           <Button 
             variant="ghost" 
             className="w-full justify-start mt-2 ml-2"
-            onClick={addNewTrack}
+            onClick={() => addNewTrack()}
           >
             <Plus size={16} className="mr-2" />
             Add Track
@@ -899,6 +899,11 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
                           onContextMenu={(e) => {
                             e.preventDefault();
                             handleCueClick(cue.id);
+                          }}
+                          draggable={!tracks.find(t => t.id === track.id)?.locked}
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('cueId', cue.id);
+                            e.dataTransfer.setData('sourceTrackId', track.id);
                           }}
                         >
                           <div className="font-medium truncate">{cue.name}</div>

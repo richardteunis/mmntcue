@@ -20,6 +20,21 @@ type CollaborationUser = {
   position?: { x: number; y: number };
 };
 
+interface TimelineCue {
+  id: string;
+  name: string;
+  type: 'audio' | 'video' | 'lighting' | 'stage';
+  time: string;
+  duration: string;
+  position: number;
+  width: number;
+  notes?: string;
+  effects?: string[];
+  autoFollow?: boolean;
+  color?: string;
+  track?: string;
+}
+
 const mockUsers: CollaborationUser[] = [
   { 
     id: '1', 
@@ -50,7 +65,42 @@ const mockUsers: CollaborationUser[] = [
 const Dashboard: React.FC = () => {
   const [showName, setShowName] = useState('Summer Festival 2025');
   const [users, setUsers] = useState<CollaborationUser[]>(mockUsers);
+  const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
   const { toast } = useToast();
+  
+  // Handle cue selection
+  const handleCueSelect = (cueId: string | null) => {
+    setSelectedCueId(cueId);
+  };
+  
+  // Handle cue update
+  const handleCueUpdate = (updatedCue: TimelineCue) => {
+    // In a real app, this would update the cue in the timeline
+    toast({
+      title: "Cue updated",
+      description: `${updatedCue.name} has been updated`,
+    });
+  };
+  
+  // Handle cue deletion
+  const handleCueDelete = (cueId: string) => {
+    // In a real app, this would remove the cue from the timeline
+    setSelectedCueId(null);
+    toast({
+      title: "Cue deleted",
+      description: `Cue has been removed from the timeline`,
+      variant: "destructive",
+    });
+  };
+  
+  // Handle cue duplication
+  const handleCueDuplicate = (cueId: string) => {
+    // In a real app, this would duplicate the cue in the timeline
+    toast({
+      title: "Cue duplicated",
+      description: `A copy of the cue has been created`,
+    });
+  };
   
   // Simulate user movement
   useEffect(() => {
@@ -112,12 +162,20 @@ const Dashboard: React.FC = () => {
           
           <div className="flex flex-1 overflow-hidden relative">
             <ResizablePanelGroup direction="horizontal">
-              <ResizablePanel defaultSize={80} minSize={60}>
-                <Timeline className="h-full" />
+              <ResizablePanel defaultSize={75} minSize={50}>
+                <Timeline 
+                  className="h-full" 
+                  onCueSelect={handleCueSelect}
+                />
               </ResizablePanel>
               <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={20} minSize={15}>
-                <CuePanel />
+              <ResizablePanel defaultSize={25} minSize={20}>
+                <CuePanel 
+                  selectedCueId={selectedCueId}
+                  onCueUpdate={handleCueUpdate}
+                  onCueDelete={handleCueDelete}
+                  onCueDuplicate={handleCueDuplicate}
+                />
               </ResizablePanel>
             </ResizablePanelGroup>
             
