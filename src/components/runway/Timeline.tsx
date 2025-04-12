@@ -287,7 +287,6 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
       const rect = trackElement.getBoundingClientRect();
       const newPosition = e.clientX - rect.left;
       
-      // Fix: Add null check for e.currentTarget and handle the case where currentTarget.id might be empty
       if (e.currentTarget && e.currentTarget.id) {
         setTracks(prevTracks => {
           return prevTracks.map(track => {
@@ -924,3 +923,18 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
                         onClick={() => toggleTrackSolo(track.id)}
                       >
                         <Wand2 size={14} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{track.solo ? "Unsolo" : "Solo"}</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Timeline;
