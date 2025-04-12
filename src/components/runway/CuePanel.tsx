@@ -17,11 +17,14 @@ import {
   Lightbulb, 
   Mic, 
   Trash2,
-  Copy
+  Copy,
+  Save,
+  DragIcon
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/hooks/use-toast';
 
 interface CuePanelProps {
   className?: string;
@@ -29,6 +32,37 @@ interface CuePanelProps {
 
 const CuePanel: React.FC<CuePanelProps> = ({ className }) => {
   const [cueType, setCueType] = useState('audio');
+  const [cueName, setCueName] = useState('Intro Music');
+  const [cueTime, setCueTime] = useState('00:00:00');
+  const [cueDuration, setCueDuration] = useState('0:30');
+  const { toast } = useToast();
+  
+  const handleSave = () => {
+    toast({
+      title: "Cue saved",
+      description: `${cueName} has been updated`,
+    });
+  };
+  
+  const handleDelete = () => {
+    toast({
+      title: "Cue deleted",
+      description: `${cueName} has been removed from the timeline`,
+      variant: "destructive",
+    });
+  };
+  
+  const handleDuplicate = () => {
+    toast({
+      title: "Cue duplicated",
+      description: `A copy of ${cueName} has been created`,
+    });
+  };
+  
+  const handleDragStart = (e: React.DragEvent, type: string) => {
+    e.dataTransfer.setData('cueType', type);
+    e.dataTransfer.effectAllowed = 'copy';
+  };
   
   return (
     <div className={cn("w-80 border-l border-border h-full overflow-auto", className)}>
@@ -42,7 +76,12 @@ const CuePanel: React.FC<CuePanelProps> = ({ className }) => {
       <div className="p-4 space-y-4">
         <div className="space-y-2">
           <Label htmlFor="cue-name">Cue Name</Label>
-          <Input id="cue-name" placeholder="Enter cue name" defaultValue="Intro Music" />
+          <Input 
+            id="cue-name" 
+            placeholder="Enter cue name" 
+            value={cueName} 
+            onChange={(e) => setCueName(e.target.value)} 
+          />
         </div>
         
         <div className="grid grid-cols-2 gap-3">
@@ -50,12 +89,21 @@ const CuePanel: React.FC<CuePanelProps> = ({ className }) => {
             <Label htmlFor="cue-time">Start Time</Label>
             <div className="relative">
               <Clock size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-              <Input id="cue-time" className="pl-9" defaultValue="00:00:00" />
+              <Input 
+                id="cue-time" 
+                className="pl-9" 
+                value={cueTime} 
+                onChange={(e) => setCueTime(e.target.value)} 
+              />
             </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="cue-duration">Duration</Label>
-            <Input id="cue-duration" defaultValue="0:30" />
+            <Input 
+              id="cue-duration" 
+              value={cueDuration} 
+              onChange={(e) => setCueDuration(e.target.value)} 
+            />
           </div>
         </div>
         
@@ -66,6 +114,8 @@ const CuePanel: React.FC<CuePanelProps> = ({ className }) => {
               variant={cueType === 'audio' ? 'default' : 'outline'} 
               className={cn("flex flex-col h-20 items-center justify-center gap-1", cueType === 'audio' ? 'bg-runway-teal' : '')}
               onClick={() => setCueType('audio')}
+              draggable
+              onDragStart={(e) => handleDragStart(e, 'audio')}
             >
               <Music size={18} />
               <span className="text-xs">Audio</span>
@@ -74,6 +124,8 @@ const CuePanel: React.FC<CuePanelProps> = ({ className }) => {
               variant={cueType === 'video' ? 'default' : 'outline'} 
               className={cn("flex flex-col h-20 items-center justify-center gap-1", cueType === 'video' ? 'bg-runway-success' : '')}
               onClick={() => setCueType('video')}
+              draggable
+              onDragStart={(e) => handleDragStart(e, 'video')}
             >
               <Video size={18} />
               <span className="text-xs">Video</span>
@@ -82,6 +134,8 @@ const CuePanel: React.FC<CuePanelProps> = ({ className }) => {
               variant={cueType === 'lighting' ? 'default' : 'outline'} 
               className={cn("flex flex-col h-20 items-center justify-center gap-1", cueType === 'lighting' ? 'bg-runway-highlight' : '')}
               onClick={() => setCueType('lighting')}
+              draggable
+              onDragStart={(e) => handleDragStart(e, 'lighting')}
             >
               <Lightbulb size={18} />
               <span className="text-xs">Lighting</span>
@@ -90,10 +144,19 @@ const CuePanel: React.FC<CuePanelProps> = ({ className }) => {
               variant={cueType === 'stage' ? 'default' : 'outline'} 
               className={cn("flex flex-col h-20 items-center justify-center gap-1", cueType === 'stage' ? 'bg-runway-warning' : '')}
               onClick={() => setCueType('stage')}
+              draggable
+              onDragStart={(e) => handleDragStart(e, 'stage')}
             >
               <Mic size={18} />
               <span className="text-xs">Stage</span>
             </Button>
+          </div>
+        </div>
+        
+        <div className="bg-muted/40 rounded-md p-3 border border-border">
+          <div className="flex items-center text-sm mb-2">
+            <DragIcon size={16} className="mr-2 text-muted-foreground" />
+            <span>Drag a cue type to the timeline to add a new cue</span>
           </div>
         </div>
         
@@ -154,12 +217,16 @@ const CuePanel: React.FC<CuePanelProps> = ({ className }) => {
       
       <Separator />
       
-      <div className="p-4 flex gap-2">
-        <Button variant="outline" className="flex-1">
+      <div className="p-4 grid grid-cols-3 gap-2">
+        <Button variant="outline" onClick={handleDuplicate}>
           <Copy size={16} className="mr-2" />
           Duplicate
         </Button>
-        <Button variant="destructive" className="flex-1">
+        <Button variant="default" onClick={handleSave}>
+          <Save size={16} className="mr-2" />
+          Save
+        </Button>
+        <Button variant="destructive" onClick={handleDelete}>
           <Trash2 size={16} className="mr-2" />
           Delete
         </Button>
