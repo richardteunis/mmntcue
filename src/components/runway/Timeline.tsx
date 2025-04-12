@@ -287,27 +287,30 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
       const rect = trackElement.getBoundingClientRect();
       const newPosition = e.clientX - rect.left;
       
-      setTracks(prevTracks => {
-        return prevTracks.map(track => {
-          if (track.id === e.currentTarget.id) {
-            return {
-              ...track,
-              cues: track.cues.map(cue => {
-                if (cue.id === draggedCue.id) {
-                  const newTime = calculateTimeFromPosition(newPosition);
-                  return {
-                    ...cue,
-                    position: newPosition,
-                    time: newTime
-                  };
-                }
-                return cue;
-              })
-            };
-          }
-          return track;
+      // Fix: Add null check for e.currentTarget and handle the case where currentTarget.id might be empty
+      if (e.currentTarget && e.currentTarget.id) {
+        setTracks(prevTracks => {
+          return prevTracks.map(track => {
+            if (track.id === e.currentTarget?.id) {
+              return {
+                ...track,
+                cues: track.cues.map(cue => {
+                  if (cue.id === draggedCue.id) {
+                    const newTime = calculateTimeFromPosition(newPosition);
+                    return {
+                      ...cue,
+                      position: newPosition,
+                      time: newTime
+                    };
+                  }
+                  return cue;
+                })
+              };
+            }
+            return track;
+          });
         });
-      });
+      }
     }
   };
   
@@ -921,156 +924,3 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
                         onClick={() => toggleTrackSolo(track.id)}
                       >
                         <Wand2 size={14} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{track.solo ? "Unsolo" : "Solo"}</TooltipContent>
-                  </Tooltip>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className={cn("h-6 w-6 p-0", track.locked && "text-amber-500")}
-                        onClick={() => toggleTrackLock(track.id)}
-                      >
-                        <PenLine size={14} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{track.locked ? "Unlock" : "Lock"}</TooltipContent>
-                  </Tooltip>
-                </div>
-              </div>
-              
-              {track.expanded && (
-                <div className="pl-8 pr-2 py-1 bg-muted/30 text-xs text-muted-foreground">
-                  {track.cues.length} cues · {track.type}
-                </div>
-              )}
-            </div>
-          ))}
-          
-          <Button 
-            variant="ghost" 
-            className="w-full justify-start mt-2 ml-2"
-            onClick={() => addNewTrack()}
-          >
-            <Plus size={16} className="mr-2" />
-            Add Track
-          </Button>
-        </div>
-        
-        <div className="flex-1 overflow-hidden relative">
-          <div className="h-8 border-b border-border sticky top-0 bg-background pl-2 flex items-end text-xs text-muted-foreground">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="absolute" style={{ 
-                left: `${i * 100 * timelineScale}px` 
-              }}>
-                <div className="h-2 border-l border-border"></div>
-                <div>{`${i * 60}s`}</div>
-              </div>
-            ))}
-          </div>
-          
-          <div className="relative">
-            <div 
-              className="absolute h-full border-l-2 border-red-500 z-10 pointer-events-none" 
-              style={{ 
-                left: `${getPlayheadPosition()}px`,
-                top: '0'
-              }}
-            />
-            
-            <ScrollArea className="h-[calc(100vh-12rem)]" onClick={handleTimelineClick}>
-              <div ref={timelineRef} className="relative min-h-full min-w-[1000px]">
-                {filteredTracks.map(track => (
-                  <div 
-                    key={track.id} 
-                    id={track.id}
-                    className="relative"
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleCueDropOnTrack(e, track.id)}
-                  >
-                    <div 
-                      className={cn(
-                        "runway-timeline-track h-16 border-b border-border relative",
-                        track.type === 'audio' && "bg-runway-teal/10",
-                        track.type === 'video' && "bg-runway-success/10",
-                        track.type === 'lighting' && "bg-runway-highlight/10",
-                        track.type === 'stage' && "bg-runway-warning/10",
-                        track.muted && "opacity-50",
-                        track.locked && "bg-muted/20"
-                      )}
-                    >
-                      {track.cues.map(cue => (
-                        <div
-                          key={cue.id}
-                          className={cn(
-                            "runway-cue absolute top-2 h-12 p-1 rounded border overflow-hidden cursor-grab text-xs",
-                            `runway-cue-${cue.type}`,
-                            cue.type === 'audio' && "bg-runway-teal/80 border-runway-teal",
-                            cue.type === 'video' && "bg-runway-success/80 border-runway-success",
-                            cue.type === 'lighting' && "bg-runway-highlight/80 border-runway-highlight",
-                            cue.type === 'stage' && "bg-runway-warning/80 border-runway-warning",
-                            selectedCue === cue.id && "ring-2 ring-white",
-                            draggedCue?.id === cue.id && "opacity-70 cursor-grabbing"
-                          )}
-                          style={{ 
-                            left: `${cue.position * timelineScale}px`, 
-                            width: `${cue.width * timelineScale}px`,
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCueClick(cue.id);
-                          }}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            handleCueClick(cue.id);
-                          }}
-                          draggable={!track.locked}
-                          onDragStart={(e) => handleCueDragStart(e, cue.id, track.id)}
-                          onDragEnd={handleCueDragEnd}
-                        >
-                          <div className="font-medium truncate">{cue.name}</div>
-                          <div className="text-xs opacity-90 truncate">{cue.time} ({cue.duration})</div>
-                          
-                          <div className="absolute top-0 right-0 opacity-0 hover:opacity-100 bg-black/40 rounded-bl rounded-tr p-0.5">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-5 w-5 p-0 text-white hover:bg-black/40"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteCue(cue.id);
-                              }}
-                            >
-                              <Trash2 size={10} />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                      
-                      {showTimelineGrid && (
-                        <div className="absolute inset-0 pointer-events-none">
-                          {Array.from({ length: 30 }).map((_, i) => (
-                            <div 
-                              key={i}
-                              className="absolute h-full border-l border-border/20"
-                              style={{ left: `${i * 30 * timelineScale}px` }}
-                            ></div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default Timeline;
