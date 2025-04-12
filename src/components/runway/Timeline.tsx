@@ -1,10 +1,23 @@
-
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronRight, Play, SkipForward, Clock, Plus, Pause, RotateCcw } from 'lucide-react';
+import { 
+  ChevronDown, 
+  ChevronRight, 
+  Play, 
+  SkipForward, 
+  Clock, 
+  Plus, 
+  Pause, 
+  RotateCcw,
+  Scissors,
+  ZoomIn,
+  ZoomOut
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
+import { Slider } from '@/components/ui/slider';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface TimelineCue {
   id: string;
@@ -76,7 +89,41 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
   const [currentTime, setCurrentTime] = useState('00:00:00');
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedCue, setSelectedCue] = useState<string | null>(null);
+  const [timelineScale, setTimelineScale] = useState(1);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timeInSecondsRef = useRef(0);
   const { toast } = useToast();
+  
+  const timeToSeconds = (timeString: string): number => {
+    const [hours, minutes, seconds] = timeString.split(':').map(Number);
+    return hours * 3600 + minutes * 60 + seconds;
+  };
+  
+  const secondsToTime = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+  
+  useEffect(() => {
+    if (isPlaying) {
+      playIntervalRef.current = setInterval(() => {
+        timeInSecondsRef.current += 0.1;
+        setCurrentTime(secondsToTime(timeInSecondsRef.current));
+      }, 100);
+    } else if (playIntervalRef.current) {
+      clearInterval(playIntervalRef.current);
+      playIntervalRef.current = null;
+    }
+    
+    return () => {
+      if (playIntervalRef.current) {
+        clearInterval(playIntervalRef.current);
+      }
+    };
+  }, [isPlaying]);
   
   const toggleTrackExpand = (trackId: string) => {
     setTracks(tracks.map(track => 
@@ -93,13 +140,36 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
   };
   
   const handleNextCue = () => {
-    toast({
-      title: "Next cue triggered",
-      description: "Moving to the next cue in the timeline",
+    let nextCuePosition = Infinity;
+    let nextCueFound = false;
+    
+    tracks.forEach(track => {
+      track.cues.forEach(cue => {
+        const cueTimeInSeconds = timeToSeconds(cue.time);
+        if (cueTimeInSeconds > timeInSecondsRef.current && cueTimeInSeconds < nextCuePosition) {
+          nextCuePosition = cueTimeInSeconds;
+          nextCueFound = true;
+        }
+      });
     });
+    
+    if (nextCueFound) {
+      timeInSecondsRef.current = nextCuePosition;
+      setCurrentTime(secondsToTime(nextCuePosition));
+      toast({
+        title: "Jumped to next cue",
+        description: `Time: ${secondsToTime(nextCuePosition)}`,
+      });
+    } else {
+      toast({
+        title: "No next cue found",
+        description: "You've reached the end of the timeline",
+      });
+    }
   };
   
   const handleReset = () => {
+    timeInSecondsRef.current = 0;
     setCurrentTime('00:00:00');
     setIsPlaying(false);
     toast({
@@ -111,7 +181,6 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
   const handleCueClick = (cueId: string) => {
     setSelectedCue(cueId);
     
-    // Find the cue to show its details
     let selectedCueDetails: TimelineCue | undefined;
     
     tracks.forEach(track => {
@@ -120,6 +189,9 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
     });
     
     if (selectedCueDetails) {
+      timeInSecondsRef.current = timeToSeconds(selectedCueDetails.time);
+      setCurrentTime(selectedCueDetails.time);
+      
       toast({
         title: `Selected: ${selectedCueDetails.name}`,
         description: `${selectedCueDetails.type} cue at ${selectedCueDetails.time}`,
@@ -131,12 +203,10 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
     e.preventDefault();
     const cueType = e.dataTransfer.getData('cueType') as 'audio' | 'video' | 'lighting' | 'stage';
     
-    // Calculate drop position
     const trackElement = e.currentTarget as HTMLElement;
     const rect = trackElement.getBoundingClientRect();
     const position = e.clientX - rect.left;
     
-    // Create a new cue
     const newCue: TimelineCue = {
       id: `cue-${Date.now()}`,
       name: `New ${cueType} Cue`,
@@ -147,7 +217,6 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
       width: 100,
     };
     
-    // Add to track
     setTracks(tracks.map(track => 
       track.id === trackId 
         ? { ...track, cues: [...track.cues, newCue] } 
@@ -161,7 +230,6 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
   };
   
   const calculateTimeFromPosition = (position: number): string => {
-    // Convert position to seconds (simple calculation for example)
     const seconds = Math.floor(position / 100) * 60;
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -171,6 +239,85 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
   
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+  };
+  
+  const handleTimelineClick = (e: React.MouseEvent) => {
+    if (!timelineRef.current) return;
+    
+    const rect = timelineRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    
+    const secondsPerPixel = 0.6 / timelineScale;
+    const seconds = clickX * secondsPerPixel;
+    
+    timeInSecondsRef.current = seconds;
+    setCurrentTime(secondsToTime(seconds));
+  };
+  
+  const handleSplitCue = () => {
+    if (!selectedCue) {
+      toast({
+        title: "No cue selected",
+        description: "Select a cue first to split it",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setTracks(currentTracks => {
+      return currentTracks.map(track => {
+        const cueIndex = track.cues.findIndex(cue => cue.id === selectedCue);
+        if (cueIndex === -1) return track;
+        
+        const cue = track.cues[cueIndex];
+        const currentTimeInSeconds = timeToSeconds(currentTime);
+        const cueStartInSeconds = timeToSeconds(cue.time);
+        
+        if (currentTimeInSeconds < cueStartInSeconds || 
+            currentTimeInSeconds > cueStartInSeconds + timeToSeconds(cue.duration)) {
+          return track;
+        }
+        
+        const firstDuration = secondsToTime(currentTimeInSeconds - cueStartInSeconds);
+        const secondDuration = secondsToTime(
+          cueStartInSeconds + timeToSeconds(cue.duration) - currentTimeInSeconds
+        );
+        
+        const totalWidth = cue.width;
+        const splitRatio = (currentTimeInSeconds - cueStartInSeconds) / timeToSeconds(cue.duration);
+        const firstWidth = Math.round(totalWidth * splitRatio);
+        const secondWidth = totalWidth - firstWidth;
+        
+        const firstCue = {
+          ...cue,
+          width: firstWidth,
+          duration: firstDuration,
+        };
+        
+        const secondCue = {
+          ...cue,
+          id: `cue-${Date.now()}`,
+          name: `${cue.name} (split)`,
+          position: cue.position + firstWidth,
+          width: secondWidth, 
+          time: currentTime,
+          duration: secondDuration,
+        };
+        
+        const newCues = [...track.cues];
+        newCues.splice(cueIndex, 1, firstCue, secondCue);
+        
+        return {
+          ...track,
+          cues: newCues,
+        };
+      });
+    });
+    
+    toast({
+      title: "Cue split",
+      description: `Cue split at ${currentTime}`,
+    });
   };
   
   const addNewTrack = () => {
@@ -193,40 +340,85 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
     });
   };
   
+  const handleZoomIn = () => {
+    setTimelineScale(prev => Math.min(prev * 1.2, 3));
+  };
+  
+  const handleZoomOut = () => {
+    setTimelineScale(prev => Math.max(prev / 1.2, 0.5));
+  };
+  
+  const getPlayheadPosition = () => {
+    return timeInSecondsRef.current * (100 * timelineScale / 60);
+  };
+  
   return (
     <div className={cn("flex flex-col h-full", className)}>
       <div className="flex items-center gap-2 p-2 border-b border-border">
-        <Button 
-          size="sm" 
-          variant="secondary" 
-          className="gap-1"
-          onClick={handlePlayPause}
-        >
-          {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-          {isPlaying ? 'Pause' : 'Play'}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button 
+            size="sm" 
+            variant="secondary" 
+            className="gap-1"
+            onClick={handlePlayPause}
+          >
+            {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+            {isPlaying ? 'Pause' : 'Play'}
+          </Button>
+          
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="gap-1"
+            onClick={handleNextCue}
+          >
+            <SkipForward size={14} />
+            Next Cue
+          </Button>
+          
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="gap-1"
+            onClick={handleReset}
+          >
+            <RotateCcw size={14} />
+            Reset
+          </Button>
+          
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1"
+            onClick={handleSplitCue}
+          >
+            <Scissors size={14} />
+            Split
+          </Button>
+        </div>
         
-        <Button 
-          size="sm" 
-          variant="outline" 
-          className="gap-1"
-          onClick={handleNextCue}
-        >
-          <SkipForward size={14} />
-          Next Cue
-        </Button>
+        <Separator orientation="vertical" className="h-6" />
         
-        <Button 
-          size="sm" 
-          variant="outline" 
-          className="gap-1"
-          onClick={handleReset}
-        >
-          <RotateCcw size={14} />
-          Reset
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleZoomOut}
+          >
+            <ZoomOut size={14} />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleZoomIn}
+          >
+            <ZoomIn size={14} />
+          </Button>
+        </div>
         
-        <div className="ml-4 flex items-center gap-1">
+        <div className="flex-1" />
+        
+        <div className="flex items-center gap-1">
           <Clock size={16} className="text-muted-foreground" />
           <span className="text-sm font-mono">{currentTime}</span>
         </div>
@@ -237,7 +429,10 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
           {tracks.map(track => (
             <div key={track.id} className="border-b border-border">
               <div 
-                className="flex items-center px-3 py-2 hover:bg-muted cursor-pointer"
+                className={cn(
+                  "flex items-center px-3 py-2 hover:bg-muted cursor-pointer",
+                  track.expanded ? "bg-muted/50" : ""
+                )}
                 onClick={() => toggleTrackExpand(track.id)}
               >
                 {track.expanded ? 
@@ -258,46 +453,72 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
           </Button>
         </div>
         
-        <div className="flex-1 overflow-auto relative">
-          {/* Timeline header with time markers */}
+        <div className="flex-1 overflow-hidden">
           <div className="h-8 border-b border-border sticky top-0 bg-background pl-2 flex items-end text-xs text-muted-foreground">
             {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="absolute" style={{ left: `${i * 100}px` }}>
+              <div key={i} className="absolute" style={{ 
+                left: `${i * 100 * timelineScale}px` 
+              }}>
                 <div className="h-2 border-l border-border"></div>
                 <div>{`${i * 60}s`}</div>
               </div>
             ))}
           </div>
           
-          {/* Timeline tracks */}
-          <div>
-            {tracks.map(track => (
-              <div key={track.id} className="relative">
-                <div 
-                  className="runway-timeline-track" 
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleTrackDrop(e, track.id)}
-                >
-                  {track.cues.map(cue => (
-                    <div
-                      key={cue.id}
+          <div className="relative">
+            <div 
+              className="absolute h-full border-l-2 border-red-500 z-10 pointer-events-none" 
+              style={{ 
+                left: `${getPlayheadPosition()}px`,
+                top: '0'
+              }}
+            />
+            
+            <ScrollArea className="h-[calc(100vh-12rem)]" onClick={handleTimelineClick}>
+              <div ref={timelineRef} className="relative min-h-full min-w-[1000px]">
+                {tracks.map(track => (
+                  <div key={track.id} className="relative">
+                    <div 
                       className={cn(
-                        "runway-cue absolute",
-                        `runway-cue-${cue.type}`,
-                        selectedCue === cue.id && "ring-2 ring-white"
+                        "runway-timeline-track h-16 border-b border-border relative",
+                        track.type === 'audio' && "bg-runway-teal/10",
+                        track.type === 'video' && "bg-runway-success/10",
+                        track.type === 'lighting' && "bg-runway-highlight/10",
+                        track.type === 'stage' && "bg-runway-warning/10"
                       )}
-                      style={{ 
-                        left: `${cue.position}px`, 
-                        width: `${cue.width}px`,
-                      }}
-                      onClick={() => handleCueClick(cue.id)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleTrackDrop(e, track.id)}
                     >
-                      {cue.name}
+                      {track.cues.map(cue => (
+                        <div
+                          key={cue.id}
+                          className={cn(
+                            "runway-cue absolute top-2 h-12 p-1 rounded border overflow-hidden cursor-pointer text-xs",
+                            `runway-cue-${cue.type}`,
+                            cue.type === 'audio' && "bg-runway-teal/80 border-runway-teal",
+                            cue.type === 'video' && "bg-runway-success/80 border-runway-success",
+                            cue.type === 'lighting' && "bg-runway-highlight/80 border-runway-highlight",
+                            cue.type === 'stage' && "bg-runway-warning/80 border-runway-warning",
+                            selectedCue === cue.id && "ring-2 ring-white"
+                          )}
+                          style={{ 
+                            left: `${cue.position * timelineScale}px`, 
+                            width: `${cue.width * timelineScale}px`,
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCueClick(cue.id);
+                          }}
+                        >
+                          <div className="font-medium truncate">{cue.name}</div>
+                          <div className="text-xs opacity-90 truncate">{cue.time} ({cue.duration})</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </ScrollArea>
           </div>
         </div>
       </div>
