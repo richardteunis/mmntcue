@@ -522,8 +522,9 @@ const Timeline: React.FC<TimelineProps> = ({
       });
     });
     
-    if (selectedCue === cueId) {
-      setSelectedCue(null);
+    // Fix: Check if selectedCue exists and matches cueId before calling onCueSelect
+    if (selectedCue && selectedCue.id === cueId && onCueSelect) {
+      onCueSelect(null, null);
     }
     
     toast({
