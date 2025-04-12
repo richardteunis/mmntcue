@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
@@ -50,26 +51,30 @@ const Dashboard: React.FC = () => {
   const [showName, setShowName] = useState('Summer Festival 2025');
   const [users, setUsers] = useState<CollaborationUser[]>(mockUsers);
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
+  const [selectedCue, setSelectedCue] = useState<TimelineCue | null>(null);
   const { toast } = useToast();
   
   // Handle cue selection
-  const handleCueSelect = (cueId: string | null) => {
+  const handleCueSelect = (cueId: string | null, cue: TimelineCue | null) => {
     setSelectedCueId(cueId);
+    setSelectedCue(cue);
   };
   
   // Handle cue update
   const handleCueUpdate = (updatedCue: TimelineCue) => {
-    // In a real app, this would update the cue in the timeline
-    toast({
-      title: "Cue updated",
-      description: `${updatedCue.name} has been updated`,
-    });
+    // Updated cue gets passed back to Timeline component
+    if (selectedCue) {
+      toast({
+        title: "Cue updated",
+        description: `${updatedCue.name} has been updated`,
+      });
+    }
   };
   
   // Handle cue deletion
   const handleCueDelete = (cueId: string) => {
-    // In a real app, this would remove the cue from the timeline
     setSelectedCueId(null);
+    setSelectedCue(null);
     toast({
       title: "Cue deleted",
       description: `Cue has been removed from the timeline`,
@@ -79,7 +84,6 @@ const Dashboard: React.FC = () => {
   
   // Handle cue duplication
   const handleCueDuplicate = (cueId: string) => {
-    // In a real app, this would duplicate the cue in the timeline
     toast({
       title: "Cue duplicated",
       description: `A copy of the cue has been created`,
@@ -150,17 +154,26 @@ const Dashboard: React.FC = () => {
                 <Timeline 
                   className="h-full" 
                   onCueSelect={handleCueSelect}
-                />
-              </ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={25} minSize={20}>
-                <CuePanel 
                   selectedCueId={selectedCueId}
-                  onCueUpdate={handleCueUpdate}
-                  onCueDelete={handleCueDelete}
-                  onCueDuplicate={handleCueDuplicate}
+                  onCueChange={handleCueUpdate}
+                  selectedCue={selectedCue}
                 />
               </ResizablePanel>
+              
+              {selectedCueId && (
+                <>
+                  <ResizableHandle withHandle />
+                  <ResizablePanel defaultSize={25} minSize={20}>
+                    <CuePanel 
+                      selectedCueId={selectedCueId}
+                      selectedCue={selectedCue}
+                      onCueUpdate={handleCueUpdate}
+                      onCueDelete={handleCueDelete}
+                      onCueDuplicate={handleCueDuplicate}
+                    />
+                  </ResizablePanel>
+                </>
+              )}
             </ResizablePanelGroup>
             
             {/* Collaboration indicators */}

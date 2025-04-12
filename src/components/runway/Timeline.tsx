@@ -69,7 +69,10 @@ interface TimelineTrack {
 
 export interface TimelineProps {
   className?: string;
-  onCueSelect?: (cueId: string | null) => void;
+  onCueSelect?: (cueId: string | null, cue: TimelineCue | null) => void;
+  selectedCueId?: string | null;
+  onCueChange?: (updatedCue: TimelineCue) => void;
+  selectedCue?: TimelineCue | null;
 }
 
 const mockTracks: TimelineTrack[] = [
@@ -79,8 +82,33 @@ const mockTracks: TimelineTrack[] = [
     type: 'audio',
     expanded: true,
     cues: [
-      { id: 'cue-1', name: 'Intro Music', type: 'audio', time: '00:00:00', duration: '0:30', position: 0, width: 120 },
-      { id: 'cue-2', name: 'Applause', type: 'audio', time: '00:01:30', duration: '0:10', position: 180, width: 60 },
+      { 
+        id: 'cue-1', 
+        name: 'Intro Music', 
+        type: 'audio', 
+        time: '00:00:00', 
+        duration: '0:30', 
+        position: 0, 
+        width: 120,
+        track: 'Audio Main',
+        color: 'bg-runway-teal',
+        autoFollow: false,
+        notes: 'Fade in gradually with the lights.',
+        effects: ['fade-in', 'crossfade']
+      },
+      { 
+        id: 'cue-2', 
+        name: 'Applause', 
+        type: 'audio', 
+        time: '00:01:30', 
+        duration: '0:10', 
+        position: 180, 
+        width: 60,
+        track: 'Audio Main',
+        color: 'bg-runway-teal',
+        notes: '',
+        effects: []
+      },
     ]
   },
   {
@@ -115,11 +143,16 @@ const mockTracks: TimelineTrack[] = [
   },
 ];
 
-const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
+const Timeline: React.FC<TimelineProps> = ({ 
+  className, 
+  onCueSelect, 
+  selectedCueId,
+  onCueChange,
+  selectedCue
+}) => {
   const [tracks, setTracks] = useState<TimelineTrack[]>(mockTracks);
   const [currentTime, setCurrentTime] = useState('00:00:00');
   const [isPlaying, setIsPlaying] = useState(false);
-  const [selectedCue, setSelectedCue] = useState<string | null>(null);
   const [timelineScale, setTimelineScale] = useState(1);
   const [searchFilter, setSearchFilter] = useState('');
   const [trackFilters, setTrackFilters] = useState<string[]>([]);
@@ -214,18 +247,21 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   };
   
   const handleCueClick = (cueId: string) => {
-    setSelectedCue(cueId);
-    
-    if (onCueSelect) {
-      onCueSelect(cueId);
-    }
-    
-    let selectedCueDetails: TimelineCue | undefined;
+    let selectedCueDetails: TimelineCue | null = null;
     
     tracks.forEach(track => {
       const found = track.cues.find(cue => cue.id === cueId);
-      if (found) selectedCueDetails = found;
+      if (found) {
+        selectedCueDetails = {
+          ...found,
+          track: track.name
+        };
+      }
     });
+    
+    if (onCueSelect) {
+      onCueSelect(cueId, selectedCueDetails);
+    }
     
     if (selectedCueDetails) {
       timeInSecondsRef.current = timeToSeconds(selectedCueDetails.time);
@@ -895,7 +931,7 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
                             cue.type === 'video' && "bg-runway-success/80 border-runway-success",
                             cue.type === 'lighting' && "bg-runway-highlight/80 border-runway-highlight",
                             cue.type === 'stage' && "bg-runway-warning/80 border-runway-warning",
-                            selectedCue === cue.id && "ring-2 ring-white"
+                            selectedCueId === cue.id && "ring-2 ring-white"
                           )}
                           style={{ 
                             left: `${cue.position * timelineScale}px`, 
