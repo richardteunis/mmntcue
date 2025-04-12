@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -38,8 +39,16 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
   // Update cursor position with mouse movement
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (cursorRef.current) {
-        setCursorPosition({ x: e.clientX, y: e.clientY });
+      if (timelineRef.current) {
+        const rect = timelineRef.current.getBoundingClientRect();
+        // Only show cursor if mouse is over the timeline area
+        if (e.clientX >= rect.left && e.clientX <= rect.right &&
+            e.clientY >= rect.top && e.clientY <= rect.bottom) {
+          setCursorPosition({ x: e.clientX, y: e.clientY });
+          setShowAddCursor(true);
+        } else {
+          setShowAddCursor(false);
+        }
       }
     };
     
@@ -126,18 +135,17 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
           >
             {/* Add indicator that appears when hovering */}
             {showAddCursor && (
-              <div className="fixed z-10 pointer-events-none opacity-50" style={{ 
+              <div className="fixed z-10 pointer-events-none opacity-70" style={{ 
                 transform: 'translate(-50%, -50%)',
                 left: `${cursorPosition.x}px`,
                 top: `${cursorPosition.y}px`,
                 willChange: 'left, top'
               }} 
               ref={cursorRef}>
-                <Plus size={20} />
+                <Plus size={18} className="text-primary" />
               </div>
             )}
             
-            {/* ... keep existing code (tracks mapping) */}
             {tracks.map(track => (
               <div 
                 key={track.id} 

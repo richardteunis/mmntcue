@@ -139,10 +139,6 @@ const Dashboard: React.FC = () => {
     };
   }, []);
   
-  // Define panel sizes based on selection state
-  const timelinePanelSize = selectedCueId ? 75 : 100;
-  const cuePanelSize = selectedCueId ? 25 : 0;
-  
   return (
     <TooltipProvider>
       <div className="flex h-screen overflow-hidden bg-background text-foreground">
@@ -153,7 +149,7 @@ const Dashboard: React.FC = () => {
           
           <div className="flex flex-1 overflow-hidden relative">
             <ResizablePanelGroup direction="horizontal">
-              <ResizablePanel defaultSize={timelinePanelSize} minSize={50}>
+              <ResizablePanel defaultSize={100} minSize={60}>
                 <Timeline 
                   className="h-full" 
                   onCueSelect={handleCueSelect}
@@ -163,7 +159,7 @@ const Dashboard: React.FC = () => {
               {selectedCueId && (
                 <>
                   <ResizableHandle withHandle />
-                  <ResizablePanel defaultSize={cuePanelSize} minSize={20}>
+                  <ResizablePanel defaultSize={40} minSize={20}>
                     <CuePanel 
                       selectedCueId={selectedCueId}
                       onCueUpdate={handleCueUpdate}
