@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
@@ -57,6 +56,38 @@ const mockUsers: CollaborationUser[] = [
 // Available tracks for cues
 const availableTracks = ['audio', 'video', 'lighting', 'stage', 'effects'];
 
+// Initial demo cues
+const initialCues: TimelineCue[] = [
+  {
+    id: 'cue-1',
+    name: 'Intro Music',
+    track: 'audio',
+    time: '00:00:00',
+    duration: '00:01:30',
+    type: 'audio',
+    color: 'bg-runway-blue',
+    autoFollow: false,
+    notes: 'Opening theme',
+    effects: [],
+    position: 0,
+    width: 90
+  },
+  {
+    id: 'cue-2',
+    name: 'Spotlight On',
+    track: 'lighting',
+    time: '00:01:00',
+    duration: '00:03:00',
+    type: 'lighting',
+    color: 'bg-runway-amber',
+    autoFollow: true,
+    notes: 'Center stage',
+    effects: [],
+    position: 60,
+    width: 180
+  }
+];
+
 const Dashboard: React.FC = () => {
   const [showName, setShowName] = useState('Summer Festival 2025');
   const [users, setUsers] = useState<CollaborationUser[]>(mockUsers);
@@ -65,6 +96,7 @@ const Dashboard: React.FC = () => {
   const [copiedCue, setCopiedCue] = useState<TimelineCue | null>(null);
   const [isAddEditPanelOpen, setIsAddEditPanelOpen] = useState(false);
   const [editingCue, setEditingCue] = useState<TimelineCue | null>(null);
+  const [cues, setCues] = useState<TimelineCue[]>(initialCues);
   const { toast } = useToast();
   
   // Handle cue selection
@@ -75,18 +107,25 @@ const Dashboard: React.FC = () => {
   
   // Handle cue update
   const handleCueUpdate = (updatedCue: TimelineCue) => {
-    // Updated cue gets passed back to Timeline component
-    if (selectedCue) {
+    // Update the cue in the cues array
+    setCues(prevCues => 
+      prevCues.map(cue => cue.id === updatedCue.id ? updatedCue : cue)
+    );
+    
+    // Update selected cue if it's the one being updated
+    if (selectedCue && selectedCue.id === updatedCue.id) {
       setSelectedCue(updatedCue);
-      toast({
-        title: "Cue updated",
-        description: `${updatedCue.name} has been updated`,
-      });
     }
+    
+    toast({
+      title: "Cue updated",
+      description: `${updatedCue.name} has been updated`,
+    });
   };
   
   // Handle cue deletion
   const handleCueDelete = (cueId: string) => {
+    setCues(prevCues => prevCues.filter(cue => cue.id !== cueId));
     setSelectedCueId(null);
     setSelectedCue(null);
     toast({
@@ -98,10 +137,23 @@ const Dashboard: React.FC = () => {
   
   // Handle cue duplication
   const handleCueDuplicate = (cueId: string) => {
-    toast({
-      title: "Cue duplicated",
-      description: `A copy of the cue has been created`,
-    });
+    const cueToDuplicate = cues.find(cue => cue.id === cueId);
+    
+    if (cueToDuplicate) {
+      const newCue: TimelineCue = {
+        ...cueToDuplicate,
+        id: `cue-${Date.now()}`,
+        name: `${cueToDuplicate.name} (Copy)`,
+        position: cueToDuplicate.position + 20, // Offset slightly from original
+      };
+      
+      setCues(prevCues => [...prevCues, newCue]);
+      
+      toast({
+        title: "Cue duplicated",
+        description: `A copy of ${cueToDuplicate.name} has been created`,
+      });
+    }
   };
 
   // Open add cue panel
@@ -128,17 +180,23 @@ const Dashboard: React.FC = () => {
   const handleSaveCue = (cue: TimelineCue) => {
     // If we're editing an existing cue
     if (editingCue) {
+      setCues(prevCues => 
+        prevCues.map(existingCue => existingCue.id === cue.id ? cue : existingCue)
+      );
       setSelectedCue(cue);
-      // Dispatch an event to tell Timeline to update the cue
-      document.dispatchEvent(new CustomEvent("timeline-update-cue", { 
-        detail: { cue } 
-      }));
+      setIsAddEditPanelOpen(false);
+      toast({
+        title: "Cue updated",
+        description: `${cue.name} has been updated`,
+      });
     } else {
       // If we're adding a new cue
-      // Dispatch an event to tell Timeline to add the cue
-      document.dispatchEvent(new CustomEvent("timeline-add-cue", { 
-        detail: { cue } 
-      }));
+      setCues(prevCues => [...prevCues, cue]);
+      setIsAddEditPanelOpen(false);
+      toast({
+        title: "Cue added",
+        description: `${cue.name} has been added to the timeline`,
+      });
     }
   };
   
@@ -152,10 +210,48 @@ const Dashboard: React.FC = () => {
       }
     };
     
+    const handleAddCueEvent = (e: Event) => {
+      if (e instanceof CustomEvent) {
+        const { cue } = e.detail;
+        setCues(prevCues => [...prevCues, cue]);
+      }
+    };
+    
+    const handleUpdateCueEvent = (e: Event) => {
+      if (e instanceof CustomEvent) {
+        const { cue } = e.detail;
+        setCues(prevCues => 
+          prevCues.map(existingCue => existingCue.id === cue.id ? cue : existingCue)
+        );
+      }
+    };
+    
+    const handleDeleteCueEvent = (e: Event) => {
+      if (e instanceof CustomEvent) {
+        const { cueId } = e.detail;
+        handleCueDelete(cueId);
+      }
+    };
+    
+    const handleDuplicateCueEvent = (e: Event) => {
+      if (e instanceof CustomEvent) {
+        const { cueId } = e.detail;
+        handleCueDuplicate(cueId);
+      }
+    };
+    
     document.addEventListener('timeline-edit-cue', handleEditCueEvent);
+    document.addEventListener('timeline-add-cue', handleAddCueEvent);
+    document.addEventListener('timeline-update-cue', handleUpdateCueEvent);
+    document.addEventListener('timeline-delete-cue', handleDeleteCueEvent);
+    document.addEventListener('timeline-duplicate-cue', handleDuplicateCueEvent);
     
     return () => {
       document.removeEventListener('timeline-edit-cue', handleEditCueEvent);
+      document.removeEventListener('timeline-add-cue', handleAddCueEvent);
+      document.removeEventListener('timeline-update-cue', handleUpdateCueEvent);
+      document.removeEventListener('timeline-delete-cue', handleDeleteCueEvent);
+      document.removeEventListener('timeline-duplicate-cue', handleDuplicateCueEvent);
     };
   }, []);
   
@@ -175,27 +271,18 @@ const Dashboard: React.FC = () => {
       if (e.key === "Delete" || e.key === "Backspace") {
         console.log("Delete shortcut detected");
         handleCueDelete(selectedCue.id);
-        document.dispatchEvent(new CustomEvent("timeline-delete-cue", { 
-          detail: { cueId: selectedCue.id } 
-        }));
       }
       
       if (e.key === "d" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         console.log("Duplicate shortcut detected");
         handleCueDuplicate(selectedCue.id);
-        document.dispatchEvent(new CustomEvent("timeline-duplicate-cue", { 
-          detail: { cueId: selectedCue.id } 
-        }));
       }
       
       if (e.key === "c" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         console.log("Copy shortcut detected");
         setCopiedCue({...selectedCue});
-        document.dispatchEvent(new CustomEvent("timeline-copy-cue", { 
-          detail: { cue: selectedCue } 
-        }));
         toast({
           title: "Cue copied",
           description: `${selectedCue.name} copied to clipboard`,
@@ -205,9 +292,17 @@ const Dashboard: React.FC = () => {
       if (e.key === "v" && (e.ctrlKey || e.metaKey) && copiedCue) {
         e.preventDefault();
         console.log("Paste shortcut detected");
-        document.dispatchEvent(new CustomEvent("timeline-paste-cue", { 
-          detail: { cue: copiedCue } 
-        }));
+        const newCue: TimelineCue = {
+          ...copiedCue,
+          id: `cue-${Date.now()}`,
+          name: `${copiedCue.name} (Copy)`,
+          position: copiedCue.position + 20, // Offset slightly from original
+        };
+        setCues(prevCues => [...prevCues, newCue]);
+        toast({
+          title: "Cue pasted",
+          description: `${newCue.name} added to timeline`,
+        });
       }
 
       // Add cue shortcut (n key)
@@ -353,6 +448,7 @@ const Dashboard: React.FC = () => {
                     selectedCueId={selectedCueId}
                     onCueChange={handleCueUpdate}
                     selectedCue={selectedCue}
+                    cues={cues}
                   />
                 </div>
               </ResizablePanel>
