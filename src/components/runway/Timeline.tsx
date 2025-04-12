@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -645,5 +646,6 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   );
 };
 
-export { TimelineCue };
+// Use "export type" instead of "export" to fix TS1205 error
+export type { TimelineCue };
 export default Timeline;
