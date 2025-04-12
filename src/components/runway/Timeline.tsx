@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { 
@@ -341,7 +342,7 @@ const Timeline: React.FC<TimelineProps> = ({
     
     setTracks(currentTracks => {
       return currentTracks.map(track => {
-        const cueIndex = track.cues.findIndex(cue => cue.id === selectedCue);
+        const cueIndex = track.cues.findIndex(cue => cue.id === selectedCue.id);
         if (cueIndex === -1) return track;
         
         const cue = track.cues[cueIndex];
@@ -536,16 +537,16 @@ const Timeline: React.FC<TimelineProps> = ({
     if (!selectedCue) return;
     
     if (e.key === "Delete") {
-      deleteCue(selectedCue);
+      deleteCue(selectedCue.id);
     }
     
     if (e.key === "d" && e.ctrlKey) {
       e.preventDefault();
-      duplicateCue(selectedCue);
+      duplicateCue(selectedCue.id);
     }
     
     if (e.key === "x" && e.ctrlKey) {
-      deleteCue(selectedCue);
+      deleteCue(selectedCue.id);
     }
   };
   
