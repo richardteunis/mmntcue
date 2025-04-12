@@ -222,7 +222,6 @@ const Timeline: React.FC<TimelineProps> = ({
         
         setTracks(updatedTracks);
       } else {
-        // Update the cues in the existing tracks
         setTracks(prevTracks => 
           prevTracks.map(track => {
             const trackCues = trackMap.get(track.name) || [];
@@ -905,4 +904,382 @@ const Timeline: React.FC<TimelineProps> = ({
       document.body.style.cursor = 'grabbing';
       
       document.addEventListener('mousemove', handleTimelineMouseMove);
-      document.addEventListener('
+      document.addEventListener('mouseup', handleTimelineMouseUp);
+    }
+  };
+  
+  const handleTimelineMouseMove = (e: MouseEvent) => {
+    if (!isDraggingTimelineRef.current || !scrollAreaRef.current) return;
+    
+    const deltaX = lastClientXRef.current - e.clientX;
+    lastClientXRef.current = e.clientX;
+    
+    scrollAreaRef.current.scrollLeft += deltaX;
+  };
+  
+  const handleTimelineMouseUp = () => {
+    isDraggingTimelineRef.current = false;
+    document.body.style.cursor = 'default';
+    
+    document.removeEventListener('mousemove', handleTimelineMouseMove);
+    document.removeEventListener('mouseup', handleTimelineMouseUp);
+  };
+  
+  const handlePasteCue = () => {
+    if (!copiedCue) {
+      toast({
+        title: "No cue to paste",
+        description: "Copy a cue first before pasting",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const newCue: TimelineCue = {
+      ...copiedCue,
+      id: `cue-${Date.now()}`,
+      name: `${copiedCue.name} (Copy)`,
+      position: copiedCue.position + 20,
+    };
+    
+    if (onCueChange) {
+      onCueChange(newCue);
+    } else {
+      // Find the track that matches the copied cue's track name
+      const trackToAddTo = tracks.find(t => t.name === newCue.track);
+      
+      if (trackToAddTo) {
+        setTracks(prevTracks => 
+          prevTracks.map(track => 
+            track.id === trackToAddTo.id
+              ? { ...track, cues: [...track.cues, newCue] }
+              : track
+          )
+        );
+      } else {
+        // If track not found, add to first track
+        setTracks(prevTracks => {
+          if (prevTracks.length === 0) return prevTracks;
+          
+          const updatedTracks = [...prevTracks];
+          updatedTracks[0] = {
+            ...updatedTracks[0],
+            cues: [...updatedTracks[0].cues, newCue]
+          };
+          
+          return updatedTracks;
+        });
+      }
+    }
+    
+    toast({
+      title: "Cue pasted",
+      description: `${newCue.name} added to timeline`,
+    });
+  };
+  
+  const renderToolbar = () => (
+    <div className="flex items-center p-2 gap-2 border-b border-border">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handlePlayPause}
+            className="h-8 w-8"
+          >
+            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{isPlaying ? "Pause" : "Play"}</TooltipContent>
+      </Tooltip>
+      
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleNextCue}
+            className="h-8 w-8"
+          >
+            <SkipForward size={16} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Next Cue</TooltipContent>
+      </Tooltip>
+      
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleReset}
+            className="h-8 w-8"
+          >
+            <RotateCcw size={16} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Reset</TooltipContent>
+      </Tooltip>
+      
+      <Separator orientation="vertical" className="h-5 mx-1" />
+      
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleSplitCue}
+            disabled={!selectedCue}
+            className="h-8 w-8"
+          >
+            <Scissors size={16} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Split Cue</TooltipContent>
+      </Tooltip>
+      
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              if (selectedCue) {
+                setCopiedCue(selectedCue);
+                toast({
+                  title: "Cue copied",
+                  description: `${selectedCue.name} copied to clipboard`,
+                });
+              }
+            }}
+            disabled={!selectedCue}
+            className="h-8 w-8"
+          >
+            <Copy size={16} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Copy</TooltipContent>
+      </Tooltip>
+      
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handlePasteCue}
+            disabled={!copiedCue}
+            className="h-8 w-8"
+          >
+            <ClipboardPaste size={16} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Paste</TooltipContent>
+      </Tooltip>
+      
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleUndoDelete}
+            disabled={!canUndo}
+            className="h-8 w-8"
+          >
+            <Undo2 size={16} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Undo</TooltipContent>
+      </Tooltip>
+      
+      <Separator orientation="vertical" className="h-5 mx-1" />
+      
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleZoomIn}
+            className="h-8 w-8"
+          >
+            <ZoomIn size={16} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Zoom In</TooltipContent>
+      </Tooltip>
+      
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleZoomOut}
+            className="h-8 w-8"
+          >
+            <ZoomOut size={16} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Zoom Out</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+  
+  const renderTrack = (track: TimelineTrack) => (
+    <div 
+      key={track.id}
+      className="runway-timeline-track"
+      onDragOver={handleDragOver}
+      onDrop={e => handleTrackDrop(e, track.id)}
+    >
+      <div className="flex items-center h-full w-40 min-w-40 px-2 border-r border-border bg-background">
+        <button
+          onClick={() => toggleTrackExpand(track.id)}
+          className="mr-1 h-6 w-6 flex items-center justify-center rounded hover:bg-muted"
+        >
+          {track.expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+        </button>
+        
+        <div 
+          className={cn(
+            "flex-grow truncate font-medium text-sm",
+            track.locked && "text-muted-foreground"
+          )}
+        >
+          {track.name}
+        </div>
+        
+        <div className="flex items-center gap-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => toggleTrackLock(track.id)}
+                className={cn(
+                  "h-6 w-6 rounded flex items-center justify-center",
+                  track.locked ? "text-primary" : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                <Lock size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">{track.locked ? "Unlock Track" : "Lock Track"}</TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => toggleTrackSolo(track.id)}
+                className={cn(
+                  "h-6 w-6 rounded flex items-center justify-center",
+                  track.solo ? "text-yellow-500" : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                <Zap size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">{track.solo ? "Un-Solo Track" : "Solo Track"}</TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => handleEditTrack(track.id)}
+                className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:bg-muted"
+              >
+                <Pencil size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Edit Track</TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+      
+      <div 
+        className="relative flex-grow h-full overflow-hidden"
+        onDragOver={handleDragOver}
+        onDrop={e => handleTrackDrop(e, track.id)}
+      >
+        {track.cues.map(cue => (
+          <div 
+            key={cue.id}
+            className={cn(
+              "runway-cue absolute top-1",
+              `runway-cue-${cue.type}`,
+              cue.color,
+              selectedCueId === cue.id && "ring-2 ring-white"
+            )}
+            style={{ 
+              left: `${cue.position}px`, 
+              width: `${cue.width}px`,
+            }}
+            onClick={e => {
+              e.stopPropagation();
+              handleCueClick(cue.id);
+            }}
+            draggable={!track.locked}
+            onDragStart={e => handleCueDragStart(e, cue, track.id)}
+          >
+            <div className="truncate text-xs">{cue.name}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+  
+  return (
+    <div className={cn("flex flex-col h-full", className)}>
+      {renderToolbar()}
+      
+      <div 
+        className="flex flex-col flex-grow overflow-hidden"
+        ref={timelineContainerRef}
+      >
+        <ScrollArea 
+          ref={scrollAreaRef}
+          className="h-full relative"
+        >
+          <div 
+            className="h-full"
+            ref={timelineRef}
+            onClick={handleTimelineClick}
+            onMouseDown={handleTimelineMouseDown}
+          >
+            <div className="min-w-[2000px]">
+              {tracks.map(track => renderTrack(track))}
+              
+              <div className="h-12 flex items-center px-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex gap-1.5 text-muted-foreground"
+                  onClick={() => onAddTrack ? onAddTrack() : addNewTrack()}
+                >
+                  <PlusCircle size={16} />
+                  <span>Add Track</span>
+                </Button>
+              </div>
+            </div>
+            
+            <div 
+              ref={playheadRef}
+              className="absolute top-0 bottom-0 w-0.5 bg-primary z-10 pointer-events-none"
+              style={{
+                left: `${timeInSecondsRef.current * (100 * timelineScale) / 60}px`,
+              }}
+            >
+              <div 
+                className="absolute -left-2.5 top-0 w-5 h-5 bg-primary rounded-full cursor-grab"
+                style={{ pointerEvents: 'auto' }}
+                onMouseDown={handlePlayheadMouseDown}
+              />
+              <div className="absolute -left-10 -top-7 bg-background border border-border rounded px-1 py-0.5 text-xs whitespace-nowrap">
+                {currentTime}
+              </div>
+            </div>
+          </div>
+        </ScrollArea>
+      </div>
+    </div>
+  );
+};
+
+export default Timeline;
