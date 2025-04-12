@@ -230,11 +230,13 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     
     if (draggedCue) {
       const trackElement = e.currentTarget as HTMLElement;
       if (!trackElement || !trackElement.id) return;
       
+      const trackId = trackElement.id;
       const rect = trackElement.getBoundingClientRect();
       let newPosition = e.clientX - rect.left;
       
@@ -245,21 +247,36 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
       
       setTracks(prevTracks => {
         return prevTracks.map(track => {
-          if (track.id === trackElement.id) {
-            return {
-              ...track,
-              cues: track.cues.map(cue => {
-                if (cue.id === draggedCue.id) {
-                  const newTime = calculateTimeFromPosition(newPosition);
-                  return {
-                    ...cue,
-                    position: newPosition,
-                    time: newTime
-                  };
-                }
-                return cue;
-              })
-            };
+          const trackWithCue = prevTracks.find(t => 
+            t.cues.some(c => c.id === draggedCue.id)
+          );
+          
+          if (!trackWithCue) return track;
+          
+          const cueToUpdate = trackWithCue.cues.find(c => c.id === draggedCue.id);
+          
+          if (!cueToUpdate) return track;
+          
+          if (track.id === trackId) {
+            if (trackWithCue.id === track.id) {
+              return {
+                ...track,
+                cues: track.cues.map(cue => {
+                  if (cue.id === draggedCue.id) {
+                    const newTime = calculateTimeFromPosition(newPosition);
+                    return {
+                      ...cue,
+                      position: newPosition,
+                      time: newTime
+                    };
+                  }
+                  return cue;
+                })
+              };
+            } 
+            else if (trackWithCue.id !== track.id) {
+              return track;
+            }
           }
           return track;
         });
@@ -268,26 +285,28 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   };
   
   const handleCueDragStart = (e: React.DragEvent, cueId: string, trackId: string) => {
+    e.stopPropagation();
     const initialX = e.clientX;
     setDraggedCue({ id: cueId, initialX, trackId });
     
     e.dataTransfer.setData('cueId', cueId);
     e.dataTransfer.setData('sourceTrackId', trackId);
+    e.dataTransfer.effectAllowed = 'move';
   };
   
   const handleCueDragEnd = (e: React.DragEvent) => {
+    e.stopPropagation();
     setDraggedCue(null);
   };
   
   const handleCueDropOnTrack = (e: React.DragEvent, targetTrackId: string) => {
     e.preventDefault();
+    e.stopPropagation();
     
     const cueId = e.dataTransfer.getData('cueId');
     const sourceTrackId = e.dataTransfer.getData('sourceTrackId');
     
     if (!cueId) return;
-    
-    if (sourceTrackId === targetTrackId) return;
     
     const trackElement = e.currentTarget as HTMLElement;
     const rect = trackElement.getBoundingClientRect();
@@ -295,41 +314,56 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
     
     setTracks(prevTracks => {
       let cueToMove: TimelineCue | undefined;
+      let sourceTrack: TimelineTrack | undefined;
       
-      const updatedTracks = prevTracks.map(track => {
-        if (track.id === sourceTrackId) {
-          const updatedCues = track.cues.filter(cue => {
-            if (cue.id === cueId) {
-              cueToMove = {...cue};
-              return false;
-            }
-            return true;
-          });
-          
-          return {...track, cues: updatedCues};
+      prevTracks.forEach(track => {
+        const cue = track.cues.find(c => c.id === cueId);
+        if (cue && track.id === sourceTrackId) {
+          cueToMove = {...cue};
+          sourceTrack = track;
         }
-        return track;
       });
       
-      if (cueToMove) {
-        const newTime = calculateTimeFromPosition(newPosition);
-        cueToMove.position = newPosition;
-        cueToMove.time = newTime;
-        
-        return updatedTracks.map(track => {
-          if (track.id === targetTrackId) {
-            return {...track, cues: [...track.cues, cueToMove!]};
-          }
-          return track;
-        });
+      if (!cueToMove) return prevTracks;
+      
+      let adjustedPosition = newPosition;
+      if (snapToGrid) {
+        const gridSize = 20 * timelineScale;
+        adjustedPosition = Math.round(newPosition / gridSize) * gridSize;
       }
       
-      return prevTracks;
+      const newTime = calculateTimeFromPosition(adjustedPosition);
+      
+      return prevTracks.map(track => {
+        if (track.id === sourceTrackId) {
+          return {
+            ...track,
+            cues: track.cues.filter(c => c.id !== cueId)
+          };
+        }
+        
+        if (track.id === targetTrackId) {
+          const updatedCue = {
+            ...cueToMove!,
+            position: adjustedPosition,
+            time: newTime
+          };
+          
+          return {
+            ...track,
+            cues: [...track.cues, updatedCue]
+          };
+        }
+        
+        return track;
+      });
     });
     
     toast({
       title: "Cue moved",
-      description: "Cue moved to different track",
+      description: sourceTrackId === targetTrackId ? 
+        "Cue repositioned within track" : 
+        "Cue moved to different track",
     });
   };
   

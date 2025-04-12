@@ -108,6 +108,10 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
                   "bg-muted/30"
                 )}
                 data-track-id={track.id}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
               >
                 <div className="absolute inset-0 overflow-hidden">
                   {/* Time grid lines */}
@@ -136,9 +140,15 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
                         e.stopPropagation();
                         onCueClick(cue.id);
                       }}
-                      draggable
-                      onDragStart={(e) => onCueDragStart(e, cue.id, track.id)}
-                      onDragEnd={onCueDragEnd}
+                      draggable="true"
+                      onDragStart={(e) => {
+                        e.stopPropagation();
+                        onCueDragStart(e, cue.id, track.id);
+                      }}
+                      onDragEnd={(e) => {
+                        e.stopPropagation();
+                        onCueDragEnd(e);
+                      }}
                     >
                       <span className="truncate text-sm font-medium">{cue.name}</span>
                     </div>
