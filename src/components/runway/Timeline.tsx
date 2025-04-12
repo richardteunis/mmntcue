@@ -21,7 +21,8 @@ import {
   Wand2,
   PenLine,
   Filter,
-  Move
+  Move,
+  Undo2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -74,6 +75,12 @@ export interface TimelineProps {
   selectedCueId?: string | null;
   onCueChange?: (updatedCue: TimelineCue) => void;
   selectedCue?: TimelineCue | null;
+}
+
+interface DeletedCue {
+  cue: TimelineCue;
+  trackId: string;
+  index: number;
 }
 
 const mockTracks: TimelineTrack[] = [
@@ -174,6 +181,12 @@ const Timeline: React.FC<TimelineProps> = ({
   const lastPinchDistanceRef = useRef(0);
   const isPinchingRef = useRef(false);
   const { toast } = useToast();
+  const [deletedCues, setDeletedCues] = useState<DeletedCue[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
+  
+  useEffect(() => {
+    setCanUndo(deletedCues.length > 0);
+  }, [deletedCues]);
   
   const timeToSeconds = (timeString: string): number => {
     const [hours, minutes, seconds] = timeString.split(':').map(Number);
@@ -586,6 +599,76 @@ const Timeline: React.FC<TimelineProps> = ({
     });
   };
   
+  const handleCueDelete = (cueId: string, trackId: string) => {
+    let deletedCueInfo: DeletedCue | null = null;
+    
+    const trackIndex = tracks.findIndex(track => track.id === trackId);
+    if (trackIndex === -1) return;
+    
+    const track = tracks[trackIndex];
+    const cueIndex = track.cues.findIndex(cue => cue.id === cueId);
+    if (cueIndex === -1) return;
+    
+    const cueToDelete = track.cues[cueIndex];
+    deletedCueInfo = {
+      cue: cueToDelete,
+      trackId,
+      index: cueIndex
+    };
+    
+    setTracks(prevTracks => {
+      const newTracks = [...prevTracks];
+      newTracks[trackIndex] = {
+        ...newTracks[trackIndex],
+        cues: newTracks[trackIndex].cues.filter(cue => cue.id !== cueId)
+      };
+      return newTracks;
+    });
+    
+    setDeletedCues(prev => [...prev, deletedCueInfo]);
+    
+    if (selectedCueId === cueId && onCueSelect) {
+      onCueSelect(null, null);
+    }
+    
+    toast({
+      title: "Cue deleted",
+      description: `${cueToDelete.name} has been removed. Click undo to restore.`,
+      variant: "destructive",
+    });
+  };
+  
+  const handleUndoDelete = () => {
+    if (deletedCues.length === 0) return;
+    
+    const lastDeletedCue = deletedCues[deletedCues.length - 1];
+    
+    setTracks(prevTracks => {
+      const newTracks = [...prevTracks];
+      const newCues = [...newTracks[tracks.findIndex(track => track.id === lastDeletedCue.trackId)].cues];
+      
+      if (lastDeletedCue.index <= newCues.length) {
+        newCues.splice(lastDeletedCue.index, 0, lastDeletedCue.cue);
+      } else {
+        newCues.push(lastDeletedCue.cue);
+      }
+      
+      newTracks[tracks.findIndex(track => track.id === lastDeletedCue.trackId)] = {
+        ...newTracks[tracks.findIndex(track => track.id === lastDeletedCue.trackId)],
+        cues: newCues
+      };
+      
+      return newTracks;
+    });
+    
+    setDeletedCues(prev => prev.slice(0, prev.length - 1));
+    
+    toast({
+      title: "Cue restored",
+      description: `${lastDeletedCue.cue.name} has been restored to the timeline.`,
+    });
+  };
+  
   const handleKeyDown = (e: KeyboardEvent) => {
     if (!selectedCue) return;
     
@@ -600,6 +683,11 @@ const Timeline: React.FC<TimelineProps> = ({
     
     if (e.key === "x" && e.ctrlKey) {
       deleteCue(selectedCue.id);
+    }
+    
+    if (e.key === "z" && e.ctrlKey) {
+      e.preventDefault();
+      handleUndoDelete();
     }
   };
   
@@ -825,6 +913,22 @@ const Timeline: React.FC<TimelineProps> = ({
               </Button>
             </TooltipTrigger>
             <TooltipContent>Split selected cue at current time (S)</TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                onClick={handleUndoDelete}
+                disabled={!canUndo}
+              >
+                <Undo2 size={14} />
+                Undo
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Undo last cue deletion (Ctrl+Z)</TooltipContent>
           </Tooltip>
         </div>
         
@@ -1132,7 +1236,7 @@ const Timeline: React.FC<TimelineProps> = ({
                         <div
                           key={cue.id}
                           className={cn(
-                            "runway-cue absolute top-2 h-12 p-1 rounded border overflow-hidden cursor-pointer text-xs",
+                            "runway-cue absolute top-2 h-12 p-1 rounded border overflow-hidden cursor-pointer text-xs group",
                             `runway-cue-${cue.type}`,
                             cue.type === 'audio' && "bg-runway-teal/80 border-runway-teal",
                             cue.type === 'video' && "bg-runway-success/80 border-runway-success",
@@ -1160,6 +1264,16 @@ const Timeline: React.FC<TimelineProps> = ({
                         >
                           <div className="font-medium truncate">{cue.name}</div>
                           <div className="text-xs opacity-90 truncate">{cue.time} ({cue.duration})</div>
+                          
+                          <button 
+                            className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 hover:bg-black/40 rounded p-0.5"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCueDelete(cue.id, track.id);
+                            }}
+                          >
+                            <Trash2 size={12} className="text-white" />
+                          </button>
                         </div>
                       ))}
                       
