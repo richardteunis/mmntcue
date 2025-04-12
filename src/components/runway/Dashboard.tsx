@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
@@ -7,6 +8,8 @@ import CollaborationIndicator from './CollaborationIndicator';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
+import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
+import { Plus } from 'lucide-react';
 
 // Define a proper type for users that includes position
 type CollaborationUser = {
@@ -136,6 +139,10 @@ const Dashboard: React.FC = () => {
     };
   }, []);
   
+  // Define panel sizes based on selection state
+  const timelinePanelSize = selectedCueId ? 75 : 100;
+  const cuePanelSize = selectedCueId ? 25 : 0;
+  
   return (
     <TooltipProvider>
       <div className="flex h-screen overflow-hidden bg-background text-foreground">
@@ -146,22 +153,44 @@ const Dashboard: React.FC = () => {
           
           <div className="flex flex-1 overflow-hidden relative">
             <ResizablePanelGroup direction="horizontal">
-              <ResizablePanel defaultSize={75} minSize={50}>
+              <ResizablePanel defaultSize={timelinePanelSize} minSize={50}>
                 <Timeline 
                   className="h-full" 
                   onCueSelect={handleCueSelect}
                 />
               </ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={25} minSize={20}>
-                <CuePanel 
-                  selectedCueId={selectedCueId}
-                  onCueUpdate={handleCueUpdate}
-                  onCueDelete={handleCueDelete}
-                  onCueDuplicate={handleCueDuplicate}
-                />
-              </ResizablePanel>
+              
+              {selectedCueId && (
+                <>
+                  <ResizableHandle withHandle />
+                  <ResizablePanel defaultSize={cuePanelSize} minSize={20}>
+                    <CuePanel 
+                      selectedCueId={selectedCueId}
+                      onCueUpdate={handleCueUpdate}
+                      onCueDelete={handleCueDelete}
+                      onCueDuplicate={handleCueDuplicate}
+                    />
+                  </ResizablePanel>
+                </>
+              )}
             </ResizablePanelGroup>
+            
+            {/* Add cue hover card */}
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <div className="absolute bottom-6 right-6 bg-primary text-primary-foreground rounded-full p-3 shadow-lg cursor-pointer z-20">
+                  <Plus size={24} />
+                </div>
+              </HoverCardTrigger>
+              <HoverCardContent align="end" className="w-72">
+                <div className="space-y-2">
+                  <h4 className="font-medium">Create a new cue</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Click the plus button, or hover over the timeline and click to add a cue at that position.
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
             
             {/* Collaboration indicators */}
             {users.map(user => (

@@ -1,8 +1,8 @@
-
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TimelineCue, TimelineTrack } from './TrackList';
+import { Plus } from 'lucide-react';
 
 interface CueTimelineProps {
   tracks: TimelineTrack[];
@@ -31,6 +31,23 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
 }) => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const cursorRef = useRef<HTMLDivElement>(null);
+  const [showAddCursor, setShowAddCursor] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
+  
+  // Update cursor position with mouse movement
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (cursorRef.current) {
+        setCursorPosition({ x: e.clientX, y: e.clientY });
+      }
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
   
   // Helper to show grid lines - we need to display more for the snap functionality
   const gridLines = () => {
@@ -98,10 +115,29 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
         {/* Cue tracks */}
         <ScrollArea className="h-full" ref={scrollAreaRef}>
           <div 
-            className="p-4 space-y-4" 
+            className={cn(
+              "p-4 space-y-4", 
+              showAddCursor ? "cursor-cell" : "cursor-default"
+            )}
             style={{ minWidth: '1500px' }}
             onClick={onTimelineClick}
+            onMouseEnter={() => setShowAddCursor(true)}
+            onMouseLeave={() => setShowAddCursor(false)}
           >
+            {/* Add indicator that appears when hovering */}
+            {showAddCursor && (
+              <div className="fixed z-10 pointer-events-none opacity-50" style={{ 
+                transform: 'translate(-50%, -50%)',
+                left: `${cursorPosition.x}px`,
+                top: `${cursorPosition.y}px`,
+                willChange: 'left, top'
+              }} 
+              ref={cursorRef}>
+                <Plus size={20} />
+              </div>
+            )}
+            
+            {/* ... keep existing code (tracks mapping) */}
             {tracks.map(track => (
               <div 
                 key={track.id} 
