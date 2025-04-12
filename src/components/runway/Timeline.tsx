@@ -125,6 +125,7 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   const [trackFilters, setTrackFilters] = useState<string[]>([]);
   const [showTimelineGrid, setShowTimelineGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
+  const [draggedCue, setDraggedCue] = useState<{id: string, initialX: number, trackId: string} | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeInSecondsRef = useRef(0);
@@ -240,32 +241,34 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   
   const handleTrackDrop = (e: React.DragEvent, trackId: string) => {
     e.preventDefault();
-    const cueType = e.dataTransfer.getData('cueType') as 'audio' | 'video' | 'lighting' | 'stage';
     
-    const trackElement = e.currentTarget as HTMLElement;
-    const rect = trackElement.getBoundingClientRect();
-    const position = e.clientX - rect.left;
-    
-    const newCue: TimelineCue = {
-      id: `cue-${Date.now()}`,
-      name: `New ${cueType} Cue`,
-      type: cueType,
-      time: calculateTimeFromPosition(position),
-      duration: '0:30',
-      position: position,
-      width: 100,
-    };
-    
-    setTracks(tracks.map(track => 
-      track.id === trackId 
-        ? { ...track, cues: [...track.cues, newCue] } 
-        : track
-    ));
-    
-    toast({
-      title: "New cue created",
-      description: `${newCue.name} added to timeline`,
-    });
+    const cueType = e.dataTransfer.getData('cueType');
+    if (cueType) {
+      const trackElement = e.currentTarget as HTMLElement;
+      const rect = trackElement.getBoundingClientRect();
+      const position = e.clientX - rect.left;
+      
+      const newCue: TimelineCue = {
+        id: `cue-${Date.now()}`,
+        name: `New ${cueType} Cue`,
+        type: cueType as 'audio' | 'video' | 'lighting' | 'stage',
+        time: calculateTimeFromPosition(position),
+        duration: '0:30',
+        position: position,
+        width: 100,
+      };
+      
+      setTracks(tracks.map(track => 
+        track.id === trackId 
+          ? { ...track, cues: [...track.cues, newCue] } 
+          : track
+      ));
+      
+      toast({
+        title: "New cue created",
+        description: `${newCue.name} added to timeline`,
+      });
+    }
   };
   
   const calculateTimeFromPosition = (position: number): string => {
@@ -278,6 +281,100 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    
+    if (draggedCue) {
+      const trackElement = e.currentTarget as HTMLElement;
+      const rect = trackElement.getBoundingClientRect();
+      const newPosition = e.clientX - rect.left;
+      
+      setTracks(prevTracks => {
+        return prevTracks.map(track => {
+          if (track.id === e.currentTarget.id) {
+            return {
+              ...track,
+              cues: track.cues.map(cue => {
+                if (cue.id === draggedCue.id) {
+                  const newTime = calculateTimeFromPosition(newPosition);
+                  return {
+                    ...cue,
+                    position: newPosition,
+                    time: newTime
+                  };
+                }
+                return cue;
+              })
+            };
+          }
+          return track;
+        });
+      });
+    }
+  };
+  
+  const handleCueDragStart = (e: React.DragEvent, cueId: string, trackId: string) => {
+    const initialX = e.clientX;
+    setDraggedCue({ id: cueId, initialX, trackId });
+    
+    e.dataTransfer.setData('cueId', cueId);
+    e.dataTransfer.setData('sourceTrackId', trackId);
+  };
+  
+  const handleCueDragEnd = (e: React.DragEvent) => {
+    setDraggedCue(null);
+  };
+  
+  const handleCueDropOnTrack = (e: React.DragEvent, targetTrackId: string) => {
+    e.preventDefault();
+    
+    const cueId = e.dataTransfer.getData('cueId');
+    const sourceTrackId = e.dataTransfer.getData('sourceTrackId');
+    
+    if (!cueId) return;
+    
+    if (sourceTrackId === targetTrackId) return;
+    
+    const trackElement = e.currentTarget as HTMLElement;
+    const rect = trackElement.getBoundingClientRect();
+    const newPosition = e.clientX - rect.left;
+    
+    setTracks(prevTracks => {
+      let cueToMove: TimelineCue | undefined;
+      
+      const updatedTracks = prevTracks.map(track => {
+        if (track.id === sourceTrackId) {
+          const updatedCues = track.cues.filter(cue => {
+            if (cue.id === cueId) {
+              cueToMove = {...cue};
+              return false;
+            }
+            return true;
+          });
+          
+          return {...track, cues: updatedCues};
+        }
+        return track;
+      });
+      
+      if (cueToMove) {
+        const newTime = calculateTimeFromPosition(newPosition);
+        cueToMove.position = newPosition;
+        cueToMove.time = newTime;
+        
+        return updatedTracks.map(track => {
+          if (track.id === targetTrackId) {
+            return {...track, cues: [...track.cues, cueToMove!]};
+          }
+          return track;
+        });
+      }
+      
+      return prevTracks;
+    });
+    
+    toast({
+      title: "Cue moved",
+      description: "Cue moved to different track",
+    });
   };
   
   const handleTimelineClick = (e: React.MouseEvent) => {
@@ -487,6 +584,9 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
     
     if (selectedCue === cueId) {
       setSelectedCue(null);
+      if (onCueSelect) {
+        onCueSelect(null);
+      }
     }
     
     toast({
@@ -499,17 +599,13 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   const handleKeyDown = (e: KeyboardEvent) => {
     if (!selectedCue) return;
     
-    if (e.key === "Delete") {
+    if (e.key === "Delete" || e.key === "Backspace") {
       deleteCue(selectedCue);
     }
     
     if (e.key === "d" && e.ctrlKey) {
       e.preventDefault();
       duplicateCue(selectedCue);
-    }
-    
-    if (e.key === "x" && e.ctrlKey) {
-      deleteCue(selectedCue);
     }
   };
   
@@ -618,6 +714,23 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
             </TooltipTrigger>
             <TooltipContent>Split selected cue at current time (S)</TooltipContent>
           </Tooltip>
+          
+          {selectedCue && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 text-destructive"
+                  onClick={() => deleteCue(selectedCue)}
+                >
+                  <Trash2 size={14} />
+                  Delete
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete selected cue (Delete)</TooltipContent>
+            </Tooltip>
+          )}
         </div>
         
         <Separator orientation="vertical" className="h-6" />
@@ -871,7 +984,13 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
             <ScrollArea className="h-[calc(100vh-12rem)]" onClick={handleTimelineClick}>
               <div ref={timelineRef} className="relative min-h-full min-w-[1000px]">
                 {filteredTracks.map(track => (
-                  <div key={track.id} className="relative">
+                  <div 
+                    key={track.id} 
+                    id={track.id}
+                    className="relative"
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleCueDropOnTrack(e, track.id)}
+                  >
                     <div 
                       className={cn(
                         "runway-timeline-track h-16 border-b border-border relative",
@@ -882,20 +1001,19 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
                         track.muted && "opacity-50",
                         track.locked && "bg-muted/20"
                       )}
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleTrackDrop(e, track.id)}
                     >
                       {track.cues.map(cue => (
                         <div
                           key={cue.id}
                           className={cn(
-                            "runway-cue absolute top-2 h-12 p-1 rounded border overflow-hidden cursor-pointer text-xs",
+                            "runway-cue absolute top-2 h-12 p-1 rounded border overflow-hidden cursor-grab text-xs",
                             `runway-cue-${cue.type}`,
                             cue.type === 'audio' && "bg-runway-teal/80 border-runway-teal",
                             cue.type === 'video' && "bg-runway-success/80 border-runway-success",
                             cue.type === 'lighting' && "bg-runway-highlight/80 border-runway-highlight",
                             cue.type === 'stage' && "bg-runway-warning/80 border-runway-warning",
-                            selectedCue === cue.id && "ring-2 ring-white"
+                            selectedCue === cue.id && "ring-2 ring-white",
+                            draggedCue?.id === cue.id && "opacity-70 cursor-grabbing"
                           )}
                           style={{ 
                             left: `${cue.position * timelineScale}px`, 
@@ -909,14 +1027,26 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
                             e.preventDefault();
                             handleCueClick(cue.id);
                           }}
-                          draggable={!tracks.find(t => t.id === track.id)?.locked}
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData('cueId', cue.id);
-                            e.dataTransfer.setData('sourceTrackId', track.id);
-                          }}
+                          draggable={!track.locked}
+                          onDragStart={(e) => handleCueDragStart(e, cue.id, track.id)}
+                          onDragEnd={handleCueDragEnd}
                         >
                           <div className="font-medium truncate">{cue.name}</div>
                           <div className="text-xs opacity-90 truncate">{cue.time} ({cue.duration})</div>
+                          
+                          <div className="absolute top-0 right-0 opacity-0 hover:opacity-100 bg-black/40 rounded-bl rounded-tr p-0.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0 text-white hover:bg-black/40"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteCue(cue.id);
+                              }}
+                            >
+                              <Trash2 size={10} />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                       
