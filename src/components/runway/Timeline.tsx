@@ -169,6 +169,7 @@ const Timeline: React.FC<TimelineProps> = ({
   const [showTimelineGrid, setShowTimelineGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
+  const [isPanModeActive, setIsPanModeActive] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
   const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -648,7 +649,11 @@ const Timeline: React.FC<TimelineProps> = ({
     
     setTracks(prevTracks => {
       const newTracks = [...prevTracks];
-      const newCues = [...newTracks[tracks.findIndex(track => track.id === lastDeletedCue.trackId)].cues];
+      const trackIndex = newTracks.findIndex(track => track.id === lastDeletedCue.trackId);
+      
+      if (trackIndex === -1) return prevTracks;
+      
+      const newCues = [...newTracks[trackIndex].cues];
       
       if (lastDeletedCue.index <= newCues.length) {
         newCues.splice(lastDeletedCue.index, 0, lastDeletedCue.cue);
@@ -656,8 +661,8 @@ const Timeline: React.FC<TimelineProps> = ({
         newCues.push(lastDeletedCue.cue);
       }
       
-      newTracks[tracks.findIndex(track => track.id === lastDeletedCue.trackId)] = {
-        ...newTracks[tracks.findIndex(track => track.id === lastDeletedCue.trackId)],
+      newTracks[trackIndex] = {
+        ...newTracks[trackIndex],
         cues: newCues
       };
       
@@ -672,83 +677,98 @@ const Timeline: React.FC<TimelineProps> = ({
     });
   };
   
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (!selectedCue) return;
-    
-    if (e.key === "Delete") {
-      deleteCue(selectedCue.id);
-    }
-    
-    if (e.key === "d" && e.ctrlKey) {
-      e.preventDefault();
-      duplicateCue(selectedCue.id);
-    }
-    
-    if (e.key === "x" && e.ctrlKey) {
-      deleteCue(selectedCue.id);
-    }
-    
-    if (e.key === "c" && e.ctrlKey) {
-      e.preventDefault();
-      handleCopyCue();
-    }
-    
-    if (e.key === "v" && e.ctrlKey) {
-      e.preventDefault();
-      handlePasteCue();
-    }
-    
-    if (e.key === "z" && e.ctrlKey) {
-      e.preventDefault();
-      handleUndoDelete();
-    }
-  };
-  
+  // Listen for custom events from the Dashboard component
   useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+    const handleTimelineUndo = () => {
+      console.log("Timeline received undo event");
+      handleUndoDelete();
     };
-  }, [selectedCue]);
-  
-  const filteredTracks = tracks.filter(track => {
-    const matchesSearch = searchFilter === '' || 
-      track.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      track.cues.some(cue => cue.name.toLowerCase().includes(searchFilter.toLowerCase()));
     
-    const matchesType = trackFilters.length === 0 || trackFilters.includes(track.type);
-    
-    return matchesSearch && matchesType;
-  });
-  
-  const toggleTrackFilter = (type: 'audio' | 'video' | 'lighting' | 'stage') => {
-    setTrackFilters(current => {
-      if (current.includes(type)) {
-        return current.filter(t => t !== type);
-      } else {
-        return [...current, type];
+    const handleTimelineDeleteCue = (e: CustomEvent<{ cueId: string }>) => {
+      console.log("Timeline received delete event", e.detail.cueId);
+      // Find which track contains this cue
+      let trackId = '';
+      tracks.forEach(track => {
+        if (track.cues.some(cue => cue.id === e.detail.cueId)) {
+          trackId = track.id;
+        }
+      });
+      
+      if (trackId) {
+        handleCueDelete(e.detail.cueId, trackId);
       }
-    });
-  };
-  
-  const getFilterButtonClass = (type: 'audio' | 'video' | 'lighting' | 'stage') => {
-    const baseClass = "px-2 py-1 text-xs rounded";
-    const isActive = trackFilters.includes(type);
+    };
     
-    switch (type) {
-      case 'audio':
-        return cn(baseClass, isActive ? "bg-runway-teal text-white" : "bg-runway-teal/20 hover:bg-runway-teal/30");
-      case 'video':
-        return cn(baseClass, isActive ? "bg-runway-success text-white" : "bg-runway-success/20 hover:bg-runway-success/30");
-      case 'lighting':
-        return cn(baseClass, isActive ? "bg-runway-highlight text-white" : "bg-runway-highlight/20 hover:bg-runway-highlight/30");
-      case 'stage':
-        return cn(baseClass, isActive ? "bg-runway-warning text-white" : "bg-runway-warning/20 hover:bg-runway-warning/30");
+    const handleTimelineDuplicateCue = (e: CustomEvent<{ cueId: string }>) => {
+      console.log("Timeline received duplicate event", e.detail.cueId);
+      duplicateCue(e.detail.cueId);
+    };
+    
+    const handleTimelineCopyCue = (e: CustomEvent<{ cue: TimelineCue }>) => {
+      console.log("Timeline received copy event", e.detail.cue);
+      setCopiedCue({...e.detail.cue});
+    };
+    
+    const handleTimelinePasteCue = (e: CustomEvent<{ cue: TimelineCue }>) => {
+      console.log("Timeline received paste event", e.detail.cue);
+      if (!e.detail.cue) return;
+      
+      handlePasteCue();
+    };
+    
+    document.addEventListener('timeline-undo', handleTimelineUndo as EventListener);
+    document.addEventListener('timeline-delete-cue', handleTimelineDeleteCue as EventListener);
+    document.addEventListener('timeline-duplicate-cue', handleTimelineDuplicateCue as EventListener);
+    document.addEventListener('timeline-copy-cue', handleTimelineCopyCue as EventListener);
+    document.addEventListener('timeline-paste-cue', handleTimelinePasteCue as EventListener);
+    
+    return () => {
+      document.removeEventListener('timeline-undo', handleTimelineUndo as EventListener);
+      document.removeEventListener('timeline-delete-cue', handleTimelineDeleteCue as EventListener);
+      document.removeEventListener('timeline-duplicate-cue', handleTimelineDuplicateCue as EventListener);
+      document.removeEventListener('timeline-copy-cue', handleTimelineCopyCue as EventListener);
+      document.removeEventListener('timeline-paste-cue', handleTimelinePasteCue as EventListener);
+    };
+  }, [tracks, copiedCue]);
+  
+  // Enhance the Timeline mode for better mouse control
+  const handleTimelineMouseDown = (e: React.MouseEvent) => {
+    // Allow panning with middle mouse button or when pan mode is active
+    if (e.button === 1 || (e.button === 0 && isPanModeActive) || e.altKey) {
+      e.preventDefault();
+      isDraggingTimelineRef.current = true;
+      lastClientXRef.current = e.clientX;
+      document.body.style.cursor = 'grabbing';
+      
+      document.addEventListener('mousemove', handleTimelineMouseMove);
+      document.addEventListener('mouseup', handleTimelineMouseUp);
     }
   };
   
-  const getPlayheadPosition = () => {
-    return timeInSecondsRef.current * (100 * timelineScale / 60);
+  const handleTimelineMouseMove = (e: MouseEvent) => {
+    if (!isDraggingTimelineRef.current || !scrollAreaRef.current) return;
+    
+    const deltaX = e.clientX - lastClientXRef.current;
+    scrollAreaRef.current.scrollLeft -= deltaX;
+    lastClientXRef.current = e.clientX;
+  };
+  
+  const handleTimelineMouseUp = () => {
+    isDraggingTimelineRef.current = false;
+    document.body.style.cursor = isPanModeActive ? 'grab' : 'default';
+    
+    document.removeEventListener('mousemove', handleTimelineMouseMove);
+    document.removeEventListener('mouseup', handleTimelineMouseUp);
+  };
+  
+  const togglePanMode = () => {
+    setIsPanModeActive(!isPanModeActive);
+    document.body.style.cursor = !isPanModeActive ? 'grab' : 'default';
+    
+    toast({
+      title: !isPanModeActive ? "Pan mode activated" : "Pan mode deactivated",
+      description: !isPanModeActive ? "Click and drag to pan the timeline" : "Normal selection mode restored",
+    });
   };
   
   const handleWheel = (e: React.WheelEvent) => {
@@ -775,34 +795,6 @@ const Timeline: React.FC<TimelineProps> = ({
         }
       }
     }
-  };
-  
-  const handleTimelineMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1 || e.altKey) {
-      e.preventDefault();
-      isDraggingTimelineRef.current = true;
-      lastClientXRef.current = e.clientX;
-      document.body.style.cursor = 'grabbing';
-      
-      document.addEventListener('mousemove', handleTimelineMouseMove);
-      document.addEventListener('mouseup', handleTimelineMouseUp);
-    }
-  };
-  
-  const handleTimelineMouseMove = (e: MouseEvent) => {
-    if (!isDraggingTimelineRef.current || !scrollAreaRef.current) return;
-    
-    const deltaX = e.clientX - lastClientXRef.current;
-    scrollAreaRef.current.scrollLeft -= deltaX;
-    lastClientXRef.current = e.clientX;
-  };
-  
-  const handleTimelineMouseUp = () => {
-    isDraggingTimelineRef.current = false;
-    document.body.style.cursor = 'default';
-    
-    document.removeEventListener('mousemove', handleTimelineMouseMove);
-    document.removeEventListener('mouseup', handleTimelineMouseUp);
   };
   
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -862,6 +854,7 @@ const Timeline: React.FC<TimelineProps> = ({
     isPinchingRef.current = false;
   };
   
+  // Cleanup function for event listeners
   useEffect(() => {
     return () => {
       document.removeEventListener('mousemove', handleTimelineMouseMove);
@@ -944,6 +937,46 @@ const Timeline: React.FC<TimelineProps> = ({
     if (onCueSelect) {
       onCueSelect(newCue.id, newCue);
     }
+  };
+  
+  const filteredTracks = tracks.filter(track => {
+    const matchesSearch = searchFilter === '' || 
+      track.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      track.cues.some(cue => cue.name.toLowerCase().includes(searchFilter.toLowerCase()));
+    
+    const matchesType = trackFilters.length === 0 || trackFilters.includes(track.type);
+    
+    return matchesSearch && matchesType;
+  });
+  
+  const toggleTrackFilter = (type: 'audio' | 'video' | 'lighting' | 'stage') => {
+    setTrackFilters(current => {
+      if (current.includes(type)) {
+        return current.filter(t => t !== type);
+      } else {
+        return [...current, type];
+      }
+    });
+  };
+  
+  const getFilterButtonClass = (type: 'audio' | 'video' | 'lighting' | 'stage') => {
+    const baseClass = "px-2 py-1 text-xs rounded";
+    const isActive = trackFilters.includes(type);
+    
+    switch (type) {
+      case 'audio':
+        return cn(baseClass, isActive ? "bg-runway-teal text-white" : "bg-runway-teal/20 hover:bg-runway-teal/30");
+      case 'video':
+        return cn(baseClass, isActive ? "bg-runway-success text-white" : "bg-runway-success/20 hover:bg-runway-success/30");
+      case 'lighting':
+        return cn(baseClass, isActive ? "bg-runway-highlight text-white" : "bg-runway-highlight/20 hover:bg-runway-highlight/30");
+      case 'stage':
+        return cn(baseClass, isActive ? "bg-runway-warning text-white" : "bg-runway-warning/20 hover:bg-runway-warning/30");
+    }
+  };
+  
+  const getPlayheadPosition = () => {
+    return timeInSecondsRef.current * (100 * timelineScale / 60);
   };
   
   return (
@@ -1086,19 +1119,16 @@ const Timeline: React.FC<TimelineProps> = ({
             <TooltipTrigger asChild>
               <Button
                 size="sm"
-                variant="ghost"
-                className="h-8 w-8"
-                onClick={() => {
-                  toast({
-                    title: "Timeline navigation",
-                    description: "Drag with Alt+mouse or middle-click, or use trackpad swipe to navigate",
-                  });
-                }}
+                variant={isPanModeActive ? "secondary" : "ghost"}
+                className={cn("h-8 w-8", isPanModeActive && "bg-muted-foreground/20")}
+                onClick={togglePanMode}
               >
                 <Move size={14} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Pan timeline (Alt+drag or swipe)</TooltipContent>
+            <TooltipContent>
+              {isPanModeActive ? "Exit pan mode" : "Enter pan mode (click to drag)"}
+            </TooltipContent>
           </Tooltip>
         </div>
         
@@ -1332,7 +1362,8 @@ const Timeline: React.FC<TimelineProps> = ({
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
-              onClick={handleTimelineClick}
+              onClick={isPanModeActive ? undefined : handleTimelineClick}
+              style={{ cursor: isPanModeActive ? 'grab' : 'default' }}
             >
               <div 
                 ref={timelineRef} 
@@ -1371,13 +1402,15 @@ const Timeline: React.FC<TimelineProps> = ({
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleCueClick(cue.id);
+                            if (!isPanModeActive) {
+                              handleCueClick(cue.id);
+                            }
                           }}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             handleCueClick(cue.id);
                           }}
-                          draggable={!tracks.find(t => t.id === track.id)?.locked}
+                          draggable={!tracks.find(t => t.id === track.id)?.locked && !isPanModeActive}
                           onDragStart={(e) => {
                             e.dataTransfer.setData('cueId', cue.id);
                             e.dataTransfer.setData('sourceTrackId', track.id);

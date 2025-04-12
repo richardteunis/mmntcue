@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
@@ -95,33 +96,55 @@ const Dashboard: React.FC = () => {
     });
   };
   
-  // Handle keyboard shortcuts
+  // Handle keyboard shortcuts at the Dashboard level to ensure they work globally
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Global keyboard shortcuts (not dependent on selectedCue)
-      if (e.key === "z" && e.ctrlKey) {
-        // Handled by Timeline component
+      if (e.key === "z" && (e.ctrlKey || e.metaKey)) {
+        console.log("Undo shortcut detected");
+        // This will be passed to the Timeline component via event
+        document.dispatchEvent(new CustomEvent("timeline-undo"));
       }
       
       if (!selectedCue) return;
       
       // Shortcuts that require a selected cue
       if (e.key === "Delete" || e.key === "Backspace") {
+        console.log("Delete shortcut detected");
         handleCueDelete(selectedCue.id);
+        document.dispatchEvent(new CustomEvent("timeline-delete-cue", { 
+          detail: { cueId: selectedCue.id } 
+        }));
       }
       
-      if (e.key === "d" && e.ctrlKey) {
+      if (e.key === "d" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
+        console.log("Duplicate shortcut detected");
         handleCueDuplicate(selectedCue.id);
+        document.dispatchEvent(new CustomEvent("timeline-duplicate-cue", { 
+          detail: { cueId: selectedCue.id } 
+        }));
       }
       
-      if (e.key === "c" && e.ctrlKey) {
+      if (e.key === "c" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
+        console.log("Copy shortcut detected");
         setCopiedCue({...selectedCue});
+        document.dispatchEvent(new CustomEvent("timeline-copy-cue", { 
+          detail: { cue: selectedCue } 
+        }));
         toast({
           title: "Cue copied",
           description: `${selectedCue.name} copied to clipboard`,
         });
+      }
+      
+      if (e.key === "v" && (e.ctrlKey || e.metaKey) && copiedCue) {
+        e.preventDefault();
+        console.log("Paste shortcut detected");
+        document.dispatchEvent(new CustomEvent("timeline-paste-cue", { 
+          detail: { cue: copiedCue } 
+        }));
       }
     };
     
@@ -130,9 +153,9 @@ const Dashboard: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedCue]);
+  }, [selectedCue, copiedCue]);
   
-  // Simulate smooth user movement with animation frames
+  // Simulate user movements with more realistic, smoother paths
   useEffect(() => {
     // Initial user join notification
     toast({
@@ -140,17 +163,26 @@ const Dashboard: React.FC = () => {
       description: `${users.map(u => u.name).join(', ')} joined the project`,
     });
     
-    // Function to generate new target positions
+    // Function to generate new target positions - more reasonable movements
     const updateTargetPositions = () => {
       setUsers(prevUsers => {
         return prevUsers.map(user => {
+          // Get the current position
+          const currentPos = user.position || { x: 300, y: 150 };
+          
+          // Create smaller, more realistic movements (max 150px in any direction)
+          const maxMovement = 150;
+          const deltaX = (Math.random() * maxMovement * 2) - maxMovement;
+          const deltaY = (Math.random() * maxMovement * 2) - maxMovement;
+          
+          // Stay within reasonable bounds of the screen
+          const newX = Math.max(50, Math.min(900, currentPos.x + deltaX));
+          const newY = Math.max(50, Math.min(400, currentPos.y + deltaY));
+          
           return {
             ...user,
             lastActive: new Date(),
-            targetPosition: { 
-              x: 100 + Math.random() * 800, 
-              y: 100 + Math.random() * 300 
-            }
+            targetPosition: { x: newX, y: newY }
           };
         });
       });
@@ -159,8 +191,8 @@ const Dashboard: React.FC = () => {
     // Set initial target positions
     updateTargetPositions();
     
-    // Update target positions periodically
-    const targetUpdateInterval = setInterval(updateTargetPositions, 5000);
+    // Update target positions periodically, but less frequently
+    const targetUpdateInterval = setInterval(updateTargetPositions, 8000);
     
     // Animate user movements smoothly using requestAnimationFrame
     let animationFrameId: number;
@@ -171,8 +203,9 @@ const Dashboard: React.FC = () => {
           if (!user.position || !user.targetPosition) return user;
           
           // Calculate the next position with smooth interpolation
-          const newX = user.position.x + (user.targetPosition.x - user.position.x) * 0.05;
-          const newY = user.position.y + (user.targetPosition.y - user.position.y) * 0.05;
+          // Slower movement for more stability
+          const newX = user.position.x + (user.targetPosition.x - user.position.x) * 0.03;
+          const newY = user.position.y + (user.targetPosition.y - user.position.y) * 0.03;
           
           return {
             ...user,
@@ -197,7 +230,7 @@ const Dashboard: React.FC = () => {
         lastActive: new Date(),
         area: 'timeline',
         position: { x: 400, y: 200 },
-        targetPosition: { x: 400, y: 200 }
+        targetPosition: { x: 450, y: 250 }
       };
       
       setUsers(prev => [...prev, newUser]);
@@ -225,7 +258,7 @@ const Dashboard: React.FC = () => {
           
           <div className="flex flex-1 overflow-hidden relative">
             <ResizablePanelGroup direction="horizontal">
-              <ResizablePanel defaultSize={75} minSize={50}>
+              <ResizablePanel defaultSize={75} minSize={50} id="timeline-panel">
                 <Timeline 
                   className="h-full" 
                   onCueSelect={handleCueSelect}
@@ -238,7 +271,7 @@ const Dashboard: React.FC = () => {
               {selectedCueId && (
                 <>
                   <ResizableHandle withHandle />
-                  <ResizablePanel defaultSize={25} minSize={20}>
+                  <ResizablePanel defaultSize={25} minSize={20} id="cue-panel">
                     <CuePanel 
                       selectedCueId={selectedCueId}
                       selectedCue={selectedCue}

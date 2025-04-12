@@ -29,7 +29,7 @@ const CollaborationIndicator: React.FC<CollaborationIndicatorProps> = ({
   const animationRef = useRef<number | null>(null);
   
   useEffect(() => {
-    if (!position || !prevPositionRef.current || !elementRef.current) {
+    if (!position || !elementRef.current) {
       prevPositionRef.current = position;
       return;
     }
@@ -39,34 +39,41 @@ const CollaborationIndicator: React.FC<CollaborationIndicatorProps> = ({
       cancelAnimationFrame(animationRef.current);
     }
     
-    const startPosition = prevPositionRef.current;
-    const endPosition = position;
-    const startTime = performance.now();
-    const duration = 200; // ms
-    
-    const animatePosition = (timestamp: number) => {
-      const elapsed = timestamp - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // Use a smooth easing function
-      const easeProgress = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-      
+    // Calculate position difference to detect large jumps
+    const isLargeJump = prevPositionRef.current && 
+      (Math.abs(position.x - prevPositionRef.current.x) > 200 || 
+       Math.abs(position.y - prevPositionRef.current.y) > 200);
+       
+    // If it's a large jump, set position immediately to avoid "spazzing"
+    if (isLargeJump) {
       if (elementRef.current) {
-        const currentX = startPosition.x + (endPosition.x - startPosition.x) * easeProgress;
-        const currentY = startPosition.y + (endPosition.y - startPosition.y) * easeProgress;
+        elementRef.current.style.transition = 'none';
+        elementRef.current.style.left = `${position.x}px`;
+        elementRef.current.style.top = `${position.y}px`;
         
-        elementRef.current.style.left = `${currentX}px`;
-        elementRef.current.style.top = `${currentY}px`;
+        // Force a reflow to make sure the transition gets disabled
+        elementRef.current.offsetHeight;
+        
+        // Re-enable transitions after a short delay
+        setTimeout(() => {
+          if (elementRef.current) {
+            elementRef.current.style.transition = 'left 0.3s ease-out, top 0.3s ease-out';
+          }
+        }, 10);
       }
       
-      if (progress < 1) {
-        animationRef.current = requestAnimationFrame(animatePosition);
-      } else {
-        prevPositionRef.current = endPosition;
-      }
-    };
+      prevPositionRef.current = position;
+      return;
+    }
     
-    animationRef.current = requestAnimationFrame(animatePosition);
+    // Apply transition and update position
+    if (elementRef.current) {
+      elementRef.current.style.transition = 'left 0.3s ease-out, top 0.3s ease-out';
+      elementRef.current.style.left = `${position.x}px`;
+      elementRef.current.style.top = `${position.y}px`;
+    }
+    
+    prevPositionRef.current = position;
     
     return () => {
       if (animationRef.current) {
