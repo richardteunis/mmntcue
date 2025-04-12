@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -49,28 +48,19 @@ import {
   TooltipTrigger
 } from '@/components/ui/tooltip';
 import { Textarea } from '@/components/ui/textarea';
+import { TimelineCue } from './Timeline';
 
 interface CuePanelProps {
   className?: string;
   selectedCueId?: string | null;
-  onCueUpdate?: (cue: CueSettings) => void;
+  onCueUpdate?: (cue: TimelineCue) => void;
   onCueDelete?: (cueId: string) => void;
   onCueDuplicate?: (cueId: string) => void;
 }
 
-interface CueSettings {
-  id: string;
-  name: string;
-  type: 'audio' | 'video' | 'lighting' | 'stage';
-  time: string;
-  duration: string;
-  track: string;
-  color: string;
-  autoFollow: boolean;
-  notes: string;
-  effects: string[];
-  position?: number;
-  width?: number;
+export interface CueSettings extends Omit<TimelineCue, 'position' | 'width'> {
+  position: number;
+  width: number;
 }
 
 const defaultCueSettings: CueSettings = {
@@ -111,17 +101,14 @@ const CuePanel: React.FC<CuePanelProps> = ({
   const [isEditing, setIsEditing] = useState(!!selectedCueId);
   const { toast } = useToast();
   
-  // Update cue settings and mark as unsaved
   const updateCueSettings = (updates: Partial<CueSettings>) => {
     setCueSettings(prev => ({ ...prev, ...updates }));
     setHasUnsavedChanges(true);
   };
   
-  // Save changes
   const handleSave = () => {
-    // Pass the updated cue to the parent component
     if (onCueUpdate) {
-      onCueUpdate(cueSettings);
+      onCueUpdate(cueSettings as TimelineCue);
     }
     
     setHasUnsavedChanges(false);
@@ -142,7 +129,6 @@ const CuePanel: React.FC<CuePanelProps> = ({
       variant: "destructive",
     });
     
-    // Reset to defaults after deletion
     setCueSettings(defaultCueSettings);
     setHasUnsavedChanges(false);
     setIsEditing(false);
@@ -159,7 +145,6 @@ const CuePanel: React.FC<CuePanelProps> = ({
     if (onCueDuplicate && cueSettings.id) {
       onCueDuplicate(cueSettings.id);
     } else {
-      // Handle local duplication if no callback is provided
       setCueSettings(newCue);
       setHasUnsavedChanges(true);
     }
@@ -210,7 +195,6 @@ const CuePanel: React.FC<CuePanelProps> = ({
     }
   };
   
-  // Prompt for unsaved changes if user tries to navigate away
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges) {
@@ -226,7 +210,6 @@ const CuePanel: React.FC<CuePanelProps> = ({
     };
   }, [hasUnsavedChanges]);
   
-  // Add an effect to the cue
   const addEffect = (effect: string) => {
     if (!cueSettings.effects.includes(effect)) {
       updateCueSettings({
@@ -240,7 +223,6 @@ const CuePanel: React.FC<CuePanelProps> = ({
     }
   };
   
-  // Remove an effect from the cue
   const removeEffect = (effect: string) => {
     updateCueSettings({
       effects: cueSettings.effects.filter(e => e !== effect)

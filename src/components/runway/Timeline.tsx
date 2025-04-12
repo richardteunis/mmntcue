@@ -41,7 +41,7 @@ import {
   TooltipTrigger
 } from '@/components/ui/tooltip';
 
-interface TimelineCue {
+export interface TimelineCue {
   id: string;
   name: string;
   type: 'audio' | 'video' | 'lighting' | 'stage';
@@ -50,6 +50,10 @@ interface TimelineCue {
   position: number;
   width: number;
   notes?: string;
+  effects?: string[];
+  autoFollow?: boolean;
+  color?: string;
+  track?: string;
 }
 
 interface TimelineTrack {
@@ -63,8 +67,9 @@ interface TimelineTrack {
   locked?: boolean;
 }
 
-interface TimelineProps {
+export interface TimelineProps {
   className?: string;
+  onCueSelect?: (cueId: string | null) => void;
 }
 
 const mockTracks: TimelineTrack[] = [
@@ -110,7 +115,7 @@ const mockTracks: TimelineTrack[] = [
   },
 ];
 
-const Timeline: React.FC<TimelineProps> = ({ className }) => {
+const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   const [tracks, setTracks] = useState<TimelineTrack[]>(mockTracks);
   const [currentTime, setCurrentTime] = useState('00:00:00');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -210,6 +215,10 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
   
   const handleCueClick = (cueId: string) => {
     setSelectedCue(cueId);
+    
+    if (onCueSelect) {
+      onCueSelect(cueId);
+    }
     
     let selectedCueDetails: TimelineCue | undefined;
     

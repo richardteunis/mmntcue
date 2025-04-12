@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
-import Timeline from './Timeline';
+import Timeline, { TimelineCue } from './Timeline';
 import CuePanel from './CuePanel';
 import CollaborationIndicator from './CollaborationIndicator';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -19,21 +18,6 @@ type CollaborationUser = {
   area: 'timeline' | 'cue-panel' | 'library';
   position?: { x: number; y: number };
 };
-
-interface TimelineCue {
-  id: string;
-  name: string;
-  type: 'audio' | 'video' | 'lighting' | 'stage';
-  time: string;
-  duration: string;
-  position: number;
-  width: number;
-  notes?: string;
-  effects?: string[];
-  autoFollow?: boolean;
-  color?: string;
-  track?: string;
-}
 
 const mockUsers: CollaborationUser[] = [
   { 
