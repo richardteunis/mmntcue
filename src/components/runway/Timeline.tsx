@@ -350,9 +350,9 @@ const Timeline: React.FC<TimelineProps> = ({ className }) => {
     });
   };
   
-  const addNewTrack = () => {
+  const addNewTrack = (type?: 'audio' | 'video' | 'lighting' | 'stage') => {
     const trackTypes: ('audio' | 'video' | 'lighting' | 'stage')[] = ['audio', 'video', 'lighting', 'stage'];
-    const randomType = trackTypes[Math.floor(Math.random() * trackTypes.length)];
+    const randomType = type || trackTypes[Math.floor(Math.random() * trackTypes.length)];
     
     const newTrack: TimelineTrack = {
       id: `track-${Date.now()}`,
