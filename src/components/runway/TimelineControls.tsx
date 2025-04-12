@@ -1,27 +1,33 @@
 
 import React from 'react';
-import { 
-  Play, 
-  Pause, 
-  SkipForward, 
-  RotateCcw,
-  Scissors,
-  Trash2,
-  ZoomIn,
-  ZoomOut,
-  Filter,
-  Clock,
-  ChevronDown
-} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger
 } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { 
+  Play, 
+  Pause, 
+  SkipForward, 
+  RotateCcw, 
+  Scissors, 
+  Trash2, 
+  ZoomIn, 
+  ZoomOut, 
+  Filter, 
+  X, 
+  UndoIcon,
+  Grid
+} from 'lucide-react';
 
 interface TimelineControlsProps {
   isPlaying: boolean;
@@ -29,11 +35,15 @@ interface TimelineControlsProps {
   searchFilter: string;
   selectedCue: string | null;
   trackFilters: string[];
+  snapToGrid: boolean;
+  canUndo: boolean;
   onPlayPause: () => void;
   onNextCue: () => void;
   onReset: () => void;
   onSplitCue: () => void;
   onDeleteCue: (cueId: string) => void;
+  onUndoDelete: () => void;
+  onToggleSnapToGrid: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onSearchChange: (value: string) => void;
@@ -48,11 +58,15 @@ const TimelineControls: React.FC<TimelineControlsProps> = ({
   searchFilter,
   selectedCue,
   trackFilters,
+  snapToGrid,
+  canUndo,
   onPlayPause,
   onNextCue,
   onReset,
   onSplitCue,
   onDeleteCue,
+  onUndoDelete,
+  onToggleSnapToGrid,
   onZoomIn,
   onZoomOut,
   onSearchChange,
@@ -134,6 +148,22 @@ const TimelineControls: React.FC<TimelineControlsProps> = ({
             <TooltipContent>Delete selected cue (Delete)</TooltipContent>
           </Tooltip>
         )}
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1"
+              onClick={onUndoDelete}
+              disabled={!canUndo}
+            >
+              <UndoIcon size={14} />
+              Undo
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Undo last deletion (Ctrl+Z)</TooltipContent>
+        </Tooltip>
       </div>
       
       <Separator orientation="vertical" className="h-6" />
@@ -164,6 +194,19 @@ const TimelineControls: React.FC<TimelineControlsProps> = ({
           </TooltipTrigger>
           <TooltipContent>Zoom in (Ctrl++)</TooltipContent>
         </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="sm"
+              variant={snapToGrid ? "secondary" : "ghost"}
+              onClick={onToggleSnapToGrid}
+            >
+              <Grid size={14} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{snapToGrid ? "Disable snap to grid" : "Enable snap to grid"}</TooltipContent>
+        </Tooltip>
       </div>
       
       <div className="flex-1" />
@@ -184,7 +227,7 @@ const TimelineControls: React.FC<TimelineControlsProps> = ({
               className="absolute right-1 top-1 h-6 w-6 p-0"
               onClick={onClearSearch}
             >
-              <ChevronDown size={14} />
+              <X size={14} />
             </Button>
           )}
         </div>
@@ -228,7 +271,6 @@ const TimelineControls: React.FC<TimelineControlsProps> = ({
       <Separator orientation="vertical" className="h-6" />
       
       <div className="flex items-center gap-1">
-        <Clock size={16} className="text-muted-foreground" />
         <span className="text-sm font-mono">{currentTime}</span>
       </div>
     </div>

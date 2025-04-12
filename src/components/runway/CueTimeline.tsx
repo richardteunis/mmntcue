@@ -10,6 +10,7 @@ interface CueTimelineProps {
   selectedCue: string | null;
   currentTime: string;
   getPlayheadPosition: () => number;
+  snapToGrid: boolean;
   onCueClick: (cueId: string) => void;
   onCueDragStart: (e: React.DragEvent, cueId: string, trackId: string) => void;
   onCueDragEnd: (e: React.DragEvent) => void;
@@ -22,12 +23,37 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
   selectedCue,
   currentTime,
   getPlayheadPosition,
+  snapToGrid,
   onCueClick,
   onCueDragStart,
   onCueDragEnd,
   onTimelineClick
 }) => {
   const timelineRef = useRef<HTMLDivElement>(null);
+
+  // Helper to show grid lines - we need to display more for the snap functionality
+  const gridLines = () => {
+    const lines = [];
+    const count = timelineScale < 1 ? 120 : 60;
+    const interval = timelineScale < 1 ? 2.5 : 5;
+    
+    for (let i = 0; i < count; i++) {
+      const isMajor = i % interval === 0;
+      lines.push(
+        <div 
+          key={i} 
+          className="absolute top-0 bottom-0 border-l border-border/30"
+          style={{ 
+            left: `${i * (100 * timelineScale) / interval}px`,
+            borderWidth: isMajor ? '1px' : '0.5px',
+            borderColor: isMajor ? 'var(--border)' : 'var(--border-30)',
+            opacity: isMajor ? 0.5 : 0.2
+          }}
+        />
+      );
+    }
+    return lines;
+  };
 
   return (
     <div className="flex-1 overflow-hidden relative">
@@ -72,34 +98,32 @@ const CueTimeline: React.FC<CueTimelineProps> = ({
         {/* Cue tracks */}
         <ScrollArea className="h-full">
           <div className="p-4 space-y-4" style={{ minWidth: '1500px' }}>
-            {tracks.filter(track => track.expanded).map(track => (
+            {tracks.map(track => (
               <div 
                 key={track.id} 
-                className="relative h-16 rounded-md bg-muted/30 border border-border"
+                className={cn(
+                  "relative rounded-md border border-border transition-all duration-200",
+                  track.expanded ? "h-16" : "h-8",
+                  "bg-muted/30"
+                )}
               >
                 <div className="absolute inset-0 overflow-hidden">
                   {/* Time grid lines */}
-                  {Array.from({ length: 60 }).map((_, i) => (
-                    <div 
-                      key={i} 
-                      className="absolute top-0 bottom-0 border-l border-border/30"
-                      style={{ 
-                        left: `${i * (100 * timelineScale)}px`,
-                      }}
-                    />
-                  ))}
+                  {gridLines()}
 
-                  {/* Cues */}
+                  {/* Cues - always visible regardless of track expansion state */}
                   {track.cues.map((cue: TimelineCue) => (
                     <div
                       key={cue.id}
                       className={cn(
-                        "absolute top-2 h-12 rounded-md border cursor-pointer flex items-center px-2 overflow-hidden",
+                        "absolute rounded-md border cursor-pointer flex items-center px-2 overflow-hidden transition-all",
                         selectedCue === cue.id ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/50",
                         cue.type === 'audio' && "bg-runway-teal/20 border-runway-teal",
                         cue.type === 'video' && "bg-runway-success/20 border-runway-success",
                         cue.type === 'lighting' && "bg-runway-highlight/20 border-runway-highlight",
-                        cue.type === 'stage' && "bg-runway-warning/20 border-runway-warning"
+                        cue.type === 'stage' && "bg-runway-warning/20 border-runway-warning",
+                        // Conditionally adjust height based on track expanded state
+                        track.expanded ? "top-2 h-12" : "top-1 h-6"
                       )}
                       style={{
                         left: `${cue.position}px`,

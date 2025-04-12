@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -65,6 +64,7 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   const [showTimelineGrid, setShowTimelineGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [draggedCue, setDraggedCue] = useState<{id: string, initialX: number, trackId: string} | null>(null);
+  const [deletedCues, setDeletedCues] = useState<{trackId: string, cue: TimelineCue, timestamp: number}[]>([]);
   const timelineRef = useRef<HTMLDivElement>(null);
   const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeInSecondsRef = useRef(0);
@@ -215,7 +215,13 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   };
   
   const calculateTimeFromPosition = (position: number): string => {
-    const seconds = Math.floor(position / 100) * 60;
+    let adjustedPosition = position;
+    if (snapToGrid) {
+      const gridSize = 20 * timelineScale;
+      adjustedPosition = Math.round(position / gridSize) * gridSize;
+    }
+    
+    const seconds = Math.floor(adjustedPosition / 100) * 60;
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     
@@ -230,7 +236,12 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
       if (!trackElement || !trackElement.id) return;
       
       const rect = trackElement.getBoundingClientRect();
-      const newPosition = e.clientX - rect.left;
+      let newPosition = e.clientX - rect.left;
+      
+      if (snapToGrid) {
+        const gridSize = 20 * timelineScale;
+        newPosition = Math.round(newPosition / gridSize) * gridSize;
+      }
       
       setTracks(prevTracks => {
         return prevTracks.map(track => {
@@ -475,20 +486,34 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
     if (!cueId) return;
     
     let deletedCueName = '';
+    let deletedCueInfo: {trackId: string, cue: TimelineCue} | null = null;
     
     setTracks(currentTracks => {
-      return currentTracks.map(track => {
-        const cueIndex = track.cues.findIndex(cue => cue.id === cueId);
-        if (cueIndex === -1) return track;
-        
-        deletedCueName = track.cues[cueIndex].name;
+      const updatedTracks = currentTracks.map(track => {
+        const cueToDelete = track.cues.find(cue => cue.id === cueId);
+        if (cueToDelete) {
+          deletedCueName = cueToDelete.name;
+          deletedCueInfo = {
+            trackId: track.id,
+            cue: {...cueToDelete}
+          };
+        }
         
         return {
           ...track,
           cues: track.cues.filter(cue => cue.id !== cueId)
         };
       });
+      
+      return updatedTracks;
     });
+    
+    if (deletedCueInfo) {
+      setDeletedCues(prev => [
+        ...prev, 
+        {...deletedCueInfo, timestamp: Date.now()}
+      ]);
+    }
     
     if (selectedCue === cueId) {
       setSelectedCue(null);
@@ -504,7 +529,38 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
     });
   };
   
+  const undoDelete = () => {
+    if (deletedCues.length === 0) return;
+    
+    const lastDeleted = deletedCues[deletedCues.length - 1];
+    
+    setDeletedCues(prev => prev.slice(0, -1));
+    
+    setTracks(currentTracks => {
+      return currentTracks.map(track => {
+        if (track.id === lastDeleted.trackId) {
+          return {
+            ...track,
+            cues: [...track.cues, lastDeleted.cue]
+          };
+        }
+        return track;
+      });
+    });
+    
+    toast({
+      title: "Undo delete",
+      description: `Restored: ${lastDeleted.cue.name}`,
+    });
+  };
+  
   const handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      e.preventDefault();
+      undoDelete();
+      return;
+    }
+    
     if (!selectedCue) return;
     
     if (e.key === "Delete" || e.key === "Backspace") {
@@ -551,7 +607,7 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [selectedCue]);
+  }, [selectedCue, deletedCues]);
   
   const filteredTracks = tracks.filter(track => {
     const matchesSearch = searchFilter === '' || 
@@ -593,6 +649,14 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
     return timeInSecondsRef.current * (100 * timelineScale / 60);
   };
   
+  const toggleSnapToGrid = () => {
+    setSnapToGrid(prev => !prev);
+    toast({
+      title: snapToGrid ? "Snap to grid disabled" : "Snap to grid enabled",
+      description: snapToGrid ? "Cues will move freely" : "Cues will snap to grid lines"
+    });
+  };
+  
   return (
     <div className={cn("flex flex-col h-full", className)}>
       <TimelineControls 
@@ -601,11 +665,15 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
         searchFilter={searchFilter}
         selectedCue={selectedCue}
         trackFilters={trackFilters}
+        snapToGrid={snapToGrid}
+        canUndo={deletedCues.length > 0}
         onPlayPause={handlePlayPause}
         onNextCue={handleNextCue}
         onReset={handleReset}
         onSplitCue={handleSplitCue}
         onDeleteCue={deleteCue}
+        onUndoDelete={undoDelete}
+        onToggleSnapToGrid={toggleSnapToGrid}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onSearchChange={setSearchFilter}
@@ -635,6 +703,7 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
           timelineScale={timelineScale}
           selectedCue={selectedCue}
           currentTime={currentTime}
+          snapToGrid={snapToGrid}
           getPlayheadPosition={getPlayheadPosition}
           onCueClick={handleCueClick}
           onCueDragStart={handleCueDragStart}
@@ -646,6 +715,5 @@ const Timeline: React.FC<TimelineProps> = ({ className, onCueSelect }) => {
   );
 };
 
-// Use "export type" instead of "export" to fix TS1205 error
 export type { TimelineCue };
 export default Timeline;
