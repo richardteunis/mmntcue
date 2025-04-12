@@ -19,7 +19,7 @@ import {
   Trash2,
   Copy,
   Save,
-  DragIcon
+  GripVertical
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
@@ -155,7 +155,7 @@ const CuePanel: React.FC<CuePanelProps> = ({ className }) => {
         
         <div className="bg-muted/40 rounded-md p-3 border border-border">
           <div className="flex items-center text-sm mb-2">
-            <DragIcon size={16} className="mr-2 text-muted-foreground" />
+            <GripVertical size={16} className="mr-2 text-muted-foreground" />
             <span>Drag a cue type to the timeline to add a new cue</span>
           </div>
         </div>

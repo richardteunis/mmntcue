@@ -8,14 +8,25 @@ import CollaborationIndicator from './CollaborationIndicator';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 
-const mockUsers = [
+// Define a proper type for users that includes position
+type CollaborationUser = {
+  id: string;
+  name: string;
+  initials: string;
+  color: string;
+  lastActive: Date;
+  area: 'timeline' | 'cue-panel' | 'library';
+  position?: { x: number; y: number };
+};
+
+const mockUsers: CollaborationUser[] = [
   { 
     id: '1', 
     name: 'Alex', 
     initials: 'AL', 
     color: 'bg-blue-500',
     lastActive: new Date(),
-    area: 'timeline' as const,
+    area: 'timeline',
   },
   { 
     id: '2', 
@@ -23,7 +34,7 @@ const mockUsers = [
     initials: 'SM', 
     color: 'bg-green-500',
     lastActive: new Date(),
-    area: 'cue-panel' as const,
+    area: 'cue-panel',
   },
   { 
     id: '3',
@@ -31,13 +42,13 @@ const mockUsers = [
     initials: 'TL',
     color: 'bg-purple-500',
     lastActive: new Date(),
-    area: 'timeline' as const,
+    area: 'timeline',
   }
 ];
 
 const Dashboard: React.FC = () => {
   const [showName, setShowName] = useState('Summer Festival 2025');
-  const [users, setUsers] = useState(mockUsers);
+  const [users, setUsers] = useState<CollaborationUser[]>(mockUsers);
   const { toast } = useToast();
   
   // Simulate user movement
@@ -66,13 +77,13 @@ const Dashboard: React.FC = () => {
     
     // Simulate a new user joining after a delay
     const joinTimeout = setTimeout(() => {
-      const newUser = { 
+      const newUser: CollaborationUser = { 
         id: '4', 
         name: 'Jordan', 
         initials: 'JD', 
         color: 'bg-amber-500',
         lastActive: new Date(),
-        area: 'timeline' as const,
+        area: 'timeline',
         position: { x: 400, y: 200 }
       };
       
