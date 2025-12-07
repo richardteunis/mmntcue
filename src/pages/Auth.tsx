@@ -64,12 +64,12 @@ const AuthPage: React.FC = () => {
         <Card className="border-border/50 shadow-xl">
           <CardHeader className="space-y-1 text-center">
             <CardTitle className="text-2xl">
-              {emailSent ? 'Check your email' : 'Welcome back'}
+              {emailSent ? 'Check your email' : 'Sign in or Sign up'}
             </CardTitle>
             <CardDescription>
               {emailSent
                 ? `We sent a magic link to ${email}`
-                : 'Sign in with your email to continue'}
+                : 'Enter your email to continue. New users will be signed up automatically.'}
             </CardDescription>
           </CardHeader>
 
