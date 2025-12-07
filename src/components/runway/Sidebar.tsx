@@ -97,6 +97,26 @@ const SidebarSection: React.FC<SectionProps> = ({ title, icon, children, default
   );
 };
 
+// Helper component for show icon with fallback
+const ShowIcon: React.FC<{ logoUrl?: string | null; size?: number; className?: string }> = ({ logoUrl, size = 14, className }) => {
+  if (logoUrl) {
+    return (
+      <img 
+        src={logoUrl} 
+        alt="" 
+        className={cn("rounded-sm object-contain shrink-0", className)}
+        style={{ width: size, height: size }}
+        onError={(e) => {
+          // Fallback to clapperboard icon on error
+          e.currentTarget.style.display = 'none';
+          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+        }}
+      />
+    );
+  }
+  return <Clapperboard size={size} className={cn("shrink-0", className)} />;
+};
+
 const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect, onQuickAddCue }) => {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
@@ -474,7 +494,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
         onClick={() => handleSelectShow(show)}
       >
         <GripVertical size={12} className="shrink-0 opacity-0 group-hover:opacity-50 cursor-grab" />
-        <Clapperboard size={14} className="shrink-0" />
+        <ShowIcon logoUrl={show.logo_url} size={14} />
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="flex flex-col items-start min-w-0">
@@ -827,7 +847,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
                   )}
                   onClick={() => handleSelectShow(show)}
                 >
-                  <Clapperboard size={14} />
+                  <ShowIcon logoUrl={show.logo_url} size={14} />
                   <span className="truncate">{show.name}</span>
                 </Button>
               ))}
@@ -866,7 +886,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
                       )}
                       onClick={() => handleSelectShow(show)}
                     >
-                      <Clapperboard size={16} />
+                      <ShowIcon logoUrl={show.logo_url} size={16} />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="right">{show.name}</TooltipContent>
