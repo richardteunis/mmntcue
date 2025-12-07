@@ -7,7 +7,6 @@ import CuePanel from './CuePanel';
 import AddEditCuePanel from './AddEditCuePanel';
 import AISuggestPanel from './AISuggestPanel';
 import ViewToggle from './ViewToggle';
-import CollaborationIndicator from './CollaborationIndicator';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -15,39 +14,6 @@ import { Button } from '@/components/ui/button';
 import { PlusCircle, Edit, Sparkles, Loader2 } from 'lucide-react';
 import { useCues, useAISuggestions } from '@/hooks/useCues';
 import { Cue, ViewMode, CueSuggestion } from '@/types/cue';
-
-// Define a proper type for users that includes position
-type CollaborationUser = {
-  id: string;
-  name: string;
-  initials: string;
-  color: string;
-  lastActive: Date;
-  area: 'timeline' | 'cue-panel' | 'library';
-  position?: { x: number; y: number };
-  targetPosition?: { x: number; y: number };
-};
-
-const mockUsers: CollaborationUser[] = [
-  { 
-    id: '1', 
-    name: 'Alex', 
-    initials: 'AL', 
-    color: 'bg-blue-500',
-    lastActive: new Date(),
-    area: 'timeline',
-    position: { x: 100, y: 100 },
-  },
-  { 
-    id: '2', 
-    name: 'Sam', 
-    initials: 'SM', 
-    color: 'bg-green-500',
-    lastActive: new Date(),
-    area: 'cue-panel',
-    position: { x: 500, y: 200 },
-  },
-];
 
 // Available tracks for cues
 const availableTracks = ['Audio Main', 'Video Wall', 'Stage Lighting', 'Stage Direction'];
@@ -86,7 +52,6 @@ const timelineCueToCue = (timelineCue: TimelineCue, orderIndex: number): Omit<Cu
 
 const Dashboard: React.FC = () => {
   const [showName] = useState('Summer Festival 2025');
-  const [users, setUsers] = useState<CollaborationUser[]>(mockUsers);
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
   const [selectedCue, setSelectedCue] = useState<TimelineCue | null>(null);
   const [copiedCue, setCopiedCue] = useState<TimelineCue | null>(null);
@@ -97,10 +62,10 @@ const Dashboard: React.FC = () => {
   const { toast } = useToast();
   
   // Use database hooks
-  const { cues, loading, addCue, updateCue, deleteCue, duplicateCue } = useCues();
+  const { cues, loading, addCue, updateCue, deleteCue, duplicateCue, getNextStartTime } = useCues();
   const { suggestions, loading: aiLoading, getSuggestions, setSuggestions } = useAISuggestions();
 
-  // Convert database cues to timeline cues
+  // Convert database cues to timeline cues (already sorted by start_time from hook)
   const timelineCues = cues.map(cueToTimelineCue);
   
   // Handle cue selection
@@ -131,7 +96,7 @@ const Dashboard: React.FC = () => {
     await duplicateCue(cueId);
   };
 
-  // Open add cue panel
+  // Open add cue panel with auto-calculated start time
   const handleAddCue = () => {
     setEditingCue(null);
     setIsAddEditPanelOpen(true);
@@ -155,27 +120,29 @@ const Dashboard: React.FC = () => {
   };
 
   // Handle save from add/edit panel
-  const handleSaveCue = async (timelineCue: TimelineCue) => {
+  const handleSaveCue = async (timelineCue: TimelineCue, useAutoStartTime: boolean = false) => {
     const cueData = timelineCueToCue(timelineCue, cues.length);
     
     if (editingCue) {
       await updateCue(timelineCue.id, cueData);
       setSelectedCue(timelineCue);
     } else {
-      await addCue(cueData);
+      await addCue(cueData, useAutoStartTime);
     }
     setIsAddEditPanelOpen(false);
   };
 
   // Handle AI suggestion add
   const handleAddAISuggestion = async (suggestion: CueSuggestion) => {
+    const nextStartTime = getNextStartTime();
+    
     const newCue: Omit<Cue, 'id' | 'show_id' | 'created_at' | 'updated_at'> = {
       name: suggestion.name,
       type: suggestion.type,
       track: suggestion.type === 'audio' ? 'Audio Main' : 
              suggestion.type === 'video' ? 'Video Wall' :
              suggestion.type === 'lighting' ? 'Stage Lighting' : 'Stage Direction',
-      start_time: '00:00:00',
+      start_time: nextStartTime,
       duration: suggestion.duration,
       position: cues.length * 100,
       width: 100,
@@ -188,7 +155,7 @@ const Dashboard: React.FC = () => {
       order_index: cues.length
     };
     
-    await addCue(newCue);
+    await addCue(newCue, false);
     setSuggestions(prev => prev.filter(s => s.name !== suggestion.name));
   };
 
@@ -235,6 +202,12 @@ const Dashboard: React.FC = () => {
   // Handle keyboard shortcuts at the Dashboard level
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "n" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleAddCue();
+        return;
+      }
+      
       if (!selectedCue) return;
       
       if (e.key === "Delete" || e.key === "Backspace") {
@@ -257,18 +230,15 @@ const Dashboard: React.FC = () => {
       
       if (e.key === "v" && (e.ctrlKey || e.metaKey) && copiedCue) {
         e.preventDefault();
+        const nextTime = getNextStartTime();
         const newCue = timelineCueToCue({
           ...copiedCue,
           id: `cue-${Date.now()}`,
           name: `${copiedCue.name} (Pasted)`,
+          time: nextTime,
           position: copiedCue.position + 20,
         }, cues.length);
-        addCue(newCue);
-      }
-
-      if (e.key === "n" && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        handleAddCue();
+        addCue(newCue, false);
       }
 
       if (e.key === "e" && (e.ctrlKey || e.metaKey)) {
@@ -282,59 +252,7 @@ const Dashboard: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedCue, copiedCue, cues.length]);
-  
-  // Simulate user movements
-  useEffect(() => {
-    const updateTargetPositions = () => {
-      setUsers(prevUsers => {
-        return prevUsers.map(user => {
-          const currentPos = user.position || { x: 300, y: 150 };
-          const maxMovement = 150;
-          const deltaX = (Math.random() * maxMovement * 2) - maxMovement;
-          const deltaY = (Math.random() * maxMovement * 2) - maxMovement;
-          const newX = Math.max(50, Math.min(900, currentPos.x + deltaX));
-          const newY = Math.max(50, Math.min(400, currentPos.y + deltaY));
-          
-          return {
-            ...user,
-            lastActive: new Date(),
-            targetPosition: { x: newX, y: newY }
-          };
-        });
-      });
-    };
-    
-    updateTargetPositions();
-    const targetUpdateInterval = setInterval(updateTargetPositions, 8000);
-    
-    let animationFrameId: number;
-    
-    const animateUsers = () => {
-      setUsers(prevUsers => {
-        return prevUsers.map(user => {
-          if (!user.position || !user.targetPosition) return user;
-          
-          const newX = user.position.x + (user.targetPosition.x - user.position.x) * 0.03;
-          const newY = user.position.y + (user.targetPosition.y - user.position.y) * 0.03;
-          
-          return {
-            ...user,
-            position: { x: newX, y: newY }
-          };
-        });
-      });
-      
-      animationFrameId = requestAnimationFrame(animateUsers);
-    };
-    
-    animationFrameId = requestAnimationFrame(animateUsers);
-    
-    return () => {
-      clearInterval(targetUpdateInterval);
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, []);
+  }, [selectedCue, copiedCue, cues.length, getNextStartTime]);
   
   if (loading) {
     return (
@@ -421,15 +339,6 @@ const Dashboard: React.FC = () => {
                 </>
               )}
             </ResizablePanelGroup>
-            
-            {/* Collaboration indicators */}
-            {users.map(user => (
-              <CollaborationIndicator
-                key={user.id}
-                user={user}
-                position={user.position || { x: 200 + Math.random() * 600, y: 100 + Math.random() * 300 }}
-              />
-            ))}
           </div>
         </div>
         
@@ -440,6 +349,7 @@ const Dashboard: React.FC = () => {
           onSave={handleSaveCue}
           editingCue={editingCue}
           tracks={availableTracks}
+          nextStartTime={getNextStartTime()}
         />
 
         {/* AI Suggest Panel */}

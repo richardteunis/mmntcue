@@ -23,7 +23,6 @@ import {
   Pencil, 
   Trash2, 
   Copy, 
-  GripVertical,
   ChevronUp,
   ChevronDown,
   Search
@@ -40,8 +39,19 @@ interface TableViewProps {
   onEditCue: (cue: Cue) => void;
 }
 
-type SortField = 'name' | 'type' | 'track' | 'start_time' | 'duration' | 'order_index';
+type SortField = 'name' | 'type' | 'track' | 'start_time' | 'duration';
 type SortDirection = 'asc' | 'desc';
+
+// Helper to convert time string to seconds for sorting
+const timeToSeconds = (timeString: string): number => {
+  const parts = timeString.split(':').map(Number);
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  } else if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  }
+  return 0;
+};
 
 const TableView: React.FC<TableViewProps> = ({
   cues,
@@ -52,7 +62,7 @@ const TableView: React.FC<TableViewProps> = ({
   onCueDuplicate,
   onEditCue
 }) => {
-  const [sortField, setSortField] = useState<SortField>('order_index');
+  const [sortField, setSortField] = useState<SortField>('start_time');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [filterType, setFilterType] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -97,13 +107,10 @@ const TableView: React.FC<TableViewProps> = ({
           comparison = a.track.localeCompare(b.track);
           break;
         case 'start_time':
-          comparison = a.start_time.localeCompare(b.start_time);
+          comparison = timeToSeconds(a.start_time) - timeToSeconds(b.start_time);
           break;
         case 'duration':
-          comparison = a.duration.localeCompare(b.duration);
-          break;
-        case 'order_index':
-          comparison = a.order_index - b.order_index;
+          comparison = timeToSeconds(a.duration) - timeToSeconds(b.duration);
           break;
       }
       return sortDirection === 'asc' ? comparison : -comparison;
@@ -149,7 +156,7 @@ const TableView: React.FC<TableViewProps> = ({
           </SelectContent>
         </Select>
         <div className="text-sm text-muted-foreground">
-          {filteredAndSortedCues.length} cues
+          {filteredAndSortedCues.length} cue{filteredAndSortedCues.length !== 1 ? 's' : ''}
         </div>
       </div>
 
@@ -158,7 +165,7 @@ const TableView: React.FC<TableViewProps> = ({
         <Table>
           <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow>
-              <TableHead className="w-[40px]">#</TableHead>
+              <TableHead className="w-[50px]">#</TableHead>
               <TableHead 
                 className="cursor-pointer hover:bg-muted/50 transition-colors"
                 onClick={() => handleSort('name')}
@@ -184,11 +191,11 @@ const TableView: React.FC<TableViewProps> = ({
                 </div>
               </TableHead>
               <TableHead 
-                className="cursor-pointer hover:bg-muted/50 transition-colors w-[100px]"
+                className="cursor-pointer hover:bg-muted/50 transition-colors w-[110px]"
                 onClick={() => handleSort('start_time')}
               >
                 <div className="flex items-center gap-2">
-                  Start <SortIcon field="start_time" />
+                  Start Time <SortIcon field="start_time" />
                 </div>
               </TableHead>
               <TableHead 
@@ -214,10 +221,7 @@ const TableView: React.FC<TableViewProps> = ({
                 onClick={() => onCueSelect(cue.id, cue)}
               >
                 <TableCell className="font-mono text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <GripVertical className="h-4 w-4 opacity-50" />
-                    {index + 1}
-                  </div>
+                  {index + 1}
                 </TableCell>
                 <TableCell>
                   {editingCell?.id === cue.id && editingCell?.field === 'name' ? (
@@ -254,8 +258,64 @@ const TableView: React.FC<TableViewProps> = ({
                   </Badge>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{cue.track}</TableCell>
-                <TableCell className="font-mono text-sm">{cue.start_time}</TableCell>
-                <TableCell className="font-mono text-sm">{cue.duration}</TableCell>
+                <TableCell>
+                  {editingCell?.id === cue.id && editingCell?.field === 'start_time' ? (
+                    <Input
+                      autoFocus
+                      defaultValue={cue.start_time}
+                      onBlur={(e) => handleCellEdit(cue, 'start_time', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleCellEdit(cue, 'start_time', e.currentTarget.value);
+                        }
+                        if (e.key === 'Escape') {
+                          setEditingCell(null);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-8 font-mono"
+                    />
+                  ) : (
+                    <div 
+                      className="font-mono text-sm hover:text-primary cursor-text"
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setEditingCell({ id: cue.id, field: 'start_time' });
+                      }}
+                    >
+                      {cue.start_time}
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editingCell?.id === cue.id && editingCell?.field === 'duration' ? (
+                    <Input
+                      autoFocus
+                      defaultValue={cue.duration}
+                      onBlur={(e) => handleCellEdit(cue, 'duration', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleCellEdit(cue, 'duration', e.currentTarget.value);
+                        }
+                        if (e.key === 'Escape') {
+                          setEditingCell(null);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-8 font-mono"
+                    />
+                  ) : (
+                    <div 
+                      className="font-mono text-sm hover:text-primary cursor-text"
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setEditingCell({ id: cue.id, field: 'duration' });
+                      }}
+                    >
+                      {cue.duration}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell className="text-muted-foreground text-sm truncate max-w-[200px]">
                   {cue.notes || '—'}
                 </TableCell>
@@ -301,7 +361,10 @@ const TableView: React.FC<TableViewProps> = ({
             {filteredAndSortedCues.length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
-                  No cues found. Add your first cue to get started.
+                  {cues.length === 0 
+                    ? "No cues yet. Click 'Add Cue' or use 'AI Suggest' to get started."
+                    : "No cues match your search criteria."
+                  }
                 </TableCell>
               </TableRow>
             )}

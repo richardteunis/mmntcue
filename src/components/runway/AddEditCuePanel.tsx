@@ -11,8 +11,7 @@ import {
   PlusCircle, 
   Save, 
   X, 
-  Clock, 
-  Palette
+  Clock
 } from 'lucide-react';
 import {
   Form,
@@ -27,22 +26,24 @@ import { useForm } from "react-hook-form"
 import { cn } from '@/lib/utils';
 import { TimelineCue } from './Timeline';
 import { useToast } from '@/hooks/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface AddEditCuePanelProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (cue: TimelineCue) => void;
+  onSave: (cue: TimelineCue, useAutoStartTime: boolean) => void;
   editingCue: TimelineCue | null;
   tracks: string[];
   defaultTrack?: string;
+  nextStartTime?: string;
 }
 
 const DEFAULT_CUE: TimelineCue = {
   id: '',
   name: 'New Cue',
-  track: 'audio',
+  track: 'Audio Main',
   time: '00:00:00',
-  duration: '00:00:05',
+  duration: '00:00:30',
   type: 'audio',
   color: 'bg-runway-teal',
   autoFollow: false,
@@ -58,11 +59,12 @@ const AddEditCuePanel: React.FC<AddEditCuePanelProps> = ({
   onSave,
   editingCue,
   tracks,
-  defaultTrack = 'audio'
+  defaultTrack = 'Audio Main',
+  nextStartTime = '00:00:00'
 }) => {
   const { toast } = useToast();
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
-  const [currentCue, setCurrentCue] = useState<TimelineCue>({...DEFAULT_CUE, track: defaultTrack});
+  const [useAutoStartTime, setUseAutoStartTime] = useState(true);
 
   const form = useForm<TimelineCue>({
     defaultValues: {...DEFAULT_CUE, track: defaultTrack}
@@ -71,19 +73,27 @@ const AddEditCuePanel: React.FC<AddEditCuePanelProps> = ({
   useEffect(() => {
     if (editingCue) {
       setFormMode('edit');
-      setCurrentCue({...editingCue});
+      setUseAutoStartTime(false);
       form.reset({...editingCue});
     } else {
       setFormMode('add');
+      setUseAutoStartTime(true);
       const newCue = {
         ...DEFAULT_CUE,
         id: `cue-${Date.now()}`,
-        track: defaultTrack
+        track: defaultTrack,
+        time: nextStartTime
       };
-      setCurrentCue(newCue);
       form.reset(newCue);
     }
-  }, [editingCue, defaultTrack, form, isOpen]);
+  }, [editingCue, defaultTrack, form, isOpen, nextStartTime]);
+
+  // Update time field when useAutoStartTime changes
+  useEffect(() => {
+    if (formMode === 'add' && useAutoStartTime) {
+      form.setValue('time', nextStartTime);
+    }
+  }, [useAutoStartTime, nextStartTime, formMode, form]);
 
   const handleEffectAdd = (effectName: string) => {
     const currentEffects = form.getValues('effects') || [];
@@ -97,27 +107,12 @@ const AddEditCuePanel: React.FC<AddEditCuePanelProps> = ({
     form.setValue('effects', currentEffects.filter(e => e !== effectName));
   };
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'audio':
-        return 'bg-runway-teal text-white';
-      case 'video':
-        return 'bg-runway-success text-white';
-      case 'lighting':
-        return 'bg-runway-highlight text-white';
-      case 'stage':
-        return 'bg-runway-warning text-white';
-      default:
-        return 'bg-muted text-foreground';
-    }
-  };
-
   const onSubmit = (data: TimelineCue) => {
     if (formMode === 'add' && !data.id) {
       data.id = `cue-${Date.now()}`;
     }
     
-    onSave(data);
+    onSave(data, formMode === 'add' && useAutoStartTime);
     
     toast({
       title: formMode === 'add' ? "Cue created" : "Cue updated",
@@ -181,7 +176,11 @@ const AddEditCuePanel: React.FC<AddEditCuePanelProps> = ({
                     <FormItem>
                       <FormLabel>Start Time</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="00:00:00" />
+                        <Input 
+                          {...field} 
+                          placeholder="00:00:00" 
+                          disabled={formMode === 'add' && useAutoStartTime}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -195,13 +194,32 @@ const AddEditCuePanel: React.FC<AddEditCuePanelProps> = ({
                     <FormItem>
                       <FormLabel>Duration</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="00:00:05" />
+                        <Input {...field} placeholder="00:00:30" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
+
+              {formMode === 'add' && (
+                <div className="flex items-center space-x-2 p-3 rounded-lg border border-border bg-muted/50">
+                  <Checkbox
+                    id="auto-start"
+                    checked={useAutoStartTime}
+                    onCheckedChange={(checked) => setUseAutoStartTime(checked as boolean)}
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="auto-start" className="text-sm font-medium cursor-pointer">
+                      Auto-calculate start time
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Start after previous cue ends ({nextStartTime})
+                    </p>
+                  </div>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </div>
+              )}
               
               <FormField
                 control={form.control}

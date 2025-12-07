@@ -86,72 +86,12 @@ interface DeletedCue {
   index: number;
 }
 
-const mockTracks: TimelineTrack[] = [
-  {
-    id: 'track-1',
-    name: 'Audio Main',
-    type: 'audio',
-    expanded: true,
-    cues: [
-      { 
-        id: 'cue-1', 
-        name: 'Intro Music', 
-        type: 'audio', 
-        time: '00:00:00', 
-        duration: '0:30', 
-        position: 0, 
-        width: 120,
-        track: 'Audio Main',
-        color: 'bg-runway-teal',
-        autoFollow: false,
-        notes: 'Fade in gradually with the lights.',
-        effects: ['fade-in', 'crossfade']
-      },
-      { 
-        id: 'cue-2', 
-        name: 'Applause', 
-        type: 'audio', 
-        time: '00:01:30', 
-        duration: '0:10', 
-        position: 180, 
-        width: 60,
-        track: 'Audio Main',
-        color: 'bg-runway-teal',
-        notes: '',
-        effects: []
-      },
-    ]
-  },
-  {
-    id: 'track-2',
-    name: 'Video Wall',
-    type: 'video',
-    expanded: true,
-    cues: [
-      { id: 'cue-3', name: 'Opening Video', type: 'video', time: '00:00:10', duration: '1:20', position: 20, width: 160 },
-      { id: 'cue-4', name: 'Logo Display', type: 'video', time: '00:02:00', duration: '5:00', position: 240, width: 200 },
-    ]
-  },
-  {
-    id: 'track-3',
-    name: 'Stage Lighting',
-    type: 'lighting',
-    expanded: true,
-    cues: [
-      { id: 'cue-5', name: 'House Lights Down', type: 'lighting', time: '00:00:05', duration: '0:05', position: 10, width: 40 },
-      { id: 'cue-6', name: 'Stage Wash', type: 'lighting', time: '00:00:15', duration: '1:45', position: 30, width: 180 },
-    ]
-  },
-  {
-    id: 'track-4',
-    name: 'Stage Direction',
-    type: 'stage',
-    expanded: true,
-    cues: [
-      { id: 'cue-7', name: 'Host Enter', type: 'stage', time: '00:01:00', duration: '0:30', position: 120, width: 80 },
-      { id: 'cue-8', name: 'Speaker Introduction', type: 'stage', time: '00:03:00', duration: '0:15', position: 360, width: 60 },
-    ]
-  },
+// Empty tracks structure - will be populated from props
+const createEmptyTracks = (): TimelineTrack[] => [
+  { id: 'track-1', name: 'Audio Main', type: 'audio', expanded: true, cues: [] },
+  { id: 'track-2', name: 'Video Wall', type: 'video', expanded: true, cues: [] },
+  { id: 'track-3', name: 'Stage Lighting', type: 'lighting', expanded: true, cues: [] },
+  { id: 'track-4', name: 'Stage Direction', type: 'stage', expanded: true, cues: [] },
 ];
 
 const Timeline: React.FC<TimelineProps> = ({ 
@@ -159,9 +99,49 @@ const Timeline: React.FC<TimelineProps> = ({
   onCueSelect, 
   selectedCueId,
   onCueChange,
-  selectedCue
+  selectedCue,
+  cues = []
 }) => {
-  const [tracks, setTracks] = useState<TimelineTrack[]>(mockTracks);
+  // Build tracks from cues prop - organize by track name
+  const buildTracksFromCues = (cuesList: TimelineCue[]): TimelineTrack[] => {
+    const baseTracks = createEmptyTracks();
+    
+    // Group cues by track
+    cuesList.forEach(cue => {
+      const trackName = cue.track || 'Audio Main';
+      const track = baseTracks.find(t => t.name === trackName);
+      if (track) {
+        track.cues.push(cue);
+      } else {
+        // If track doesn't exist, add to first matching type track
+        const typeTrack = baseTracks.find(t => t.type === cue.type);
+        if (typeTrack) {
+          typeTrack.cues.push(cue);
+        }
+      }
+    });
+    
+    // Sort cues within each track by time
+    baseTracks.forEach(track => {
+      track.cues.sort((a, b) => {
+        const timeA = a.time.split(':').map(Number);
+        const timeB = b.time.split(':').map(Number);
+        const secondsA = (timeA[0] || 0) * 3600 + (timeA[1] || 0) * 60 + (timeA[2] || 0);
+        const secondsB = (timeB[0] || 0) * 3600 + (timeB[1] || 0) * 60 + (timeB[2] || 0);
+        return secondsA - secondsB;
+      });
+    });
+    
+    return baseTracks;
+  };
+
+  const [tracks, setTracks] = useState<TimelineTrack[]>(() => buildTracksFromCues(cues));
+  
+  // Sync tracks when cues prop changes
+  useEffect(() => {
+    setTracks(buildTracksFromCues(cues));
+  }, [cues]);
+
   const [currentTime, setCurrentTime] = useState('00:00:00');
   const [isPlaying, setIsPlaying] = useState(false);
   const [timelineScale, setTimelineScale] = useState(1);
