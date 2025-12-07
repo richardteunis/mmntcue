@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { 
   Calendar, 
@@ -44,6 +45,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { Show, Folder as FolderType } from '@/types/cue';
 import ShowFormModal from './ShowFormModal';
+import { useAuthContext } from '@/contexts/AuthContext';
 
 interface SidebarProps {
   className?: string;
@@ -96,6 +98,7 @@ const SidebarSection: React.FC<SectionProps> = ({ title, icon, children, default
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect, onQuickAddCue }) => {
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [shows, setShows] = useState<Show[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
@@ -835,38 +838,21 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
       <Separator className="bg-sidebar-border/50" />
       <div className="p-2">
         {!collapsed ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                className="w-full justify-start gap-2 h-9 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              >
-                <Settings size={14} />
-                Settings
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem>
-                <Settings size={14} className="mr-2" />
-                Preferences
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Users size={14} className="mr-2" />
-                Team Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <Calendar size={14} className="mr-2" />
-                Keyboard Shortcuts
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start gap-2 h-9 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            onClick={() => navigate('/settings')}
+          >
+            <Settings size={14} />
+            Settings
+          </Button>
         ) : (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button 
                 variant="ghost" 
                 className="w-full justify-center h-9 p-0 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                onClick={() => navigate('/settings')}
               >
                 <Settings size={16} />
               </Button>

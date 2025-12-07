@@ -8,6 +8,7 @@ import AddEditCuePanel from './AddEditCuePanel';
 import AISuggestPanel from './AISuggestPanel';
 import BulkEditModal from './BulkEditModal';
 import ConfirmDialog from './ConfirmDialog';
+import ShareModal from './ShareModal';
 import ViewToggle from './ViewToggle';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
@@ -65,6 +66,7 @@ const Dashboard: React.FC = () => {
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const { toast } = useToast();
   
   // Use database hooks with active show
@@ -369,7 +371,10 @@ const Dashboard: React.FC = () => {
         <Sidebar activeShowId={activeShowId} onShowSelect={handleShowSelect} onQuickAddCue={handleQuickAddCue} />
         
         <div className="flex flex-col flex-1 overflow-hidden">
-          <TopBar showName={showName} />
+          <TopBar 
+            showName={showName} 
+            onShare={() => setIsShareOpen(true)}
+          />
           
           <div className="flex flex-1 overflow-hidden relative">
             <ResizablePanelGroup direction="horizontal">
@@ -517,6 +522,16 @@ const Dashboard: React.FC = () => {
           confirmText="Delete"
           variant="destructive"
         />
+
+        {/* Share Modal */}
+        {activeShowId && (
+          <ShareModal
+            isOpen={isShareOpen}
+            onClose={() => setIsShareOpen(false)}
+            showId={activeShowId}
+            showName={showName}
+          />
+        )}
       </div>
     </TooltipProvider>
   );
