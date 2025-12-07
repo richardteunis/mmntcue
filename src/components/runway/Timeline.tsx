@@ -1311,15 +1311,28 @@ const Timeline: React.FC<TimelineProps> = ({
         </div>
         
         <div className="flex-1 overflow-hidden relative">
-          <div className="h-8 border-b border-border sticky top-0 bg-background pl-2 flex items-end text-xs text-muted-foreground">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="absolute" style={{ 
-                left: `${i * 100 * timelineScale}px` 
-              }}>
-                <div className="h-2 border-l border-border"></div>
-                <div>{`${i * 60}s`}</div>
-              </div>
-            ))}
+          <div className="h-8 border-b border-border sticky top-0 bg-background pl-2 flex items-end text-xs text-muted-foreground overflow-hidden">
+            {/* Generate time markers at 1-minute intervals */}
+            {Array.from({ length: 20 }).map((_, i) => {
+              const minutes = i;
+              const position = (minutes * 60 / 0.6) * timelineScale;
+              const formattedTime = `${minutes}:00`;
+              
+              return (
+                <div key={i} className="absolute flex flex-col items-center" style={{ left: `${position}px` }}>
+                  <div className="h-3 border-l border-border/70"></div>
+                  <div className="text-[10px] font-mono text-muted-foreground mt-0.5">{formattedTime}</div>
+                  
+                  {/* Add 30-second sub-markers when zoomed in */}
+                  {timelineScale >= 1 && (
+                    <div 
+                      className="absolute h-2 border-l border-border/40" 
+                      style={{ left: `${(30 / 0.6) * timelineScale}px`, top: 0 }}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
           
           <div className="relative">
