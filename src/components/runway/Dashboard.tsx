@@ -2,14 +2,19 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import Timeline, { TimelineCue } from './Timeline';
+import TableView from './TableView';
 import CuePanel from './CuePanel';
 import AddEditCuePanel from './AddEditCuePanel';
+import AISuggestPanel from './AISuggestPanel';
+import ViewToggle from './ViewToggle';
 import CollaborationIndicator from './CollaborationIndicator';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Edit } from 'lucide-react';
+import { PlusCircle, Edit, Sparkles, Loader2 } from 'lucide-react';
+import { useCues, useAISuggestions } from '@/hooks/useCues';
+import { Cue, ViewMode, CueSuggestion } from '@/types/cue';
 
 // Define a proper type for users that includes position
 type CollaborationUser = {
@@ -42,62 +47,61 @@ const mockUsers: CollaborationUser[] = [
     area: 'cue-panel',
     position: { x: 500, y: 200 },
   },
-  { 
-    id: '3',
-    name: 'Taylor',
-    initials: 'TL',
-    color: 'bg-purple-500',
-    lastActive: new Date(),
-    area: 'timeline',
-    position: { x: 300, y: 150 },
-  }
 ];
 
 // Available tracks for cues
-const availableTracks = ['audio', 'video', 'lighting', 'stage', 'effects'];
+const availableTracks = ['Audio Main', 'Video Wall', 'Stage Lighting', 'Stage Direction'];
 
-// Initial demo cues
-const initialCues: TimelineCue[] = [
-  {
-    id: 'cue-1',
-    name: 'Intro Music',
-    track: 'audio',
-    time: '00:00:00',
-    duration: '00:01:30',
-    type: 'audio',
-    color: 'bg-runway-blue',
-    autoFollow: false,
-    notes: 'Opening theme',
-    effects: [],
-    position: 0,
-    width: 90
-  },
-  {
-    id: 'cue-2',
-    name: 'Spotlight On',
-    track: 'lighting',
-    time: '00:01:00',
-    duration: '00:03:00',
-    type: 'lighting',
-    color: 'bg-runway-amber',
-    autoFollow: true,
-    notes: 'Center stage',
-    effects: [],
-    position: 60,
-    width: 180
-  }
-];
+// Convert database Cue to TimelineCue for Timeline component
+const cueToTimelineCue = (cue: Cue): TimelineCue => ({
+  id: cue.id,
+  name: cue.name,
+  type: cue.type,
+  time: cue.start_time,
+  duration: cue.duration,
+  position: cue.position,
+  width: cue.width,
+  notes: cue.notes || '',
+  effects: cue.effects,
+  autoFollow: cue.auto_follow,
+  color: cue.color,
+  track: cue.track
+});
+
+// Convert TimelineCue to database Cue format
+const timelineCueToCue = (timelineCue: TimelineCue, orderIndex: number): Omit<Cue, 'id' | 'show_id' | 'created_at' | 'updated_at'> => ({
+  name: timelineCue.name,
+  type: timelineCue.type,
+  track: timelineCue.track || 'Audio Main',
+  start_time: timelineCue.time,
+  duration: timelineCue.duration,
+  position: timelineCue.position,
+  width: timelineCue.width,
+  color: timelineCue.color || 'bg-runway-teal',
+  notes: timelineCue.notes || null,
+  effects: timelineCue.effects || [],
+  auto_follow: timelineCue.autoFollow || false,
+  order_index: orderIndex
+});
 
 const Dashboard: React.FC = () => {
-  const [showName, setShowName] = useState('Summer Festival 2025');
+  const [showName] = useState('Summer Festival 2025');
   const [users, setUsers] = useState<CollaborationUser[]>(mockUsers);
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
   const [selectedCue, setSelectedCue] = useState<TimelineCue | null>(null);
   const [copiedCue, setCopiedCue] = useState<TimelineCue | null>(null);
   const [isAddEditPanelOpen, setIsAddEditPanelOpen] = useState(false);
   const [editingCue, setEditingCue] = useState<TimelineCue | null>(null);
-  const [cues, setCues] = useState<TimelineCue[]>(initialCues);
+  const [viewMode, setViewMode] = useState<ViewMode>('timeline');
+  const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
   const { toast } = useToast();
+  
+  // Use database hooks
+  const { cues, loading, addCue, updateCue, deleteCue, duplicateCue } = useCues();
+  const { suggestions, loading: aiLoading, getSuggestions, setSuggestions } = useAISuggestions();
+
+  // Convert database cues to timeline cues
+  const timelineCues = cues.map(cueToTimelineCue);
   
   // Handle cue selection
   const handleCueSelect = (cueId: string | null, cue: TimelineCue | null) => {
@@ -106,54 +110,25 @@ const Dashboard: React.FC = () => {
   };
   
   // Handle cue update
-  const handleCueUpdate = (updatedCue: TimelineCue) => {
-    // Update the cue in the cues array
-    setCues(prevCues => 
-      prevCues.map(cue => cue.id === updatedCue.id ? updatedCue : cue)
-    );
+  const handleCueUpdate = async (updatedCue: TimelineCue) => {
+    const cueData = timelineCueToCue(updatedCue, cues.findIndex(c => c.id === updatedCue.id));
+    await updateCue(updatedCue.id, cueData);
     
-    // Update selected cue if it's the one being updated
     if (selectedCue && selectedCue.id === updatedCue.id) {
       setSelectedCue(updatedCue);
     }
-    
-    toast({
-      title: "Cue updated",
-      description: `${updatedCue.name} has been updated`,
-    });
   };
   
   // Handle cue deletion
-  const handleCueDelete = (cueId: string) => {
-    setCues(prevCues => prevCues.filter(cue => cue.id !== cueId));
+  const handleCueDelete = async (cueId: string) => {
+    await deleteCue(cueId);
     setSelectedCueId(null);
     setSelectedCue(null);
-    toast({
-      title: "Cue deleted",
-      description: `Cue has been removed from the timeline`,
-      variant: "destructive",
-    });
   };
   
   // Handle cue duplication
-  const handleCueDuplicate = (cueId: string) => {
-    const cueToDuplicate = cues.find(cue => cue.id === cueId);
-    
-    if (cueToDuplicate) {
-      const newCue: TimelineCue = {
-        ...cueToDuplicate,
-        id: `cue-${Date.now()}`,
-        name: `${cueToDuplicate.name} (Copy)`,
-        position: cueToDuplicate.position + 20, // Offset slightly from original
-      };
-      
-      setCues(prevCues => [...prevCues, newCue]);
-      
-      toast({
-        title: "Cue duplicated",
-        description: `A copy of ${cueToDuplicate.name} has been created`,
-      });
-    }
+  const handleCueDuplicate = async (cueId: string) => {
+    await duplicateCue(cueId);
   };
 
   // Open add cue panel
@@ -163,8 +138,11 @@ const Dashboard: React.FC = () => {
   };
 
   // Open edit cue panel
-  const handleEditCue = () => {
-    if (selectedCue) {
+  const handleEditCue = (cue?: TimelineCue) => {
+    if (cue) {
+      setEditingCue(cue);
+      setIsAddEditPanelOpen(true);
+    } else if (selectedCue) {
       setEditingCue(selectedCue);
       setIsAddEditPanelOpen(true);
     } else {
@@ -177,27 +155,46 @@ const Dashboard: React.FC = () => {
   };
 
   // Handle save from add/edit panel
-  const handleSaveCue = (cue: TimelineCue) => {
-    // If we're editing an existing cue
+  const handleSaveCue = async (timelineCue: TimelineCue) => {
+    const cueData = timelineCueToCue(timelineCue, cues.length);
+    
     if (editingCue) {
-      setCues(prevCues => 
-        prevCues.map(existingCue => existingCue.id === cue.id ? cue : existingCue)
-      );
-      setSelectedCue(cue);
-      setIsAddEditPanelOpen(false);
-      toast({
-        title: "Cue updated",
-        description: `${cue.name} has been updated`,
-      });
+      await updateCue(timelineCue.id, cueData);
+      setSelectedCue(timelineCue);
     } else {
-      // If we're adding a new cue
-      setCues(prevCues => [...prevCues, cue]);
-      setIsAddEditPanelOpen(false);
-      toast({
-        title: "Cue added",
-        description: `${cue.name} has been added to the timeline`,
-      });
+      await addCue(cueData);
     }
+    setIsAddEditPanelOpen(false);
+  };
+
+  // Handle AI suggestion add
+  const handleAddAISuggestion = async (suggestion: CueSuggestion) => {
+    const newCue: Omit<Cue, 'id' | 'show_id' | 'created_at' | 'updated_at'> = {
+      name: suggestion.name,
+      type: suggestion.type,
+      track: suggestion.type === 'audio' ? 'Audio Main' : 
+             suggestion.type === 'video' ? 'Video Wall' :
+             suggestion.type === 'lighting' ? 'Stage Lighting' : 'Stage Direction',
+      start_time: '00:00:00',
+      duration: suggestion.duration,
+      position: cues.length * 100,
+      width: 100,
+      color: suggestion.type === 'audio' ? 'bg-runway-teal' :
+             suggestion.type === 'video' ? 'bg-runway-success' :
+             suggestion.type === 'lighting' ? 'bg-runway-highlight' : 'bg-runway-warning',
+      notes: suggestion.notes,
+      effects: [],
+      auto_follow: false,
+      order_index: cues.length
+    };
+    
+    await addCue(newCue);
+    setSuggestions(prev => prev.filter(s => s.name !== suggestion.name));
+  };
+
+  // Handle AI suggestions
+  const handleGetAISuggestions = async (cueType?: string) => {
+    await getSuggestions(showName, cues, cueType);
   };
   
   // Listen for custom events from the timeline and cue panel
@@ -207,22 +204,6 @@ const Dashboard: React.FC = () => {
         const { cue } = e.detail;
         setEditingCue(cue);
         setIsAddEditPanelOpen(true);
-      }
-    };
-    
-    const handleAddCueEvent = (e: Event) => {
-      if (e instanceof CustomEvent) {
-        const { cue } = e.detail;
-        setCues(prevCues => [...prevCues, cue]);
-      }
-    };
-    
-    const handleUpdateCueEvent = (e: Event) => {
-      if (e instanceof CustomEvent) {
-        const { cue } = e.detail;
-        setCues(prevCues => 
-          prevCues.map(existingCue => existingCue.id === cue.id ? cue : existingCue)
-        );
       }
     };
     
@@ -241,47 +222,32 @@ const Dashboard: React.FC = () => {
     };
     
     document.addEventListener('timeline-edit-cue', handleEditCueEvent);
-    document.addEventListener('timeline-add-cue', handleAddCueEvent);
-    document.addEventListener('timeline-update-cue', handleUpdateCueEvent);
     document.addEventListener('timeline-delete-cue', handleDeleteCueEvent);
     document.addEventListener('timeline-duplicate-cue', handleDuplicateCueEvent);
     
     return () => {
       document.removeEventListener('timeline-edit-cue', handleEditCueEvent);
-      document.removeEventListener('timeline-add-cue', handleAddCueEvent);
-      document.removeEventListener('timeline-update-cue', handleUpdateCueEvent);
       document.removeEventListener('timeline-delete-cue', handleDeleteCueEvent);
       document.removeEventListener('timeline-duplicate-cue', handleDuplicateCueEvent);
     };
   }, []);
   
-  // Handle keyboard shortcuts at the Dashboard level to ensure they work globally
+  // Handle keyboard shortcuts at the Dashboard level
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Global keyboard shortcuts (not dependent on selectedCue)
-      if (e.key === "z" && (e.ctrlKey || e.metaKey)) {
-        console.log("Undo shortcut detected");
-        // This will be passed to the Timeline component via event
-        document.dispatchEvent(new CustomEvent("timeline-undo"));
-      }
-      
       if (!selectedCue) return;
       
-      // Shortcuts that require a selected cue
       if (e.key === "Delete" || e.key === "Backspace") {
-        console.log("Delete shortcut detected");
         handleCueDelete(selectedCue.id);
       }
       
       if (e.key === "d" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        console.log("Duplicate shortcut detected");
         handleCueDuplicate(selectedCue.id);
       }
       
       if (e.key === "c" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        console.log("Copy shortcut detected");
         setCopiedCue({...selectedCue});
         toast({
           title: "Cue copied",
@@ -291,31 +257,22 @@ const Dashboard: React.FC = () => {
       
       if (e.key === "v" && (e.ctrlKey || e.metaKey) && copiedCue) {
         e.preventDefault();
-        console.log("Paste shortcut detected");
-        const newCue: TimelineCue = {
+        const newCue = timelineCueToCue({
           ...copiedCue,
           id: `cue-${Date.now()}`,
-          name: `${copiedCue.name} (Copy)`,
-          position: copiedCue.position + 20, // Offset slightly from original
-        };
-        setCues(prevCues => [...prevCues, newCue]);
-        toast({
-          title: "Cue pasted",
-          description: `${newCue.name} added to timeline`,
-        });
+          name: `${copiedCue.name} (Pasted)`,
+          position: copiedCue.position + 20,
+        }, cues.length);
+        addCue(newCue);
       }
 
-      // Add cue shortcut (n key)
       if (e.key === "n" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        console.log("Add cue shortcut detected");
         handleAddCue();
       }
 
-      // Edit cue shortcut (e key)
-      if (e.key === "e" && (e.ctrlKey || e.metaKey) && selectedCue) {
+      if (e.key === "e" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        console.log("Edit cue shortcut detected");
         handleEditCue();
       }
     };
@@ -325,29 +282,17 @@ const Dashboard: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedCue, copiedCue]);
+  }, [selectedCue, copiedCue, cues.length]);
   
-  // Simulate user movements with more realistic, smoother paths
+  // Simulate user movements
   useEffect(() => {
-    // Initial user join notification
-    toast({
-      title: "Users online",
-      description: `${users.map(u => u.name).join(', ')} joined the project`,
-    });
-    
-    // Function to generate new target positions - more reasonable movements
     const updateTargetPositions = () => {
       setUsers(prevUsers => {
         return prevUsers.map(user => {
-          // Get the current position
           const currentPos = user.position || { x: 300, y: 150 };
-          
-          // Create smaller, more realistic movements (max 150px in any direction)
           const maxMovement = 150;
           const deltaX = (Math.random() * maxMovement * 2) - maxMovement;
           const deltaY = (Math.random() * maxMovement * 2) - maxMovement;
-          
-          // Stay within reasonable bounds of the screen
           const newX = Math.max(50, Math.min(900, currentPos.x + deltaX));
           const newY = Math.max(50, Math.min(400, currentPos.y + deltaY));
           
@@ -360,13 +305,9 @@ const Dashboard: React.FC = () => {
       });
     };
     
-    // Set initial target positions
     updateTargetPositions();
-    
-    // Update target positions periodically, but less frequently
     const targetUpdateInterval = setInterval(updateTargetPositions, 8000);
     
-    // Animate user movements smoothly using requestAnimationFrame
     let animationFrameId: number;
     
     const animateUsers = () => {
@@ -374,8 +315,6 @@ const Dashboard: React.FC = () => {
         return prevUsers.map(user => {
           if (!user.position || !user.targetPosition) return user;
           
-          // Calculate the next position with smooth interpolation
-          // Slower movement for more stability
           const newX = user.position.x + (user.targetPosition.x - user.position.x) * 0.03;
           const newY = user.position.y + (user.targetPosition.y - user.position.y) * 0.03;
           
@@ -389,36 +328,21 @@ const Dashboard: React.FC = () => {
       animationFrameId = requestAnimationFrame(animateUsers);
     };
     
-    // Start the animation
     animationFrameId = requestAnimationFrame(animateUsers);
-    
-    // Simulate a new user joining after a delay
-    const joinTimeout = setTimeout(() => {
-      const newUser: CollaborationUser = { 
-        id: '4', 
-        name: 'Jordan', 
-        initials: 'JD', 
-        color: 'bg-amber-500',
-        lastActive: new Date(),
-        area: 'timeline',
-        position: { x: 400, y: 200 },
-        targetPosition: { x: 450, y: 250 }
-      };
-      
-      setUsers(prev => [...prev, newUser]);
-      
-      toast({
-        title: "User joined",
-        description: `${newUser.name} joined the project`,
-      });
-    }, 12000);
     
     return () => {
       clearInterval(targetUpdateInterval);
-      clearTimeout(joinTimeout);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);
+  
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
   
   return (
     <TooltipProvider>
@@ -432,24 +356,53 @@ const Dashboard: React.FC = () => {
             <ResizablePanelGroup direction="horizontal">
               <ResizablePanel defaultSize={75} minSize={50} id="timeline-panel">
                 <div className="h-full flex flex-col">
-                  <div className="p-2 border-b border-border flex items-center gap-2">
-                    <Button onClick={handleAddCue} size="sm">
-                      <PlusCircle size={16} className="mr-1.5" /> Add Cue
-                    </Button>
-                    {selectedCue && (
-                      <Button onClick={handleEditCue} size="sm" variant="outline">
-                        <Edit size={16} className="mr-1.5" /> Edit Cue
+                  <div className="p-3 border-b border-border flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <Button onClick={handleAddCue} size="sm">
+                        <PlusCircle size={16} className="mr-1.5" /> Add Cue
                       </Button>
-                    )}
+                      {selectedCue && (
+                        <Button onClick={() => handleEditCue()} size="sm" variant="outline">
+                          <Edit size={16} className="mr-1.5" /> Edit
+                        </Button>
+                      )}
+                      <Button 
+                        onClick={() => setIsAIPanelOpen(true)} 
+                        size="sm" 
+                        variant="outline"
+                        className="bg-gradient-to-r from-primary/10 to-accent/10 hover:from-primary/20 hover:to-accent/20"
+                      >
+                        <Sparkles size={16} className="mr-1.5" /> AI Suggest
+                      </Button>
+                    </div>
+                    <ViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />
                   </div>
-                  <Timeline 
-                    className="flex-1" 
-                    onCueSelect={handleCueSelect}
-                    selectedCueId={selectedCueId}
-                    onCueChange={handleCueUpdate}
-                    selectedCue={selectedCue}
-                    cues={cues}
-                  />
+                  
+                  {viewMode === 'timeline' ? (
+                    <Timeline 
+                      className="flex-1" 
+                      onCueSelect={handleCueSelect}
+                      selectedCueId={selectedCueId}
+                      onCueChange={handleCueUpdate}
+                      selectedCue={selectedCue}
+                      cues={timelineCues}
+                    />
+                  ) : (
+                    <TableView
+                      cues={cues}
+                      selectedCueId={selectedCueId}
+                      onCueSelect={(id, cue) => {
+                        setSelectedCueId(id);
+                        setSelectedCue(cue ? cueToTimelineCue(cue as unknown as Cue) : null);
+                      }}
+                      onCueUpdate={(cue) => {
+                        updateCue(cue.id, cue);
+                      }}
+                      onCueDelete={handleCueDelete}
+                      onCueDuplicate={handleCueDuplicate}
+                      onEditCue={(cue) => handleEditCue(cueToTimelineCue(cue))}
+                    />
+                  )}
                 </div>
               </ResizablePanel>
               
@@ -487,6 +440,16 @@ const Dashboard: React.FC = () => {
           onSave={handleSaveCue}
           editingCue={editingCue}
           tracks={availableTracks}
+        />
+
+        {/* AI Suggest Panel */}
+        <AISuggestPanel
+          isOpen={isAIPanelOpen}
+          onClose={() => setIsAIPanelOpen(false)}
+          suggestions={suggestions}
+          loading={aiLoading}
+          onGetSuggestions={handleGetAISuggestions}
+          onAddSuggestion={handleAddAISuggestion}
         />
       </div>
     </TooltipProvider>
