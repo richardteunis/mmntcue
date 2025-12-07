@@ -11,7 +11,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Edit, Sparkles, Loader2 } from 'lucide-react';
+import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare } from 'lucide-react';
 import { useCues, useAISuggestions } from '@/hooks/useCues';
 import { Cue, ViewMode, CueSuggestion } from '@/types/cue';
 
@@ -55,6 +55,7 @@ const Dashboard: React.FC = () => {
   const [showName, setShowName] = useState<string>('');
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
   const [selectedCue, setSelectedCue] = useState<TimelineCue | null>(null);
+  const [selectedCueIds, setSelectedCueIds] = useState<string[]>([]);
   const [copiedCue, setCopiedCue] = useState<TimelineCue | null>(null);
   const [isAddEditPanelOpen, setIsAddEditPanelOpen] = useState(false);
   const [editingCue, setEditingCue] = useState<TimelineCue | null>(null);
@@ -63,7 +64,7 @@ const Dashboard: React.FC = () => {
   const { toast } = useToast();
   
   // Use database hooks with active show
-  const { cues, loading, addCue, updateCue, deleteCue, duplicateCue, getNextStartTime } = useCues(activeShowId);
+  const { cues, loading, addCue, updateCue, deleteCue, duplicateCue, reorderCues, bulkUpdateCues, bulkDeleteCues, getNextStartTime } = useCues(activeShowId);
   const { suggestions, loading: aiLoading, getSuggestions, setSuggestions } = useAISuggestions();
 
   // Handle show selection from sidebar
@@ -72,6 +73,7 @@ const Dashboard: React.FC = () => {
     setShowName(name);
     setSelectedCueId(null);
     setSelectedCue(null);
+    setSelectedCueIds([]);
   };
 
   // Convert database cues to timeline cues (already sorted by start_time from hook)
@@ -98,11 +100,45 @@ const Dashboard: React.FC = () => {
     await deleteCue(cueId);
     setSelectedCueId(null);
     setSelectedCue(null);
+    setSelectedCueIds(prev => prev.filter(id => id !== cueId));
   };
   
   // Handle cue duplication
   const handleCueDuplicate = async (cueId: string) => {
     await duplicateCue(cueId);
+  };
+
+  // Handle cue reorder
+  const handleCueReorder = async (cueId: string, targetIndex: number) => {
+    await reorderCues(cueId, targetIndex);
+  };
+
+  // Handle bulk delete
+  const handleBulkDelete = async () => {
+    if (selectedCueIds.length === 0) return;
+    await bulkDeleteCues(selectedCueIds);
+    setSelectedCueIds([]);
+    setSelectedCueId(null);
+    setSelectedCue(null);
+  };
+
+  // Handle bulk update
+  const handleBulkUpdate = async (updates: Partial<Cue>) => {
+    if (selectedCueIds.length === 0) return;
+    await bulkUpdateCues(selectedCueIds, updates);
+  };
+
+  // Handle multi-select toggle
+  const handleSelectCue = (cueId: string, isMultiSelect: boolean) => {
+    if (isMultiSelect) {
+      setSelectedCueIds(prev => 
+        prev.includes(cueId) 
+          ? prev.filter(id => id !== cueId) 
+          : [...prev, cueId]
+      );
+    } else {
+      setSelectedCueIds([cueId]);
+    }
   };
 
   // Open add cue panel with auto-calculated start time
@@ -293,6 +329,15 @@ const Dashboard: React.FC = () => {
                           <Edit size={16} className="mr-1.5" /> Edit
                         </Button>
                       )}
+                      {selectedCueIds.length > 1 && (
+                        <Button 
+                          onClick={handleBulkDelete} 
+                          size="sm" 
+                          variant="destructive"
+                        >
+                          <Trash2 size={16} className="mr-1.5" /> Delete ({selectedCueIds.length})
+                        </Button>
+                      )}
                       <Button 
                         onClick={() => setIsAIPanelOpen(true)} 
                         size="sm" 
@@ -302,7 +347,15 @@ const Dashboard: React.FC = () => {
                         <Sparkles size={16} className="mr-1.5" /> AI Suggest
                       </Button>
                     </div>
-                    <ViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />
+                    <div className="flex items-center gap-2">
+                      {selectedCueIds.length > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          <CheckSquare size={14} className="inline mr-1" />
+                          {selectedCueIds.length} selected
+                        </span>
+                      )}
+                      <ViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />
+                    </div>
                   </div>
                   
                   {viewMode === 'timeline' ? (
@@ -315,6 +368,10 @@ const Dashboard: React.FC = () => {
                       cues={timelineCues}
                       onCueDelete={handleCueDelete}
                       onCueDuplicate={handleCueDuplicate}
+                      onCueReorder={handleCueReorder}
+                      selectedCueIds={selectedCueIds}
+                      onSelectCue={handleSelectCue}
+                      onBulkUpdate={handleBulkUpdate}
                     />
                   ) : (
                     <TableView

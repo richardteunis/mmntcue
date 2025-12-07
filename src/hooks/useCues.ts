@@ -234,6 +234,108 @@ export function useCues(showId: string | null) {
     }, false); // Don't auto-calculate, we set it explicitly
   };
 
+  // Reorder cues by updating their start times based on new position
+  const reorderCues = async (draggedCueId: string, targetIndex: number) => {
+    const sortedCues = [...cues].sort((a, b) => timeToSeconds(a.start_time) - timeToSeconds(b.start_time));
+    const draggedCueIndex = sortedCues.findIndex(c => c.id === draggedCueId);
+    
+    if (draggedCueIndex === -1 || draggedCueIndex === targetIndex) return;
+
+    // Remove dragged cue and insert at new position
+    const [draggedCue] = sortedCues.splice(draggedCueIndex, 1);
+    sortedCues.splice(targetIndex, 0, draggedCue);
+
+    // Recalculate start times sequentially
+    let currentTime = 0;
+
+    try {
+      for (let i = 0; i < sortedCues.length; i++) {
+        const cue = sortedCues[i];
+        const newStartTime = secondsToTime(currentTime);
+        
+        if (cue.start_time !== newStartTime) {
+          const { error } = await supabase
+            .from('cues')
+            .update({ start_time: newStartTime, order_index: i })
+            .eq('id', cue.id);
+          
+          if (error) throw error;
+        }
+        
+        currentTime += parseDuration(cue.duration);
+      }
+
+      toast({
+        title: 'Cues reordered',
+        description: 'Timeline order has been updated'
+      });
+      await fetchCues();
+    } catch (error) {
+      console.error('Error reordering cues:', error);
+      toast({
+        title: 'Error reordering',
+        description: 'Could not update cue order',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Bulk update multiple cues
+  const bulkUpdateCues = async (cueIds: string[], updates: Partial<Cue>) => {
+    try {
+      const updatePromises = cueIds.map(id =>
+        supabase
+          .from('cues')
+          .update(updates)
+          .eq('id', id)
+          .then(({ error }) => {
+            if (error) throw error;
+          })
+      );
+      
+      await Promise.all(updatePromises);
+      
+      toast({
+        title: 'Cues updated',
+        description: `${cueIds.length} cues have been updated`
+      });
+      
+      await fetchCues();
+    } catch (error) {
+      console.error('Error bulk updating cues:', error);
+      toast({
+        title: 'Error updating cues',
+        description: 'Could not update selected cues',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Bulk delete multiple cues
+  const bulkDeleteCues = async (cueIds: string[]) => {
+    try {
+      const { error } = await supabase
+        .from('cues')
+        .delete()
+        .in('id', cueIds);
+      
+      if (error) throw error;
+      
+      toast({
+        title: 'Cues deleted',
+        description: `${cueIds.length} cues have been deleted`,
+        variant: 'destructive'
+      });
+    } catch (error) {
+      console.error('Error bulk deleting cues:', error);
+      toast({
+        title: 'Error deleting cues',
+        description: 'Could not delete selected cues',
+        variant: 'destructive'
+      });
+    }
+  };
+
   return {
     cues,
     loading,
@@ -241,6 +343,9 @@ export function useCues(showId: string | null) {
     updateCue,
     deleteCue,
     duplicateCue,
+    reorderCues,
+    bulkUpdateCues,
+    bulkDeleteCues,
     refetch: fetchCues,
     getNextStartTime
   };
