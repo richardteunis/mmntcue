@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Dialog, 
   DialogContent, 
@@ -50,10 +50,13 @@ import {
   Timer,
   Gauge,
   User,
-  Loader2
+  Loader2,
+  X,
+  ImageIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Show, SHOW_TEMPLATES, TIMECODE_FORMATS, TIMEZONES } from '@/types/cue';
+import { useShowIconUpload } from '@/hooks/useShowIconUpload';
 
 interface ShowFormModalProps {
   isOpen: boolean;
@@ -155,6 +158,8 @@ const ShowFormModal: React.FC<ShowFormModalProps> = ({
   
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const iconInputRef = useRef<HTMLInputElement>(null);
+  const { uploadIcon, removeIcon, uploading: iconUploading } = useShowIconUpload();
 
   // Load editing show data
   useEffect(() => {
@@ -478,12 +483,87 @@ const ShowFormModal: React.FC<ShowFormModalProps> = ({
                 </FormField>
               </div>
 
-              <FormField label="Event Logo">
-                <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                  <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Click to upload or drag and drop</p>
-                  <p className="text-xs text-muted-foreground/70">PNG, JPG, SVG up to 2MB</p>
-                </div>
+              <FormField label="Show Icon / Logo" tooltip="Upload an SVG or image file to use as the show icon">
+                <input
+                  ref={iconInputRef}
+                  type="file"
+                  accept=".svg,.png,.jpg,.jpeg,.webp,.gif,image/svg+xml,image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file && editingShow?.id) {
+                      const url = await uploadIcon(file, editingShow.id);
+                      if (url) {
+                        updateField('logo_url', url);
+                      }
+                    } else if (file && !editingShow) {
+                      // For new shows, store the file temporarily and show preview
+                      const previewUrl = URL.createObjectURL(file);
+                      updateField('logo_url', previewUrl);
+                      // Store the file for later upload
+                      (window as any).__pendingShowIconFile = file;
+                    }
+                    e.target.value = '';
+                  }}
+                />
+                {formData.logo_url ? (
+                  <div className="flex items-center gap-4 p-3 border border-border rounded-lg bg-muted/30">
+                    <div className="w-16 h-16 rounded-lg border border-border bg-background flex items-center justify-center overflow-hidden">
+                      <img 
+                        src={formData.logo_url} 
+                        alt="Show icon" 
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">Show Icon</p>
+                      <p className="text-xs text-muted-foreground">Click to change or remove</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => iconInputRef.current?.click()}
+                        disabled={iconUploading}
+                      >
+                        {iconUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Change'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          if (editingShow?.id) {
+                            const success = await removeIcon(editingShow.id);
+                            if (success) {
+                              updateField('logo_url', null);
+                            }
+                          } else {
+                            updateField('logo_url', null);
+                            (window as any).__pendingShowIconFile = null;
+                          }
+                        }}
+                        disabled={iconUploading}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                    onClick={() => iconInputRef.current?.click()}
+                  >
+                    {iconUploading ? (
+                      <Loader2 className="h-6 w-6 mx-auto mb-2 text-muted-foreground animate-spin" />
+                    ) : (
+                      <ImageIcon className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
+                    )}
+                    <p className="text-sm text-muted-foreground">Click to upload or drag and drop</p>
+                    <p className="text-xs text-muted-foreground/70">SVG, PNG, JPG, WebP, GIF up to 2MB</p>
+                  </div>
+                )}
               </FormField>
 
               <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
