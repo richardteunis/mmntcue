@@ -17,10 +17,20 @@ export interface Cue {
   updated_at: string;
 }
 
+export interface Folder {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Show {
   id: string;
   name: string;
   description: string | null;
+  folder_id?: string | null;
   created_at: string;
   updated_at: string;
   // Event Details
