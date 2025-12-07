@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Trash2, Scissors, Clock, Copy, ClipboardCopy, Edit } from 'lucide-react';
+import { PlusCircle, Trash2, Scissors, Clock, Copy, ClipboardCopy, Edit, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TimelineCue } from './Timeline';
 import { useToast } from '@/hooks/use-toast';
@@ -19,6 +19,7 @@ interface CuePanelProps {
   onCueUpdate: (cue: TimelineCue) => void;
   onCueDelete: (cueId: string) => void;
   onCueDuplicate: (cueId: string) => void;
+  onClose?: () => void;
 }
 
 const CuePanel: React.FC<CuePanelProps> = ({
@@ -26,7 +27,8 @@ const CuePanel: React.FC<CuePanelProps> = ({
   selectedCue,
   onCueUpdate,
   onCueDelete,
-  onCueDuplicate
+  onCueDuplicate,
+  onClose
 }) => {
   const { toast } = useToast();
   
@@ -141,9 +143,9 @@ const CuePanel: React.FC<CuePanelProps> = ({
   return (
     <div className="h-full overflow-y-auto border-l border-border">
       <div className="p-4 border-b border-border">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h2 className="text-xl font-semibold">{selectedCue.name}</h2>
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-semibold truncate">{selectedCue.name}</h2>
             <div className="flex items-center gap-2 mt-1">
               <Badge className={cn("capitalize", getTypeColor(selectedCue.type))}>
                 {selectedCue.type}
@@ -155,7 +157,7 @@ const CuePanel: React.FC<CuePanelProps> = ({
             </div>
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex items-center gap-1 ml-2 shrink-0">
             <Button size="sm" variant="ghost" onClick={handleCopyCue}>
               <ClipboardCopy size={16} />
             </Button>
@@ -168,6 +170,11 @@ const CuePanel: React.FC<CuePanelProps> = ({
             <Button size="sm" variant="ghost" className="text-destructive" onClick={handleDeleteCue}>
               <Trash2 size={16} />
             </Button>
+            {onClose && (
+              <Button size="sm" variant="ghost" onClick={onClose}>
+                <X size={16} />
+              </Button>
+            )}
           </div>
         </div>
         
