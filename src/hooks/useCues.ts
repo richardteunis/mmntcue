@@ -326,6 +326,8 @@ export function useCues(showId: string | null) {
         description: `${cueIds.length} cues have been deleted`,
         variant: 'destructive'
       });
+      
+      await fetchCues();
     } catch (error) {
       console.error('Error bulk deleting cues:', error);
       toast({
