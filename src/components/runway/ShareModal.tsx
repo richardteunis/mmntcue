@@ -61,7 +61,30 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
 
       if (error) throw error;
 
-      setMembers((data as unknown as ShowMember[]) || []);
+      // Fetch profiles for members with user_id
+      const memberUserIds = (data || []).filter(m => m.user_id).map(m => m.user_id);
+      let profiles: Record<string, any> = {};
+      
+      if (memberUserIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', memberUserIds);
+        
+        profiles = (profilesData || []).reduce((acc, p) => {
+          acc[p.id] = p;
+          return acc;
+        }, {} as Record<string, any>);
+      }
+
+      // Attach profiles to members
+      const membersWithProfiles = (data || []).map(m => ({
+        ...m,
+        role: m.role as ShowMember['role'],
+        profile: m.user_id ? profiles[m.user_id] : undefined
+      }));
+
+      setMembers(membersWithProfiles);
     } catch (error) {
       console.error('Error fetching members:', error);
     } finally {
