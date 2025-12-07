@@ -98,11 +98,11 @@
 /* Custom Runway Styles */
 @layer components {
   .runway-timeline-track {
-    @apply h-10 border-b border-runway-darkGray relative flex items-center;
+    @apply h-10 border-b border-border relative flex items-center transition-colors;
   }
   
   .runway-cue {
-    @apply px-3 py-1.5 rounded bg-runway-purple text-white cursor-pointer hover:bg-opacity-90 transition-all;
+    @apply px-3 py-1.5 rounded bg-primary text-primary-foreground cursor-pointer hover:opacity-90 transition-all shadow-sm;
   }
   
   .runway-cue-audio {
@@ -123,5 +123,29 @@
   
   .runway-user-avatar {
     @apply h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium;
+  }
+
+  /* Micro-animations */
+  .hover-lift {
+    @apply transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md;
+  }
+
+  .fade-in {
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Playhead animation */
+  .playhead-active {
+    animation: playheadPulse 1s ease-in-out infinite;
+  }
+
+  @keyframes playheadPulse {
+    0%, 100% { box-shadow: 0 0 0 0 hsl(var(--destructive) / 0.4); }
+    50% { box-shadow: 0 0 0 4px hsl(var(--destructive) / 0); }
   }
 }
