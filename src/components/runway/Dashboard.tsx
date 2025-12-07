@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import Timeline, { TimelineCue } from './Timeline';
@@ -54,7 +55,8 @@ const timelineCueToCue = (timelineCue: TimelineCue, orderIndex: number): Omit<Cu
 });
 
 const Dashboard: React.FC = () => {
-  const [activeShowId, setActiveShowId] = useState<string | null>(null);
+  const { showId: urlShowId } = useParams<{ showId?: string }>();
+  const [activeShowId, setActiveShowId] = useState<string | null>(urlShowId || null);
   const [showName, setShowName] = useState<string>('');
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
   const [selectedCue, setSelectedCue] = useState<TimelineCue | null>(null);
@@ -72,6 +74,27 @@ const Dashboard: React.FC = () => {
   // Use database hooks with active show
   const { cues, loading, addCue, updateCue, deleteCue, duplicateCue, reorderCues, bulkUpdateCues, bulkDeleteCues, getNextStartTime } = useCues(activeShowId);
   const { suggestions, loading: aiLoading, getSuggestions, setSuggestions } = useAISuggestions();
+
+  // Load show from URL parameter
+  useEffect(() => {
+    if (urlShowId && !showName) {
+      // Fetch show name from database
+      const fetchShowName = async () => {
+        const { supabase } = await import('@/integrations/supabase/client');
+        const { data } = await supabase
+          .from('shows')
+          .select('name')
+          .eq('id', urlShowId)
+          .maybeSingle();
+        
+        if (data) {
+          setShowName(data.name);
+          setActiveShowId(urlShowId);
+        }
+      };
+      fetchShowName();
+    }
+  }, [urlShowId, showName]);
 
   // Handle show selection from sidebar
   const handleShowSelect = (showId: string, name: string) => {
