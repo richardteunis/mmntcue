@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useAvatarUpload } from '@/hooks/useAvatarUpload';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,11 +10,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, User, Bell, Keyboard, Palette, Shield, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, User, Bell, Keyboard, Palette, Loader2, Save, Upload } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
 
 const SettingsPage: React.FC = () => {
-  const { profile, updateProfile, loading } = useAuthContext();
+  const { user, profile, updateProfile, loading, refetchProfile } = useAuthContext();
+  const { uploadAvatar, uploading } = useAvatarUpload();
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<{
     full_name: string;
@@ -40,6 +45,21 @@ const SettingsPage: React.FC = () => {
     setSaving(true);
     await updateProfile(formData);
     setSaving(false);
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    const avatarUrl = await uploadAvatar(file, user.id);
+    if (avatarUrl) {
+      await updateProfile({ avatar_url: avatarUrl });
+      refetchProfile();
+      toast({
+        title: 'Avatar updated',
+        description: 'Your profile picture has been updated',
+      });
+    }
   };
 
   const timezones = [
@@ -108,7 +128,31 @@ const SettingsPage: React.FC = () => {
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <Button variant="outline" size="sm">Change Avatar</Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarChange}
+                      className="hidden"
+                    />
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      {uploading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="mr-2 h-4 w-4" />
+                          Change Avatar
+                        </>
+                      )}
+                    </Button>
                     <p className="text-xs text-muted-foreground mt-1">JPG, PNG. Max 2MB</p>
                   </div>
                 </div>

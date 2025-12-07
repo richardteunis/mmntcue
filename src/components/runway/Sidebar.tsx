@@ -811,35 +811,40 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
               ))}
             </SidebarSection>
 
-            {/* Recent Section */}
+            {/* Recent Section - shows recently updated shows */}
             <SidebarSection 
               title="Recent" 
               icon={<Clock size={12} />}
               defaultOpen={false}
             >
-              <p className="text-xs text-sidebar-foreground/40 px-3 py-2">No recent activity</p>
+              {shows.slice(0, 5).map(show => (
+                <Button 
+                  key={`recent-${show.id}`}
+                  variant="ghost" 
+                  className={cn(
+                    "w-full justify-start gap-2 h-8 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                    activeShowId === show.id && "bg-sidebar-accent text-sidebar-foreground"
+                  )}
+                  onClick={() => handleSelectShow(show)}
+                >
+                  <Clapperboard size={14} />
+                  <span className="truncate">{show.name}</span>
+                </Button>
+              ))}
+              {shows.length === 0 && (
+                <p className="text-xs text-sidebar-foreground/40 px-3 py-2">No recent shows</p>
+              )}
             </SidebarSection>
 
-            {/* Assets Section */}
+            {/* Assets Section - placeholder for future media library */}
             <SidebarSection 
               title="Assets" 
               icon={<Package size={12} />}
               defaultOpen={false}
             >
-              <Button 
-                variant="ghost" 
-                className="w-full justify-start gap-2 h-8 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              >
-                <Video size={14} />
-                Video Files
-              </Button>
-              <Button 
-                variant="ghost" 
-                className="w-full justify-start gap-2 h-8 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              >
-                <Music size={14} />
-                Audio Files
-              </Button>
+              <p className="text-xs text-sidebar-foreground/40 px-3 py-2">
+                Media library coming soon
+              </p>
             </SidebarSection>
           </div>
         ) : (
