@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_log: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          entity_id: string | null
+          entity_name: string | null
+          entity_type: string
+          id: string
+          show_id: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_name?: string | null
+          entity_type: string
+          id?: string
+          show_id: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_name?: string | null
+          entity_type?: string
+          id?: string
+          show_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_log_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cues: {
         Row: {
           auto_follow: boolean | null
@@ -87,6 +131,7 @@ export type Database = {
           order_index: number
           parent_id: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -95,6 +140,7 @@ export type Database = {
           order_index?: number
           parent_id?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -103,6 +149,7 @@ export type Database = {
           order_index?: number
           parent_id?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -110,6 +157,127 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          read: boolean | null
+          show_id: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          read?: boolean | null
+          show_id?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          read?: boolean | null
+          show_id?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          email_notifications: boolean | null
+          full_name: string | null
+          id: string
+          keyboard_shortcuts_enabled: boolean | null
+          theme: string | null
+          timezone: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          email_notifications?: boolean | null
+          full_name?: string | null
+          id: string
+          keyboard_shortcuts_enabled?: boolean | null
+          theme?: string | null
+          timezone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          email_notifications?: boolean | null
+          full_name?: string | null
+          id?: string
+          keyboard_shortcuts_enabled?: boolean | null
+          theme?: string | null
+          timezone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      show_members: {
+        Row: {
+          accepted_at: string | null
+          guest_email: string | null
+          id: string
+          invited_at: string
+          invited_by: string | null
+          role: string
+          show_id: string
+          user_id: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          guest_email?: string | null
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          role?: string
+          show_id: string
+          user_id?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          guest_email?: string | null
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          role?: string
+          show_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "show_members_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
             referencedColumns: ["id"]
           },
         ]
@@ -149,6 +317,7 @@ export type Database = {
           timecode_format: string | null
           timezone: string | null
           updated_at: string
+          user_id: string | null
           venue: string | null
           video_latency_offset: number | null
         }
@@ -186,6 +355,7 @@ export type Database = {
           timecode_format?: string | null
           timezone?: string | null
           updated_at?: string
+          user_id?: string | null
           venue?: string | null
           video_latency_offset?: number | null
         }
@@ -223,6 +393,7 @@ export type Database = {
           timecode_format?: string | null
           timezone?: string | null
           updated_at?: string
+          user_id?: string | null
           venue?: string | null
           video_latency_offset?: number | null
         }
