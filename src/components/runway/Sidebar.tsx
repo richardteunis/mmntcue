@@ -13,17 +13,18 @@ import {
   ChevronRight,
   ChevronLeft,
   ChevronDown,
-  FolderPlus,
-  BookOpen,
+  Plus,
+  Clapperboard,
   Loader2,
   Pencil,
   Trash2,
   Clock,
-  FolderOpen,
+  ListVideo,
   Zap,
   Package,
   MapPin,
-  Folder,
+  FolderPlus,
+  FolderOpen,
   FolderClosed,
   GripVertical,
   MoreHorizontal
@@ -412,7 +413,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
         onClick={() => handleSelectShow(show)}
       >
         <GripVertical size={12} className="shrink-0 opacity-0 group-hover:opacity-50 cursor-grab" />
-        <BookOpen size={14} className="shrink-0" />
+        <Clapperboard size={14} className="shrink-0" />
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="flex flex-col items-start min-w-0">
@@ -602,7 +603,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
           )}
           onClick={handleOpenCreateModal}
         >
-          <FolderPlus size={16} />
+          <Plus size={16} />
           {!collapsed && <span className="font-medium text-sm">New Show</span>}
         </Button>
         {!collapsed && (
@@ -611,7 +612,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
             className="w-full justify-start gap-2 h-8 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
             onClick={() => handleOpenFolderModal()}
           >
-            <Folder size={14} />
+            <FolderPlus size={14} />
             <span>New Folder</span>
           </Button>
         )}
@@ -690,7 +691,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
             {/* Shows Section */}
             <SidebarSection 
               title="Shows" 
-              icon={<FolderOpen size={12} />}
+              icon={<ListVideo size={12} />}
               badge={shows.length}
             >
               {loading ? (
@@ -797,7 +798,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
                       )}
                       onClick={() => handleSelectShow(show)}
                     >
-                      <BookOpen size={16} />
+                      <Clapperboard size={16} />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="right">{show.name}</TooltipContent>
