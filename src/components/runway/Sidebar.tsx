@@ -144,9 +144,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
         });
       } else {
         setShows(showsResult.data || []);
-        if (showsResult.data && showsResult.data.length > 0 && !activeShowId) {
-          onShowSelect(showsResult.data[0].id, showsResult.data[0].name);
-        }
+        // Don't auto-select a show - let user choose or stay on home
       }
       
       if (foldersResult.error) {
@@ -159,6 +157,19 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
     };
 
     fetchData();
+  }, []);
+
+  // Listen for external create show event (from HomeView)
+  useEffect(() => {
+    const handleOpenCreateShowModal = () => {
+      setEditingShow(null);
+      setShowFormOpen(true);
+    };
+    
+    document.addEventListener('open-create-show-modal', handleOpenCreateShowModal);
+    return () => {
+      document.removeEventListener('open-create-show-modal', handleOpenCreateShowModal);
+    };
   }, []);
   
   const toggleFolder = (folderId: string) => {
@@ -192,6 +203,8 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
   const handleSaveFolder = async () => {
     if (!folderName.trim()) return;
     
+    const { data: { user } } = await supabase.auth.getUser();
+    
     if (editingFolder) {
       const { error } = await supabase
         .from('folders')
@@ -208,7 +221,11 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
     } else {
       const { data, error } = await supabase
         .from('folders')
-        .insert({ name: folderName.trim(), order_index: folders.length })
+        .insert({ 
+          name: folderName.trim(), 
+          order_index: folders.length,
+          user_id: user?.id || null
+        })
         .select()
         .single();
       
