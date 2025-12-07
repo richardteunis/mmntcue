@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,16 +9,16 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Share2, Copy, Mail, UserPlus, Loader2, Crown, Pencil, Eye, X, Check } from 'lucide-react';
+import { Share2, Copy, Mail, UserPlus, Loader2, Crown, Pencil, Eye, X, Check, Search, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { ShowMember } from '@/types/user';
+import { ShowMember, Profile } from '@/types/user';
 import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -35,14 +35,16 @@ const roleLabels: Record<string, { label: string; icon: React.ReactNode; color: 
 };
 
 const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showName }) => {
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'editor' | 'viewer' | 'guest'>('viewer');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [role, setRole] = useState<'editor' | 'viewer'>('viewer');
   const [members, setMembers] = useState<ShowMember[]>([]);
+  const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const { toast } = useToast();
-  const { user } = useAuthContext();
+  const { user, profile } = useAuthContext();
 
   // Fetch members when modal opens
   React.useEffect(() => {
@@ -92,24 +94,55 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
     }
   };
 
-  const handleInvite = async () => {
-    if (!email.trim() || !user) return;
+  // Search for users by email
+  const handleSearch = useCallback(async (query: string) => {
+    setSearchQuery(query);
+    
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
 
+    setSearching(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .or(`email.ilike.%${query}%,full_name.ilike.%${query}%`)
+        .limit(5);
+
+      if (error) throw error;
+
+      // Filter out current user and existing members
+      const memberIds = members.map(m => m.user_id).filter(Boolean);
+      const filtered = (data || []).filter(p => 
+        p.id !== user?.id && !memberIds.includes(p.id)
+      );
+
+      setSearchResults(filtered);
+    } catch (error) {
+      console.error('Error searching users:', error);
+    } finally {
+      setSearching(false);
+    }
+  }, [members, user?.id]);
+
+  // Check if input is a valid email
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  // Invite by selecting from search results
+  const handleInviteUser = async (selectedProfile: Profile) => {
+    if (!user) return;
+    
     setInviting(true);
     try {
-      // Check if user exists
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', email.trim())
-        .maybeSingle();
-
       // Insert member
       const { error } = await supabase.from('show_members').insert({
         show_id: showId,
-        user_id: existingProfile?.id || null,
-        guest_email: existingProfile ? null : email.trim(),
-        role: existingProfile ? role : 'guest',
+        user_id: selectedProfile.id,
+        role: role,
         invited_by: user.id,
       });
 
@@ -126,23 +159,113 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
         return;
       }
 
-      // Create notification for existing user
-      if (existingProfile?.id) {
-        await supabase.from('notifications').insert({
-          user_id: existingProfile.id,
-          type: 'invite',
-          title: 'Show invitation',
-          message: `You've been invited to collaborate on "${showName}"`,
-          show_id: showId,
+      // Create in-app notification
+      await supabase.from('notifications').insert({
+        user_id: selectedProfile.id,
+        type: 'invite',
+        title: 'Show invitation',
+        message: `You've been invited to collaborate on "${showName}"`,
+        show_id: showId,
+      });
+
+      // Send email notification
+      try {
+        await supabase.functions.invoke('send-invite', {
+          body: {
+            email: selectedProfile.email,
+            showId,
+            showName,
+            inviterName: profile?.full_name || user.email || 'Someone',
+            role: role,
+          },
         });
+      } catch (emailError) {
+        console.error('Failed to send invite email:', emailError);
+        // Don't fail the invite if email fails
       }
 
       toast({
         title: 'Invitation sent',
-        description: `${email} has been invited as ${role}`,
+        description: `${selectedProfile.full_name || selectedProfile.email} has been invited as ${role}`,
       });
 
-      setEmail('');
+      setSearchQuery('');
+      setSearchResults([]);
+      fetchMembers();
+    } catch (error: any) {
+      toast({
+        title: 'Error sending invitation',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  // Invite by email (for new users)
+  const handleInviteByEmail = async () => {
+    if (!searchQuery.trim() || !user || !isValidEmail(searchQuery)) return;
+
+    setInviting(true);
+    try {
+      // Check if user exists
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .eq('email', searchQuery.trim().toLowerCase())
+        .maybeSingle();
+
+      if (existingProfile) {
+        // User exists, invite them directly
+        await handleInviteUser(existingProfile as Profile);
+        return;
+      }
+
+      // New user - create guest invite
+      const { error } = await supabase.from('show_members').insert({
+        show_id: showId,
+        user_id: null,
+        guest_email: searchQuery.trim().toLowerCase(),
+        role: 'guest',
+        invited_by: user.id,
+      });
+
+      if (error) {
+        if (error.code === '23505') {
+          toast({
+            title: 'Already invited',
+            description: 'This person is already invited to this show.',
+            variant: 'destructive',
+          });
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      // Send email invite
+      try {
+        await supabase.functions.invoke('send-invite', {
+          body: {
+            email: searchQuery.trim().toLowerCase(),
+            showId,
+            showName,
+            inviterName: profile?.full_name || user.email || 'Someone',
+            role: 'guest',
+          },
+        });
+      } catch (emailError) {
+        console.error('Failed to send invite email:', emailError);
+      }
+
+      toast({
+        title: 'Invitation sent',
+        description: `An invite has been sent to ${searchQuery}`,
+      });
+
+      setSearchQuery('');
+      setSearchResults([]);
       fetchMembers();
     } catch (error: any) {
       toast({
@@ -207,57 +330,108 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[540px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-5 w-5" />
             Share "{showName}"
           </DialogTitle>
           <DialogDescription>
-            Invite team members to collaborate on this show
+            Invite team members or guests to collaborate
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {/* Invite Section */}
+        <div className="space-y-5 py-2">
+          {/* Search/Invite Section - Figma Style */}
           <div className="space-y-3">
-            <Label>Invite by email</Label>
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="email@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Search by name or email..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
                   className="pl-10"
                 />
               </div>
               <Select value={role} onValueChange={(v) => setRole(v as typeof role)}>
-                <SelectTrigger className="w-[120px]">
+                <SelectTrigger className="w-[110px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="editor">Editor</SelectItem>
-                  <SelectItem value="viewer">Viewer</SelectItem>
-                  <SelectItem value="guest">Guest</SelectItem>
+                  <SelectItem value="editor">Can edit</SelectItem>
+                  <SelectItem value="viewer">Can view</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={handleInvite} disabled={!email.trim() || inviting}>
-                {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-              </Button>
             </div>
+
+            {/* Search Results Dropdown */}
+            {searchQuery.length >= 2 && (
+              <div className="border border-border rounded-lg overflow-hidden bg-card">
+                {searching ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  <div className="divide-y divide-border">
+                    {searchResults.map((result) => (
+                      <button
+                        key={result.id}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors text-left"
+                        onClick={() => handleInviteUser(result)}
+                        disabled={inviting}
+                      >
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={result.avatar_url || undefined} />
+                          <AvatarFallback className="text-xs bg-primary text-primary-foreground">
+                            {(result.full_name || result.email || '?').charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{result.full_name || 'Unknown'}</p>
+                          <p className="text-xs text-muted-foreground truncate">{result.email}</p>
+                        </div>
+                        <Badge variant="outline" className="text-xs">
+                          <Users className="h-3 w-3 mr-1" />
+                          Workspace
+                        </Badge>
+                      </button>
+                    ))}
+                  </div>
+                ) : isValidEmail(searchQuery) ? (
+                  <button
+                    className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors text-left"
+                    onClick={handleInviteByEmail}
+                    disabled={inviting}
+                  >
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Mail className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Invite {searchQuery}</p>
+                      <p className="text-xs text-muted-foreground">Send invite via email</p>
+                    </div>
+                    <Badge variant="secondary" className="text-xs">Guest</Badge>
+                  </button>
+                ) : (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    No users found. Enter a valid email to invite as guest.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Share Link */}
           <div className="space-y-2">
-            <Label>Or share link</Label>
+            <Label className="text-xs text-muted-foreground">Anyone with link</Label>
             <div className="flex gap-2">
               <Input
                 value={`${window.location.origin}/show/${showId}`}
                 readOnly
-                className="font-mono text-xs"
+                className="font-mono text-xs bg-muted/50"
               />
-              <Button variant="outline" onClick={copyShareLink}>
+              <Button variant="outline" size="sm" onClick={copyShareLink} className="shrink-0">
                 {linkCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
@@ -265,80 +439,93 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
 
           {/* Members List */}
           <div className="space-y-2">
-            <Label>Members ({members.length})</Label>
-            <div className="border border-border rounded-lg divide-y divide-border max-h-[200px] overflow-y-auto">
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
-              ) : members.length === 0 ? (
-                <div className="text-center py-8 text-sm text-muted-foreground">
-                  No members yet. Invite someone to collaborate!
-                </div>
-              ) : (
-                members.map((member) => {
-                  const roleInfo = roleLabels[member.role];
-                  const isCurrentUser = member.user_id === user?.id;
-                  const displayName = member.profile?.full_name || member.guest_email || 'Unknown';
-                  const displayEmail = member.profile?.email || member.guest_email;
+            <Label className="text-xs text-muted-foreground">
+              People with access ({members.length})
+            </Label>
+            <ScrollArea className="h-[200px]">
+              <div className="border border-border rounded-lg divide-y divide-border">
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : members.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-muted-foreground">
+                    No members yet
+                  </div>
+                ) : (
+                  members.map((member) => {
+                    const roleInfo = roleLabels[member.role];
+                    const isCurrentUser = member.user_id === user?.id;
+                    const displayName = member.profile?.full_name || member.guest_email || 'Unknown';
+                    const displayEmail = member.profile?.email || member.guest_email;
+                    const isGuest = !member.user_id;
 
-                  return (
-                    <div key={member.id} className="flex items-center gap-3 p-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={member.profile?.avatar_url || undefined} />
-                        <AvatarFallback className="text-xs">
-                          {displayName.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {displayName} {isCurrentUser && <span className="text-muted-foreground">(you)</span>}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">{displayEmail}</p>
-                      </div>
-                      {member.role === 'owner' ? (
-                        <Badge className={cn('gap-1', roleInfo.color)}>
-                          {roleInfo.icon} {roleInfo.label}
-                        </Badge>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <Select
-                            value={member.role}
-                            onValueChange={(v) => handleUpdateRole(member.id, v)}
-                            disabled={isCurrentUser}
-                          >
-                            <SelectTrigger className="h-7 w-[100px] text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="editor">Editor</SelectItem>
-                              <SelectItem value="viewer">Viewer</SelectItem>
-                              <SelectItem value="guest">Guest</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          {!isCurrentUser && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive"
-                              onClick={() => handleRemoveMember(member.id)}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          )}
+                    return (
+                      <div key={member.id} className="flex items-center gap-3 p-3">
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={member.profile?.avatar_url || undefined} />
+                          <AvatarFallback className={cn(
+                            "text-xs",
+                            isGuest ? "bg-purple-500/20 text-purple-400" : "bg-primary text-primary-foreground"
+                          )}>
+                            {displayName.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium truncate">
+                              {displayName}
+                            </p>
+                            {isCurrentUser && (
+                              <span className="text-xs text-muted-foreground">(you)</span>
+                            )}
+                            {isGuest && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                Pending
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">{displayEmail}</p>
                         </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                        {member.role === 'owner' ? (
+                          <Badge className={cn('gap-1 shrink-0', roleInfo.color)}>
+                            {roleInfo.icon} {roleInfo.label}
+                          </Badge>
+                        ) : (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Select
+                              value={member.role}
+                              onValueChange={(v) => handleUpdateRole(member.id, v)}
+                              disabled={isCurrentUser}
+                            >
+                              <SelectTrigger className="h-7 w-[90px] text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="editor">Can edit</SelectItem>
+                                <SelectItem value="viewer">Can view</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {!isCurrentUser && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                onClick={() => handleRemoveMember(member.id)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
           </div>
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Done</Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
