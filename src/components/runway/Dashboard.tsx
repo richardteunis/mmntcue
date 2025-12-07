@@ -6,12 +6,14 @@ import TableView from './TableView';
 import CuePanel from './CuePanel';
 import AddEditCuePanel from './AddEditCuePanel';
 import AISuggestPanel from './AISuggestPanel';
+import BulkEditModal from './BulkEditModal';
+import ConfirmDialog from './ConfirmDialog';
 import ViewToggle from './ViewToggle';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare } from 'lucide-react';
+import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil } from 'lucide-react';
 import { useCues, useAISuggestions } from '@/hooks/useCues';
 import { Cue, ViewMode, CueSuggestion } from '@/types/cue';
 
@@ -61,6 +63,8 @@ const Dashboard: React.FC = () => {
   const [editingCue, setEditingCue] = useState<TimelineCue | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('timeline');
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
+  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const { toast } = useToast();
   
   // Use database hooks with active show
@@ -113,19 +117,27 @@ const Dashboard: React.FC = () => {
     await reorderCues(cueId, targetIndex);
   };
 
-  // Handle bulk delete
-  const handleBulkDelete = async () => {
+  // Handle bulk delete with confirmation
+  const handleBulkDeleteConfirm = () => {
+    if (selectedCueIds.length === 0) return;
+    setIsConfirmDeleteOpen(true);
+  };
+
+  const handleBulkDeleteExecute = async () => {
     if (selectedCueIds.length === 0) return;
     await bulkDeleteCues(selectedCueIds);
     setSelectedCueIds([]);
     setSelectedCueId(null);
     setSelectedCue(null);
+    setIsConfirmDeleteOpen(false);
   };
 
   // Handle bulk update
   const handleBulkUpdate = async (updates: Partial<Cue>) => {
     if (selectedCueIds.length === 0) return;
     await bulkUpdateCues(selectedCueIds, updates);
+    setSelectedCueIds([]);
+    setIsBulkEditOpen(false);
   };
 
   // Handle multi-select toggle
@@ -207,6 +219,50 @@ const Dashboard: React.FC = () => {
   // Handle AI suggestions
   const handleGetAISuggestions = async (cueType?: string) => {
     await getSuggestions(showName, cues, cueType);
+  };
+
+  // Handle quick add cue from sidebar
+  const handleQuickAddCue = async (type: 'audio' | 'video' | 'lighting' | 'stage') => {
+    if (!activeShowId) {
+      toast({
+        title: 'No show selected',
+        description: 'Please select or create a show first',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const trackMap = {
+      audio: 'Audio Main',
+      video: 'Video Wall',
+      lighting: 'Stage Lighting',
+      stage: 'Stage Direction'
+    };
+
+    const colorMap = {
+      audio: 'bg-runway-teal',
+      video: 'bg-runway-success',
+      lighting: 'bg-runway-highlight',
+      stage: 'bg-runway-warning'
+    };
+
+    const nextStartTime = getNextStartTime();
+    const newCue: Omit<Cue, 'id' | 'show_id' | 'created_at' | 'updated_at'> = {
+      name: `New ${type.charAt(0).toUpperCase() + type.slice(1)} Cue`,
+      type,
+      track: trackMap[type],
+      start_time: nextStartTime,
+      duration: '00:00:30',
+      position: cues.length * 100,
+      width: 100,
+      color: colorMap[type],
+      notes: null,
+      effects: [],
+      auto_follow: false,
+      order_index: cues.length
+    };
+
+    await addCue(newCue, false);
   };
   
   // Listen for custom events from the timeline and cue panel
@@ -310,7 +366,7 @@ const Dashboard: React.FC = () => {
   return (
     <TooltipProvider>
       <div className="flex h-screen overflow-hidden bg-background text-foreground">
-        <Sidebar activeShowId={activeShowId} onShowSelect={handleShowSelect} />
+        <Sidebar activeShowId={activeShowId} onShowSelect={handleShowSelect} onQuickAddCue={handleQuickAddCue} />
         
         <div className="flex flex-col flex-1 overflow-hidden">
           <TopBar showName={showName} />
@@ -330,13 +386,22 @@ const Dashboard: React.FC = () => {
                         </Button>
                       )}
                       {selectedCueIds.length > 1 && (
-                        <Button 
-                          onClick={handleBulkDelete} 
-                          size="sm" 
-                          variant="destructive"
-                        >
-                          <Trash2 size={16} className="mr-1.5" /> Delete ({selectedCueIds.length})
-                        </Button>
+                        <>
+                          <Button 
+                            onClick={() => setIsBulkEditOpen(true)} 
+                            size="sm" 
+                            variant="outline"
+                          >
+                            <Pencil size={16} className="mr-1.5" /> Edit ({selectedCueIds.length})
+                          </Button>
+                          <Button 
+                            onClick={handleBulkDeleteConfirm} 
+                            size="sm" 
+                            variant="destructive"
+                          >
+                            <Trash2 size={16} className="mr-1.5" /> Delete ({selectedCueIds.length})
+                          </Button>
+                        </>
                       )}
                       <Button 
                         onClick={() => setIsAIPanelOpen(true)} 
@@ -432,6 +497,25 @@ const Dashboard: React.FC = () => {
           loading={aiLoading}
           onGetSuggestions={handleGetAISuggestions}
           onAddSuggestion={handleAddAISuggestion}
+        />
+
+        {/* Bulk Edit Modal */}
+        <BulkEditModal
+          isOpen={isBulkEditOpen}
+          onClose={() => setIsBulkEditOpen(false)}
+          selectedCount={selectedCueIds.length}
+          onBulkUpdate={handleBulkUpdate}
+        />
+
+        {/* Confirm Delete Dialog */}
+        <ConfirmDialog
+          isOpen={isConfirmDeleteOpen}
+          onClose={() => setIsConfirmDeleteOpen(false)}
+          onConfirm={handleBulkDeleteExecute}
+          title={`Delete ${selectedCueIds.length} Cue${selectedCueIds.length > 1 ? 's' : ''}?`}
+          description="This action cannot be undone. All selected cues will be permanently removed from the timeline."
+          confirmText="Delete"
+          variant="destructive"
         />
       </div>
     </TooltipProvider>

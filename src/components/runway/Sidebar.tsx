@@ -49,6 +49,7 @@ interface SidebarProps {
   className?: string;
   activeShowId: string | null;
   onShowSelect: (showId: string, showName: string) => void;
+  onQuickAddCue?: (type: 'audio' | 'video' | 'lighting' | 'stage') => void;
 }
 
 interface SectionProps {
@@ -94,7 +95,7 @@ const SidebarSection: React.FC<SectionProps> = ({ title, icon, children, default
   );
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect }) => {
+const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect, onQuickAddCue }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [shows, setShows] = useState<Show[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
@@ -741,6 +742,8 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
                     "w-full justify-start gap-2 h-8 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                     item.color
                   )}
+                  onClick={() => onQuickAddCue?.(item.type as 'audio' | 'video' | 'lighting' | 'stage')}
+                  disabled={!activeShowId}
                 >
                   {item.icon}
                   {item.label}
@@ -815,6 +818,8 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
                       "w-full justify-center h-9 p-0 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                       item.color
                     )}
+                    onClick={() => onQuickAddCue?.(item.type as 'audio' | 'video' | 'lighting' | 'stage')}
+                    disabled={!activeShowId}
                   >
                     {item.icon}
                   </Button>
