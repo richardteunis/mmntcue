@@ -23,11 +23,14 @@ import {
   Columns,
   GripVertical,
   Pencil,
-  Flag
+  Flag,
+  Square,
+  CheckSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { 
   DropdownMenu,
@@ -76,6 +79,9 @@ export interface TimelineProps {
   onCueReorder?: (cueId: string, newIndex: number) => void;
   onCueDelete?: (cueId: string) => void;
   onCueDuplicate?: (cueId: string) => void;
+  selectedCueIds?: string[];
+  onSelectCue?: (cueId: string, isMultiSelect: boolean) => void;
+  onBulkUpdate?: (updates: Partial<TimelineCue>) => void;
 }
 
 // Track columns configuration
@@ -141,7 +147,10 @@ const Timeline: React.FC<TimelineProps> = ({
   cues = [],
   onCueReorder,
   onCueDelete,
-  onCueDuplicate
+  onCueDuplicate,
+  selectedCueIds = [],
+  onSelectCue,
+  onBulkUpdate
 }) => {
   const [currentTime, setCurrentTime] = useState('00:00:00');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -470,6 +479,23 @@ const Timeline: React.FC<TimelineProps> = ({
         <Table>
           <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow className="hover:bg-transparent border-b-2 border-border">
+              <TableHead className="w-[40px] text-center font-semibold text-[10px] uppercase tracking-wider">
+                <Checkbox 
+                  checked={selectedCueIds.length > 0 && selectedCueIds.length === filteredCues.length}
+                  onCheckedChange={(checked) => {
+                    if (checked && onSelectCue) {
+                      filteredCues.forEach(cue => onSelectCue(cue.id, true));
+                    } else if (onSelectCue) {
+                      // Deselect all by selecting with multi=false on empty
+                      filteredCues.forEach(cue => {
+                        if (selectedCueIds.includes(cue.id)) {
+                          onSelectCue(cue.id, true);
+                        }
+                      });
+                    }
+                  }}
+                />
+              </TableHead>
               <TableHead className="w-[40px] text-center font-semibold text-[10px] uppercase tracking-wider">#</TableHead>
               <TableHead className="min-w-[250px] font-semibold text-[10px] uppercase tracking-wider">Items</TableHead>
               <TableHead className="w-[100px] font-semibold text-[10px] uppercase tracking-wider">
@@ -501,6 +527,7 @@ const Timeline: React.FC<TimelineProps> = ({
             {filteredCues.map((cue, index) => {
               const isCurrentCue = index === currentCueIndex && isPlaying;
               const isSelected = selectedCueId === cue.id;
+              const isMultiSelected = selectedCueIds.includes(cue.id);
               const isDragging = draggedCueId === cue.id;
               const isDragOver = dragOverIndex === index;
               
@@ -514,13 +541,28 @@ const Timeline: React.FC<TimelineProps> = ({
                   onDrop={(e) => handleDrop(e, index)}
                   className={cn(
                     "cursor-pointer transition-all group",
-                    isSelected && "bg-primary/10",
+                    (isSelected || isMultiSelected) && "bg-primary/10",
                     isCurrentCue && "bg-runway-success/20 ring-1 ring-runway-success",
                     isDragging && "opacity-50",
                     isDragOver && "border-t-2 border-t-primary"
                   )}
-                  onClick={() => handleCueClick(cue)}
+                  onClick={(e) => {
+                    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+                      if (onSelectCue) onSelectCue(cue.id, true);
+                    } else {
+                      handleCueClick(cue);
+                      if (onSelectCue) onSelectCue(cue.id, false);
+                    }
+                  }}
                 >
+                  <TableCell className="text-center py-3" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox 
+                      checked={isMultiSelected}
+                      onCheckedChange={(checked) => {
+                        if (onSelectCue) onSelectCue(cue.id, true);
+                      }}
+                    />
+                  </TableCell>
                   <TableCell className="text-center font-mono text-xs text-muted-foreground py-3">
                     {index + 1}
                   </TableCell>
@@ -674,7 +716,7 @@ const Timeline: React.FC<TimelineProps> = ({
             {filteredCues.length === 0 && (
               <TableRow>
                 <TableCell 
-                  colSpan={6 + visibleColumns.length} 
+                  colSpan={7 + visibleColumns.length} 
                   className="h-32 text-center text-muted-foreground"
                 >
                   {cues.length === 0 
