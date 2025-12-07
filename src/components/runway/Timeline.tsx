@@ -73,6 +73,9 @@ export interface TimelineProps {
   onCueChange?: (updatedCue: TimelineCue) => void;
   selectedCue?: TimelineCue | null;
   cues?: TimelineCue[];
+  onCueReorder?: (cueId: string, newIndex: number) => void;
+  onCueDelete?: (cueId: string) => void;
+  onCueDuplicate?: (cueId: string) => void;
 }
 
 // Track columns configuration
@@ -135,7 +138,10 @@ const Timeline: React.FC<TimelineProps> = ({
   selectedCueId,
   onCueChange,
   selectedCue,
-  cues = []
+  cues = [],
+  onCueReorder,
+  onCueDelete,
+  onCueDuplicate
 }) => {
   const [currentTime, setCurrentTime] = useState('00:00:00');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -144,6 +150,8 @@ const Timeline: React.FC<TimelineProps> = ({
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [copiedCue, setCopiedCue] = useState<TimelineCue | null>(null);
   const [deletedCues, setDeletedCues] = useState<TimelineCue[]>([]);
+  const [draggedCueId, setDraggedCueId] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   
   const timeInSecondsRef = useRef(0);
   const animationFrameRef = useRef<number | null>(null);
@@ -162,6 +170,55 @@ const Timeline: React.FC<TimelineProps> = ({
       cue.notes?.toLowerCase().includes(searchFilter.toLowerCase())
     );
   }, [sortedCues, searchFilter]);
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, cueId: string) => {
+    setDraggedCueId(cueId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', cueId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedCueId(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    const cueId = e.dataTransfer.getData('text/plain');
+    
+    if (cueId && onCueReorder) {
+      onCueReorder(cueId, targetIndex);
+    }
+    
+    handleDragEnd();
+  };
+
+  // Delete cue handler
+  const handleDeleteCue = (cueId: string, cueName: string) => {
+    if (onCueDelete) {
+      onCueDelete(cueId);
+      toast({ title: "Cue deleted", description: cueName, variant: "destructive" });
+    } else {
+      document.dispatchEvent(new CustomEvent("timeline-delete-cue", { detail: { cueId } }));
+    }
+  };
+
+  // Duplicate cue handler
+  const handleDuplicateCue = (cueId: string, cueName: string) => {
+    if (onCueDuplicate) {
+      onCueDuplicate(cueId);
+      toast({ title: "Cue duplicated", description: `Copy of ${cueName} created` });
+    } else {
+      document.dispatchEvent(new CustomEvent("timeline-duplicate-cue", { detail: { cueId } }));
+    }
+  };
   
   // Playback logic
   useEffect(() => {
@@ -437,20 +494,30 @@ const Timeline: React.FC<TimelineProps> = ({
                   </TableHead>
                 );
               })}
+              <TableHead className="w-[80px] font-semibold text-[10px] uppercase tracking-wider text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredCues.map((cue, index) => {
               const isCurrentCue = index === currentCueIndex && isPlaying;
               const isSelected = selectedCueId === cue.id;
+              const isDragging = draggedCueId === cue.id;
+              const isDragOver = dragOverIndex === index;
               
               return (
                 <TableRow 
                   key={cue.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, cue.id)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragEnd={handleDragEnd}
+                  onDrop={(e) => handleDrop(e, index)}
                   className={cn(
                     "cursor-pointer transition-all group",
                     isSelected && "bg-primary/10",
-                    isCurrentCue && "bg-runway-success/20 ring-1 ring-runway-success"
+                    isCurrentCue && "bg-runway-success/20 ring-1 ring-runway-success",
+                    isDragging && "opacity-50",
+                    isDragOver && "border-t-2 border-t-primary"
                   )}
                   onClick={() => handleCueClick(cue)}
                 >
@@ -459,7 +526,10 @@ const Timeline: React.FC<TimelineProps> = ({
                   </TableCell>
                   <TableCell className="py-3">
                     <div className="flex items-center gap-2">
-                      <GripVertical size={12} className="opacity-0 group-hover:opacity-40 cursor-grab" />
+                      <GripVertical 
+                        size={14} 
+                        className="opacity-30 group-hover:opacity-70 cursor-grab active:cursor-grabbing text-muted-foreground" 
+                      />
                       {isCurrentCue && (
                         <div className="w-2 h-2 rounded-full bg-runway-success animate-pulse" />
                       )}
@@ -562,13 +632,49 @@ const Timeline: React.FC<TimelineProps> = ({
                       </TableCell>
                     );
                   })}
+                  <TableCell className="py-3">
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-7 w-7 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicateCue(cue.id, cue.name);
+                            }}
+                          >
+                            <Copy size={14} />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Duplicate</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteCue(cue.id, cue.name);
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </TableCell>
                 </TableRow>
               );
             })}
             {filteredCues.length === 0 && (
               <TableRow>
                 <TableCell 
-                  colSpan={5 + visibleColumns.length} 
+                  colSpan={6 + visibleColumns.length} 
                   className="h-32 text-center text-muted-foreground"
                 >
                   {cues.length === 0 

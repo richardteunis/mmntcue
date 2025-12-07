@@ -313,6 +313,8 @@ const Dashboard: React.FC = () => {
                       onCueChange={handleCueUpdate}
                       selectedCue={selectedCue}
                       cues={timelineCues}
+                      onCueDelete={handleCueDelete}
+                      onCueDuplicate={handleCueDuplicate}
                     />
                   ) : (
                     <TableView
@@ -343,6 +345,10 @@ const Dashboard: React.FC = () => {
                       onCueUpdate={handleCueUpdate}
                       onCueDelete={handleCueDelete}
                       onCueDuplicate={handleCueDuplicate}
+                      onClose={() => {
+                        setSelectedCueId(null);
+                        setSelectedCue(null);
+                      }}
                     />
                   </ResizablePanel>
                 </>
