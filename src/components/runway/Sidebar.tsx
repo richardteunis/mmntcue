@@ -227,6 +227,9 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
   };
   
   const handleSaveShow = async (showData: Partial<Show>) => {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    
     if (editingShow) {
       const { error } = await supabase
         .from('shows')
@@ -248,15 +251,37 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
       
       toast({ title: "Show updated", description: `${showData.name} has been updated successfully` });
     } else {
+      // Clean up empty time fields before inserting
+      const cleanedData = { ...showData };
+      if (cleanedData.call_time === '') cleanedData.call_time = null as any;
+      if (cleanedData.doors_time === '') cleanedData.doors_time = null as any;
+      if (cleanedData.show_time === '') cleanedData.show_time = null as any;
+      if (cleanedData.event_start_date === '') cleanedData.event_start_date = null as any;
+      if (cleanedData.event_end_date === '') cleanedData.event_end_date = null as any;
+      
       const { data, error } = await supabase
         .from('shows')
-        .insert({ name: showData.name!, ...showData } as any)
+        .insert({ 
+          name: showData.name!, 
+          ...cleanedData,
+          user_id: user?.id || null 
+        } as any)
         .select()
         .single();
       
       if (error) {
         toast({ title: "Error creating show", description: error.message, variant: "destructive" });
         throw error;
+      }
+      
+      // Create owner membership for the current user
+      if (user) {
+        await supabase.from('show_members').insert({
+          show_id: data.id,
+          user_id: user.id,
+          role: 'owner',
+          accepted_at: new Date().toISOString()
+        });
       }
       
       setShows(prev => [data, ...prev]);
@@ -270,17 +295,32 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
     const showToDuplicate = shows.find(s => s.id === showId);
     if (!showToDuplicate) return;
     
+    const { data: { user } } = await supabase.auth.getUser();
     const { id, created_at, updated_at, ...showFields } = showToDuplicate;
     
     const { data, error } = await supabase
       .from('shows')
-      .insert({ ...showFields, name: `${showToDuplicate.name} (Copy)` })
+      .insert({ 
+        ...showFields, 
+        name: `${showToDuplicate.name} (Copy)`,
+        user_id: user?.id || null 
+      })
       .select()
       .single();
     
     if (error) {
       toast({ title: "Error duplicating show", description: error.message, variant: "destructive" });
       return;
+    }
+    
+    // Create owner membership for the current user
+    if (user) {
+      await supabase.from('show_members').insert({
+        show_id: data.id,
+        user_id: user.id,
+        role: 'owner',
+        accepted_at: new Date().toISOString()
+      });
     }
     
     setShows(prev => [data, ...prev]);
