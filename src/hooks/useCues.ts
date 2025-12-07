@@ -3,8 +3,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Cue, CueSuggestion } from '@/types/cue';
 import { useToast } from '@/hooks/use-toast';
 
-const DEFAULT_SHOW_ID = '00000000-0000-0000-0000-000000000001';
-
 // Helper to convert time string to seconds for sorting
 const timeToSeconds = (timeString: string): number => {
   const parts = timeString.split(':').map(Number);
@@ -35,13 +33,18 @@ const parseDuration = (duration: string): number => {
   return 30; // default 30 seconds
 };
 
-export function useCues() {
+export function useCues(showId: string | null) {
   const [cues, setCues] = useState<Cue[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showId] = useState(DEFAULT_SHOW_ID);
   const { toast } = useToast();
 
   const fetchCues = useCallback(async () => {
+    if (!showId) {
+      setCues([]);
+      setLoading(false);
+      return;
+    }
+    
     try {
       const { data, error } = await supabase
         .from('cues')
@@ -76,9 +79,11 @@ export function useCues() {
   useEffect(() => {
     fetchCues();
 
+    if (!showId) return;
+
     // Subscribe to realtime changes
     const channel = supabase
-      .channel('cues-changes')
+      .channel(`cues-changes-${showId}`)
       .on(
         'postgres_changes',
         {
@@ -116,6 +121,15 @@ export function useCues() {
   }, [cues]);
 
   const addCue = async (cue: Omit<Cue, 'id' | 'show_id' | 'created_at' | 'updated_at'>, autoStartTime: boolean = true) => {
+    if (!showId) {
+      toast({
+        title: 'No show selected',
+        description: 'Please select or create a show first',
+        variant: 'destructive'
+      });
+      return null;
+    }
+    
     try {
       // If autoStartTime is true and start_time is default, calculate it
       let startTime = cue.start_time;

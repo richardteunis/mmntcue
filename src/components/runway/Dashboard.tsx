@@ -51,7 +51,8 @@ const timelineCueToCue = (timelineCue: TimelineCue, orderIndex: number): Omit<Cu
 });
 
 const Dashboard: React.FC = () => {
-  const [showName] = useState('Summer Festival 2025');
+  const [activeShowId, setActiveShowId] = useState<string | null>(null);
+  const [showName, setShowName] = useState<string>('');
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
   const [selectedCue, setSelectedCue] = useState<TimelineCue | null>(null);
   const [copiedCue, setCopiedCue] = useState<TimelineCue | null>(null);
@@ -61,9 +62,17 @@ const Dashboard: React.FC = () => {
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
   const { toast } = useToast();
   
-  // Use database hooks
-  const { cues, loading, addCue, updateCue, deleteCue, duplicateCue, getNextStartTime } = useCues();
+  // Use database hooks with active show
+  const { cues, loading, addCue, updateCue, deleteCue, duplicateCue, getNextStartTime } = useCues(activeShowId);
   const { suggestions, loading: aiLoading, getSuggestions, setSuggestions } = useAISuggestions();
+
+  // Handle show selection from sidebar
+  const handleShowSelect = (showId: string, name: string) => {
+    setActiveShowId(showId);
+    setShowName(name);
+    setSelectedCueId(null);
+    setSelectedCue(null);
+  };
 
   // Convert database cues to timeline cues (already sorted by start_time from hook)
   const timelineCues = cues.map(cueToTimelineCue);
@@ -265,7 +274,7 @@ const Dashboard: React.FC = () => {
   return (
     <TooltipProvider>
       <div className="flex h-screen overflow-hidden bg-background text-foreground">
-        <Sidebar />
+        <Sidebar activeShowId={activeShowId} onShowSelect={handleShowSelect} />
         
         <div className="flex flex-col flex-1 overflow-hidden">
           <TopBar showName={showName} />

@@ -1,23 +1,21 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { 
   Calendar, 
   Users, 
   Settings, 
-  Clock, 
   Video, 
   Music, 
   Lightbulb,
   Mic,
-  Plus,
   Layers,
   ChevronRight,
   ChevronLeft,
   Share2,
   FolderPlus,
   BookOpen,
-  ListVideo
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -28,66 +26,79 @@ import { Label } from '@/components/ui/label';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
+import { supabase } from '@/integrations/supabase/client';
+import { Show } from '@/types/cue';
 
 interface SidebarProps {
   className?: string;
+  activeShowId: string | null;
+  onShowSelect: (showId: string, showName: string) => void;
 }
 
-interface Show {
-  id: number;
-  name: string;
-  date: string;
-  description?: string;
-}
-
-interface CueItem {
-  id: number;
-  name: string;
-  duration?: string;
-  type: 'video' | 'audio' | 'lighting' | 'stage';
-}
-
-const mockCues: CueItem[] = [
-  { id: 1, name: "Opening Video", duration: "0:45", type: "video" },
-  { id: 2, name: "Intro Music", duration: "1:30", type: "audio" },
-  { id: 3, name: "Stage Lights Up", type: "lighting" },
-  { id: 4, name: "MC Introduction", type: "stage" },
-  { id: 5, name: "Product Demo", duration: "5:20", type: "video" },
-  { id: 6, name: "Transition Music", duration: "0:20", type: "audio" },
-  { id: 7, name: "Spotlight Center", type: "lighting" },
-  { id: 8, name: "Guest Speaker Intro", type: "stage" },
-];
-
-const Sidebar: React.FC<SidebarProps> = ({ className }) => {
+const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect }) => {
   const [collapsed, setCollapsed] = useState(false);
-  const [shows, setShows] = useState<Show[]>([
-    { id: 1, name: "Summer Festival 2025", date: "2025-07-15", description: "Annual summer music and arts festival" },
-    { id: 2, name: "Conference Keynote", date: "2025-05-22", description: "Tech industry keynote presentation" },
-    { id: 3, name: "Product Launch", date: "2025-06-10", description: "New product line launch event" },
-  ]);
-  const [activeShow, setActiveShow] = useState<number | null>(1);
+  const [shows, setShows] = useState<Show[]>([]);
+  const [loading, setLoading] = useState(true);
   const [newShowName, setNewShowName] = useState('');
   const [newShowDescription, setNewShowDescription] = useState('');
-  const [activeCueType, setActiveCueType] = useState<string | null>(null);
-  const [showCueDrawer, setShowCueDrawer] = useState(false);
-  const [selectedCue, setSelectedCue] = useState<CueItem | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
+
+  // Fetch shows from database
+  useEffect(() => {
+    const fetchShows = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('shows')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching shows:', error);
+        toast({
+          title: "Error loading shows",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        setShows(data || []);
+        // Auto-select first show if none selected
+        if (data && data.length > 0 && !activeShowId) {
+          onShowSelect(data[0].id, data[0].name);
+        }
+      }
+      setLoading(false);
+    };
+
+    fetchShows();
+  }, []);
   
-  const handleCreateShow = () => {
+  const handleCreateShow = async () => {
     if (!newShowName.trim()) return;
     
-    const newShow: Show = {
-      id: Date.now(),
-      name: newShowName,
-      date: new Date().toISOString().split('T')[0],
-      description: newShowDescription || undefined
-    };
+    const { data, error } = await supabase
+      .from('shows')
+      .insert({
+        name: newShowName,
+        description: newShowDescription || null
+      })
+      .select()
+      .single();
     
-    setShows([...shows, newShow]);
+    if (error) {
+      toast({
+        title: "Error creating show",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setShows(prev => [data, ...prev]);
     setNewShowName('');
     setNewShowDescription('');
-    setActiveShow(newShow.id);
+    setDialogOpen(false);
+    onShowSelect(data.id, data.name);
     
     toast({
       title: "Show created",
@@ -95,37 +106,16 @@ const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     });
   };
   
-  const handleSelectShow = (showId: number) => {
-    setActiveShow(showId);
-    toast({
-      title: "Show opened",
-      description: `You are now viewing ${shows.find(show => show.id === showId)?.name}`,
-    });
+  const handleSelectShow = (show: Show) => {
+    onShowSelect(show.id, show.name);
   };
   
-  const handleShareShow = (showId: number) => {
-    const showName = shows.find(show => show.id === showId)?.name;
+  const handleShareShow = (showId: string, showName: string) => {
     toast({
       title: "Show shared",
       description: `Collaboration link for "${showName}" copied to clipboard`,
     });
   };
-
-  const handleSelectCueType = (type: string) => {
-    setActiveCueType(type);
-    setShowCueDrawer(true);
-  };
-
-  const handleSelectCue = (cue: CueItem) => {
-    setSelectedCue(cue);
-    toast({
-      title: "Cue selected",
-      description: `Added "${cue.name}" to the timeline`,
-    });
-    setShowCueDrawer(false);
-  };
-  
-  const filteredCues = activeCueType ? mockCues.filter(cue => cue.type === activeCueType) : mockCues;
   
   return (
     <div className={cn(
@@ -154,7 +144,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className }) => {
       <Separator className="bg-sidebar-border" />
       
       <div className="p-4">
-        <Dialog>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button 
               variant="outline" 
@@ -206,128 +196,94 @@ const Sidebar: React.FC<SidebarProps> = ({ className }) => {
           <>
             <nav className="space-y-1">
               <p className="text-xs uppercase text-sidebar-foreground/70 font-semibold px-3 pb-2">Shows</p>
-              {shows.map(show => (
-                <div key={show.id} className="group relative">
-                  <Button 
-                    variant="ghost" 
-                    className={cn(
-                      "w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent pr-8",
-                      activeShow === show.id ? "bg-sidebar-accent text-white font-medium" : ""
-                    )}
-                    onClick={() => handleSelectShow(show.id)}
-                  >
-                    <BookOpen size={18} />
-                    <span className="truncate">{show.name}</span>
-                  </Button>
-                  <HoverCard>
-                    <HoverCardTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-sidebar-foreground hover:bg-sidebar-accent"
-                      >
-                        <Calendar size={16} />
-                      </Button>
-                    </HoverCardTrigger>
-                    <HoverCardContent className="w-80">
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-semibold">{show.name}</h4>
-                        <p className="text-xs">{show.description}</p>
-                        <div className="flex items-center gap-2">
-                          <Calendar size={14} />
-                          <span className="text-xs">{new Date(show.date).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                    </HoverCardContent>
-                  </HoverCard>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-sidebar-foreground hover:bg-sidebar-accent"
-                    onClick={() => handleShareShow(show.id)}
-                  >
-                    <Share2 size={16} />
-                  </Button>
+              
+              {loading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-sidebar-foreground" />
                 </div>
-              ))}
+              ) : shows.length === 0 ? (
+                <p className="text-sm text-sidebar-foreground/50 px-3 py-2">No shows yet. Create one!</p>
+              ) : (
+                shows.map(show => (
+                  <div key={show.id} className="group relative">
+                    <Button 
+                      variant="ghost" 
+                      className={cn(
+                        "w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent pr-8",
+                        activeShowId === show.id ? "bg-sidebar-accent text-white font-medium" : ""
+                      )}
+                      onClick={() => handleSelectShow(show)}
+                    >
+                      <BookOpen size={18} />
+                      <span className="truncate">{show.name}</span>
+                    </Button>
+                    <HoverCard>
+                      <HoverCardTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-sidebar-foreground hover:bg-sidebar-accent"
+                        >
+                          <Calendar size={16} />
+                        </Button>
+                      </HoverCardTrigger>
+                      <HoverCardContent className="w-80">
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-semibold">{show.name}</h4>
+                          {show.description && <p className="text-xs">{show.description}</p>}
+                          <div className="flex items-center gap-2">
+                            <Calendar size={14} />
+                            <span className="text-xs">{new Date(show.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-sidebar-foreground hover:bg-sidebar-accent"
+                      onClick={() => handleShareShow(show.id, show.name)}
+                    >
+                      <Share2 size={16} />
+                    </Button>
+                  </div>
+                ))
+              )}
+              
               <Button variant="ghost" className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent">
                 <Users size={18} />
                 Shared With Me
               </Button>
               
-              <p className="text-xs uppercase text-sidebar-foreground/70 font-semibold px-3 pb-2 pt-4">Cue Library</p>
-              
-              <Drawer open={showCueDrawer} onOpenChange={setShowCueDrawer}>
-                <DrawerContent>
-                  <DrawerHeader>
-                    <DrawerTitle>
-                      {activeCueType === 'video' && "Video Cues"}
-                      {activeCueType === 'audio' && "Audio Cues"}
-                      {activeCueType === 'lighting' && "Lighting Cues"}
-                      {activeCueType === 'stage' && "Stage Cues"}
-                    </DrawerTitle>
-                    <DrawerDescription>
-                      Select a cue to add to your timeline
-                    </DrawerDescription>
-                  </DrawerHeader>
-                  <div className="p-4">
-                    <ScrollArea className="h-[50vh]">
-                      <div className="space-y-2">
-                        {filteredCues.map(cue => (
-                          <div 
-                            key={cue.id} 
-                            className="p-3 rounded-md border border-border hover:bg-accent/50 cursor-pointer"
-                            onClick={() => handleSelectCue(cue)}
-                          >
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h4 className="font-medium">{cue.name}</h4>
-                                {cue.duration && <p className="text-xs opacity-70">Duration: {cue.duration}</p>}
-                              </div>
-                              {cue.type === 'video' && <Video size={18} />}
-                              {cue.type === 'audio' && <Music size={18} />}
-                              {cue.type === 'lighting' && <Lightbulb size={18} />}
-                              {cue.type === 'stage' && <Mic size={18} />}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </div>
-                </DrawerContent>
-              </Drawer>
+              <p className="text-xs uppercase text-sidebar-foreground/70 font-semibold px-3 pb-2 pt-4">Quick Add</p>
               
               <Button 
                 variant="ghost" 
                 className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent"
-                onClick={() => handleSelectCueType('video')}
               >
                 <Video size={18} />
-                Video Cues
+                Video Cue
               </Button>
               <Button 
                 variant="ghost" 
                 className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent"
-                onClick={() => handleSelectCueType('audio')}
               >
                 <Music size={18} />
-                Audio Cues
+                Audio Cue
               </Button>
               <Button 
                 variant="ghost" 
                 className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent"
-                onClick={() => handleSelectCueType('lighting')}
               >
                 <Lightbulb size={18} />
-                Lighting Cues
+                Lighting Cue
               </Button>
               <Button 
                 variant="ghost" 
                 className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent"
-                onClick={() => handleSelectCueType('stage')}
               >
                 <Mic size={18} />
-                Stage Cues
+                Stage Cue
               </Button>
             </nav>
           </>
@@ -343,7 +299,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 {shows.map(show => (
-                  <DropdownMenuItem key={show.id} onClick={() => handleSelectShow(show.id)}>
+                  <DropdownMenuItem key={show.id} onClick={() => handleSelectShow(show)}>
                     {show.name}
                   </DropdownMenuItem>
                 ))}
@@ -360,7 +316,6 @@ const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               variant="ghost" 
               size="icon" 
               className="text-sidebar-foreground hover:bg-sidebar-accent"
-              onClick={() => handleSelectCueType('video')}
             >
               <Video size={20} />
             </Button>
@@ -368,7 +323,6 @@ const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               variant="ghost" 
               size="icon" 
               className="text-sidebar-foreground hover:bg-sidebar-accent"
-              onClick={() => handleSelectCueType('audio')}
             >
               <Music size={20} />
             </Button>
@@ -376,7 +330,6 @@ const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               variant="ghost" 
               size="icon" 
               className="text-sidebar-foreground hover:bg-sidebar-accent"
-              onClick={() => handleSelectCueType('lighting')}
             >
               <Lightbulb size={20} />
             </Button>
@@ -384,7 +337,6 @@ const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               variant="ghost" 
               size="icon" 
               className="text-sidebar-foreground hover:bg-sidebar-accent"
-              onClick={() => handleSelectCueType('stage')}
             >
               <Mic size={20} />
             </Button>
