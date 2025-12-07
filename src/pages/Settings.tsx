@@ -121,7 +121,7 @@ const SettingsPage: React.FC = () => {
                     <Input
                       id="name"
                       value={formData.full_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
+                      onChange={(e) => setFormData(prev => prev ? { ...prev, full_name: e.target.value } : prev)}
                       placeholder="Your name"
                     />
                   </div>
@@ -136,7 +136,7 @@ const SettingsPage: React.FC = () => {
                     <Label htmlFor="timezone">Timezone</Label>
                     <Select
                       value={formData.timezone}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, timezone: value }))}
+                      onValueChange={(value) => setFormData(prev => prev ? { ...prev, timezone: value } : prev)}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -176,7 +176,7 @@ const SettingsPage: React.FC = () => {
                   </div>
                   <Switch
                     checked={formData.email_notifications}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, email_notifications: checked }))}
+                    onCheckedChange={(checked) => setFormData(prev => prev ? { ...prev, email_notifications: checked } : prev)}
                   />
                 </div>
 
@@ -222,7 +222,7 @@ const SettingsPage: React.FC = () => {
                     <Label>Theme</Label>
                     <Select
                       value={formData.theme}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, theme: value }))}
+                      onValueChange={(value) => setFormData(prev => prev ? { ...prev, theme: value } : prev)}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -244,7 +244,7 @@ const SettingsPage: React.FC = () => {
                     </div>
                     <Switch
                       checked={formData.keyboard_shortcuts_enabled}
-                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, keyboard_shortcuts_enabled: checked }))}
+                      onCheckedChange={(checked) => setFormData(prev => prev ? { ...prev, keyboard_shortcuts_enabled: checked } : prev)}
                     />
                   </div>
                 </div>

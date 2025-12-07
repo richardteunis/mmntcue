@@ -17,9 +17,8 @@ const UserMenu: React.FC = () => {
   const { user, profile, signOut } = useAuthContext();
   const navigate = useNavigate();
 
-  if (!user) return null;
-
-  const displayName = profile?.full_name || user.email?.split('@')[0] || 'User';
+  // Always render - show loading state if no user
+  const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
   const initials = displayName.charAt(0).toUpperCase();
 
   return (
@@ -36,7 +35,7 @@ const UserMenu: React.FC = () => {
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">{displayName}</p>
-            <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+            <p className="text-xs leading-none text-muted-foreground">{user?.email || 'Not signed in'}</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
