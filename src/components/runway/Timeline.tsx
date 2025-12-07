@@ -77,6 +77,7 @@ export interface TimelineProps {
   selectedCueId?: string | null;
   onCueChange?: (updatedCue: TimelineCue) => void;
   selectedCue?: TimelineCue | null;
+  cues?: TimelineCue[];
 }
 
 interface DeletedCue {

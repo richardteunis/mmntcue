@@ -1,0 +1,4 @@
+project_id = "qzjewqaxnwwzesiznkgd"
+
+[functions.suggest-cue]
+verify_jwt = false
