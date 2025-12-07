@@ -79,6 +79,41 @@ export type Database = {
           },
         ]
       }
+      folders: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          order_index: number
+          parent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          order_index?: number
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          order_index?: number
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shows: {
         Row: {
           apply_branding: boolean | null
@@ -93,6 +128,7 @@ export type Database = {
           event_end_date: string | null
           event_name: string | null
           event_start_date: string | null
+          folder_id: string | null
           id: string
           locked: boolean | null
           logo_url: string | null
@@ -129,6 +165,7 @@ export type Database = {
           event_end_date?: string | null
           event_name?: string | null
           event_start_date?: string | null
+          folder_id?: string | null
           id?: string
           locked?: boolean | null
           logo_url?: string | null
@@ -165,6 +202,7 @@ export type Database = {
           event_end_date?: string | null
           event_name?: string | null
           event_start_date?: string | null
+          folder_id?: string | null
           id?: string
           locked?: boolean | null
           logo_url?: string | null
@@ -188,7 +226,15 @@ export type Database = {
           venue?: string | null
           video_latency_offset?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "shows_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
