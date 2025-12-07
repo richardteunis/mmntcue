@@ -12,12 +12,18 @@ import {
   Layers,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   Share2,
   FolderPlus,
   BookOpen,
   Loader2,
   Pencil,
-  Trash2
+  Trash2,
+  Clock,
+  Star,
+  FolderOpen,
+  Zap,
+  Package
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -29,7 +35,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { Show } from '@/types/cue';
 
@@ -38,6 +47,49 @@ interface SidebarProps {
   activeShowId: string | null;
   onShowSelect: (showId: string, showName: string) => void;
 }
+
+interface SectionProps {
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  collapsed?: boolean;
+  badge?: number;
+}
+
+const SidebarSection: React.FC<SectionProps> = ({ title, icon, children, defaultOpen = true, collapsed, badge }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  if (collapsed) {
+    return <>{children}</>;
+  }
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger asChild>
+        <Button 
+          variant="ghost" 
+          className="w-full justify-between px-3 py-2 h-8 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-transparent"
+        >
+          <div className="flex items-center gap-2">
+            {icon}
+            <span className="text-xs uppercase font-semibold tracking-wider">{title}</span>
+            {badge !== undefined && badge > 0 && (
+              <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">{badge}</Badge>
+            )}
+          </div>
+          <ChevronDown className={cn(
+            "h-3.5 w-3.5 transition-transform",
+            !isOpen && "-rotate-90"
+          )} />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-0.5 mt-1">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+};
 
 const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -214,45 +266,67 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
       description: `Collaboration link for "${showName}" copied to clipboard`,
     });
   };
+
+  const quickAddItems = [
+    { icon: <Video size={16} />, label: 'Video Cue', type: 'video', color: 'text-runway-success' },
+    { icon: <Music size={16} />, label: 'Audio Cue', type: 'audio', color: 'text-runway-teal' },
+    { icon: <Lightbulb size={16} />, label: 'Lighting Cue', type: 'lighting', color: 'text-runway-highlight' },
+    { icon: <Mic size={16} />, label: 'Stage Cue', type: 'stage', color: 'text-runway-warning' },
+  ];
   
   return (
     <div className={cn(
-      "h-screen bg-sidebar flex flex-col transition-all duration-300", 
-      collapsed ? "w-16" : "w-64",
+      "h-screen bg-sidebar flex flex-col transition-all duration-300 border-r border-sidebar-border", 
+      collapsed ? "w-14" : "w-64",
       className
     )}>
-      <div className="p-4 flex items-center justify-between">
-        <h1 className={cn(
-          "font-bold text-white flex items-center gap-2",
-          collapsed ? "text-xl" : "text-2xl"
+      {/* Header */}
+      <div className="p-3 flex items-center justify-between">
+        <div className={cn(
+          "flex items-center gap-2 transition-opacity",
+          collapsed && "opacity-0 w-0 overflow-hidden"
         )}>
-          <Layers className="text-runway-purple" />
-          {!collapsed && "Runway"}
-        </h1>
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+            <Layers className="h-4 w-4 text-white" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-bold text-white text-sm">MMNT.Cue</span>
+            <span className="text-[10px] text-sidebar-foreground/50">Show Control</span>
+          </div>
+        </div>
+        {collapsed && (
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto">
+            <Layers className="h-4 w-4 text-white" />
+          </div>
+        )}
         <Button 
           variant="ghost" 
-          size="sm" 
-          className="text-sidebar-foreground hover:bg-sidebar-accent"
+          size="icon"
+          className={cn(
+            "h-7 w-7 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+            collapsed && "absolute right-1.5"
+          )}
           onClick={() => setCollapsed(!collapsed)}
         >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </Button>
       </div>
       
-      <Separator className="bg-sidebar-border" />
+      <Separator className="bg-sidebar-border/50" />
       
-      <div className="p-4">
+      {/* New Show Button */}
+      <div className="p-2">
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button 
               variant="outline" 
               className={cn(
-                "bg-sidebar-accent text-sidebar-foreground border-sidebar-border hover:bg-sidebar-accent hover:text-white",
-                collapsed ? "w-full p-2 justify-center" : "w-full justify-start gap-2"
+                "bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 hover:text-primary hover:border-primary/50 transition-all",
+                collapsed ? "w-full h-9 p-0 justify-center" : "w-full justify-start gap-2 h-9"
               )}
             >
-              <FolderPlus size={18} />
-              {!collapsed && "New Show"}
+              <FolderPlus size={16} />
+              {!collapsed && <span className="font-medium text-sm">New Show</span>}
             </Button>
           </DialogTrigger>
           <DialogContent>
@@ -345,106 +419,143 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
         </AlertDialogContent>
       </AlertDialog>
       
-      <ScrollArea className="flex-1 overflow-auto px-3 py-2">
-        {!collapsed && (
-          <>
-            <nav className="space-y-1">
-              <p className="text-xs uppercase text-sidebar-foreground/70 font-semibold px-3 pb-2">Shows</p>
-              
+      <ScrollArea className="flex-1 px-2">
+        {!collapsed ? (
+          <div className="space-y-4 py-2">
+            {/* Shows Section */}
+            <SidebarSection 
+              title="Shows" 
+              icon={<FolderOpen size={12} />}
+              badge={shows.length}
+            >
               {loading ? (
                 <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-5 w-5 animate-spin text-sidebar-foreground" />
+                  <Loader2 className="h-4 w-4 animate-spin text-sidebar-foreground/50" />
                 </div>
               ) : shows.length === 0 ? (
-                <p className="text-sm text-sidebar-foreground/50 px-3 py-2">No shows yet. Create one!</p>
+                <p className="text-xs text-sidebar-foreground/40 px-3 py-2">No shows yet</p>
               ) : (
                 shows.map(show => (
                   <div key={show.id} className="group relative">
                     <Button 
                       variant="ghost" 
                       className={cn(
-                        "w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent pr-20",
-                        activeShowId === show.id ? "bg-sidebar-accent text-white font-medium" : ""
+                        "w-full justify-start gap-2 h-8 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground pr-16",
+                        activeShowId === show.id && "bg-sidebar-accent text-sidebar-foreground font-medium"
                       )}
                       onClick={() => handleSelectShow(show)}
                     >
-                      <BookOpen size={18} />
-                      <span className="truncate">{show.name}</span>
+                      <BookOpen size={14} />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="truncate">{show.name}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                          <div className="space-y-1">
+                            <p className="font-medium">{show.name}</p>
+                            {show.description && <p className="text-xs text-muted-foreground">{show.description}</p>}
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Calendar size={10} />
+                              {new Date(show.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
                     </Button>
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 flex opacity-0 group-hover:opacity-100">
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2 flex opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent"
+                        className="h-6 w-6 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleEditShow(show);
                         }}
                       >
-                        <Pencil size={14} />
+                        <Pencil size={12} />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent hover:text-destructive"
+                        className="h-6 w-6 text-sidebar-foreground/50 hover:text-destructive hover:bg-sidebar-accent"
                         onClick={(e) => {
                           e.stopPropagation();
                           setShowToDelete(show);
                           setDeleteDialogOpen(true);
                         }}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={12} />
                       </Button>
                     </div>
                   </div>
                 ))
               )}
-              
-              <Button variant="ghost" className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent">
-                <Users size={18} />
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start gap-2 h-8 text-sm text-sidebar-foreground/50 hover:text-sidebar-foreground"
+              >
+                <Users size={14} />
                 Shared With Me
               </Button>
-              
-              <p className="text-xs uppercase text-sidebar-foreground/70 font-semibold px-3 pb-2 pt-4">Quick Add</p>
-              
+            </SidebarSection>
+
+            {/* Quick Add Section */}
+            <SidebarSection 
+              title="Quick Add" 
+              icon={<Zap size={12} />}
+            >
+              {quickAddItems.map(item => (
+                <Button 
+                  key={item.type}
+                  variant="ghost" 
+                  className={cn(
+                    "w-full justify-start gap-2 h-8 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                    item.color
+                  )}
+                >
+                  {item.icon}
+                  {item.label}
+                </Button>
+              ))}
+            </SidebarSection>
+
+            {/* Recent Section */}
+            <SidebarSection 
+              title="Recent" 
+              icon={<Clock size={12} />}
+              defaultOpen={false}
+            >
+              <p className="text-xs text-sidebar-foreground/40 px-3 py-2">No recent activity</p>
+            </SidebarSection>
+
+            {/* Assets Section */}
+            <SidebarSection 
+              title="Assets" 
+              icon={<Package size={12} />}
+              defaultOpen={false}
+            >
               <Button 
                 variant="ghost" 
-                className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent"
+                className="w-full justify-start gap-2 h-8 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent"
               >
-                <Video size={18} />
-                Video Cue
+                <Music size={14} />
+                Audio Files
               </Button>
               <Button 
                 variant="ghost" 
-                className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent"
+                className="w-full justify-start gap-2 h-8 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent"
               >
-                <Music size={18} />
-                Audio Cue
+                <Video size={14} />
+                Video Files
               </Button>
-              <Button 
-                variant="ghost" 
-                className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent"
-              >
-                <Lightbulb size={18} />
-                Lighting Cue
-              </Button>
-              <Button 
-                variant="ghost" 
-                className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent"
-              >
-                <Mic size={18} />
-                Stage Cue
-              </Button>
-            </nav>
-          </>
-        )}
-        
-        {collapsed && (
-          <div className="flex flex-col items-center space-y-4 mt-4">
+            </SidebarSection>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center space-y-2 py-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent">
-                  <BookOpen size={20} />
+                <Button variant="ghost" size="icon" className="h-9 w-9 text-sidebar-foreground hover:bg-sidebar-accent">
+                  <BookOpen size={18} />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
@@ -472,54 +583,39 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
               </DropdownMenuContent>
             </DropdownMenu>
             
-            <Button variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent">
-              <Users size={20} />
-            </Button>
+            <Separator className="bg-sidebar-border/50 w-8" />
             
-            <Separator className="bg-sidebar-border w-8" />
-            
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="text-sidebar-foreground hover:bg-sidebar-accent"
-            >
-              <Video size={20} />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="text-sidebar-foreground hover:bg-sidebar-accent"
-            >
-              <Music size={20} />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="text-sidebar-foreground hover:bg-sidebar-accent"
-            >
-              <Lightbulb size={20} />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="text-sidebar-foreground hover:bg-sidebar-accent"
-            >
-              <Mic size={20} />
-            </Button>
+            {quickAddItems.map(item => (
+              <Tooltip key={item.type}>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className={cn("h-9 w-9 text-sidebar-foreground/70 hover:bg-sidebar-accent", item.color)}
+                  >
+                    {item.icon}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{item.label}</TooltipContent>
+              </Tooltip>
+            ))}
           </div>
         )}
       </ScrollArea>
       
-      <div className="p-4 mt-auto">
+      <Separator className="bg-sidebar-border/50" />
+      
+      {/* Footer */}
+      <div className="p-2">
         <Button 
           variant="ghost" 
           className={cn(
-            "text-sidebar-foreground hover:bg-sidebar-accent",
-            collapsed ? "w-full p-2 justify-center" : "w-full justify-start gap-2"
+            "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+            collapsed ? "w-full h-9 p-0 justify-center" : "w-full justify-start gap-2 h-9"
           )}
         >
-          <Settings size={18} />
-          {!collapsed && "Settings"}
+          <Settings size={16} />
+          {!collapsed && <span className="text-sm">Settings</span>}
         </Button>
       </div>
     </div>
