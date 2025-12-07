@@ -15,16 +15,16 @@ import { Link } from 'react-router-dom';
 const SettingsPage: React.FC = () => {
   const { profile, updateProfile, loading } = useAuthContext();
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    full_name: profile?.full_name || '',
-    timezone: profile?.timezone || 'America/Los_Angeles',
-    theme: profile?.theme || 'dark',
-    keyboard_shortcuts_enabled: profile?.keyboard_shortcuts_enabled ?? true,
-    email_notifications: profile?.email_notifications ?? true,
-  });
+  const [formData, setFormData] = useState<{
+    full_name: string;
+    timezone: string;
+    theme: string;
+    keyboard_shortcuts_enabled: boolean;
+    email_notifications: boolean;
+  } | null>(null);
 
   React.useEffect(() => {
-    if (profile) {
+    if (profile && !formData) {
       setFormData({
         full_name: profile.full_name || '',
         timezone: profile.timezone || 'America/Los_Angeles',
@@ -33,9 +33,10 @@ const SettingsPage: React.FC = () => {
         email_notifications: profile.email_notifications ?? true,
       });
     }
-  }, [profile]);
+  }, [profile, formData]);
 
   const handleSave = async () => {
+    if (!formData) return;
     setSaving(true);
     await updateProfile(formData);
     setSaving(false);
@@ -52,7 +53,7 @@ const SettingsPage: React.FC = () => {
     'Australia/Sydney',
   ];
 
-  if (loading) {
+  if (loading || !formData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
