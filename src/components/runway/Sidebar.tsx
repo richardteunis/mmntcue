@@ -13,26 +13,20 @@ import {
   ChevronRight,
   ChevronLeft,
   ChevronDown,
-  Share2,
   FolderPlus,
   BookOpen,
   Loader2,
   Pencil,
   Trash2,
   Clock,
-  Star,
   FolderOpen,
   Zap,
-  Package
+  Package,
+  MapPin
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -41,6 +35,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { Show } from '@/types/cue';
+import ShowFormModal from './ShowFormModal';
 
 interface SidebarProps {
   className?: string;
@@ -95,15 +90,10 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
   const [collapsed, setCollapsed] = useState(false);
   const [shows, setShows] = useState<Show[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newShowName, setNewShowName] = useState('');
-  const [newShowDescription, setNewShowDescription] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
   
-  // Edit show state
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  // Show form modal state
+  const [showFormOpen, setShowFormOpen] = useState(false);
   const [editingShow, setEditingShow] = useState<Show | null>(null);
-  const [editShowName, setEditShowName] = useState('');
-  const [editShowDescription, setEditShowDescription] = useState('');
   
   // Delete confirmation state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -140,21 +130,92 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
     fetchShows();
   }, []);
   
-  const handleCreateShow = async () => {
-    if (!newShowName.trim()) return;
+  const handleOpenCreateModal = () => {
+    setEditingShow(null);
+    setShowFormOpen(true);
+  };
+  
+  const handleOpenEditModal = (show: Show) => {
+    setEditingShow(show);
+    setShowFormOpen(true);
+  };
+  
+  const handleSaveShow = async (showData: Partial<Show>) => {
+    if (editingShow) {
+      // Update existing show
+      const { error } = await supabase
+        .from('shows')
+        .update(showData)
+        .eq('id', editingShow.id);
+      
+      if (error) {
+        toast({
+          title: "Error updating show",
+          description: error.message,
+          variant: "destructive",
+        });
+        throw error;
+      }
+      
+      setShows(prev => prev.map(s => 
+        s.id === editingShow.id ? { ...s, ...showData } as Show : s
+      ));
+      
+      // Update active show name if editing the active show
+      if (activeShowId === editingShow.id && showData.name) {
+        onShowSelect(editingShow.id, showData.name);
+      }
+      
+      toast({
+        title: "Show updated",
+        description: `${showData.name} has been updated successfully`,
+      });
+    } else {
+      // Create new show
+      const { data, error } = await supabase
+        .from('shows')
+        .insert({ name: showData.name!, ...showData } as any)
+        .select()
+        .single();
+      
+      if (error) {
+        toast({
+          title: "Error creating show",
+          description: error.message,
+          variant: "destructive",
+        });
+        throw error;
+      }
+      
+      setShows(prev => [data, ...prev]);
+      onShowSelect(data.id, data.name);
+      
+      toast({
+        title: "Show created",
+        description: `${showData.name} has been created successfully`,
+      });
+    }
+  };
+  
+  const handleDuplicateShow = async (showId: string) => {
+    const showToDuplicate = shows.find(s => s.id === showId);
+    if (!showToDuplicate) return;
+    
+    // Create a copy without id and timestamps
+    const { id, created_at, updated_at, ...showFields } = showToDuplicate;
     
     const { data, error } = await supabase
       .from('shows')
       .insert({
-        name: newShowName,
-        description: newShowDescription || null
+        ...showFields,
+        name: `${showToDuplicate.name} (Copy)`,
       })
       .select()
       .single();
     
     if (error) {
       toast({
-        title: "Error creating show",
+        title: "Error duplicating show",
         description: error.message,
         variant: "destructive",
       });
@@ -162,61 +223,12 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
     }
     
     setShows(prev => [data, ...prev]);
-    setNewShowName('');
-    setNewShowDescription('');
-    setDialogOpen(false);
+    setShowFormOpen(false);
     onShowSelect(data.id, data.name);
     
     toast({
-      title: "Show created",
-      description: `${newShowName} has been created successfully`,
-    });
-  };
-  
-  const handleEditShow = (show: Show) => {
-    setEditingShow(show);
-    setEditShowName(show.name);
-    setEditShowDescription(show.description || '');
-    setEditDialogOpen(true);
-  };
-  
-  const handleSaveEdit = async () => {
-    if (!editingShow || !editShowName.trim()) return;
-    
-    const { error } = await supabase
-      .from('shows')
-      .update({
-        name: editShowName,
-        description: editShowDescription || null
-      })
-      .eq('id', editingShow.id);
-    
-    if (error) {
-      toast({
-        title: "Error updating show",
-        description: error.message,
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setShows(prev => prev.map(s => 
-      s.id === editingShow.id 
-        ? { ...s, name: editShowName, description: editShowDescription || null }
-        : s
-    ));
-    
-    // Update active show name if editing the active show
-    if (activeShowId === editingShow.id) {
-      onShowSelect(editingShow.id, editShowName);
-    }
-    
-    setEditDialogOpen(false);
-    setEditingShow(null);
-    
-    toast({
-      title: "Show updated",
-      description: `${editShowName} has been updated successfully`,
+      title: "Show duplicated",
+      description: `${data.name} has been created`,
     });
   };
   
@@ -258,13 +270,6 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
   
   const handleSelectShow = (show: Show) => {
     onShowSelect(show.id, show.name);
-  };
-  
-  const handleShareShow = (showId: string, showName: string) => {
-    toast({
-      title: "Show shared",
-      description: `Collaboration link for "${showName}" copied to clipboard`,
-    });
   };
 
   const quickAddItems = [
@@ -316,90 +321,30 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
       
       {/* New Show Button */}
       <div className="p-2">
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button 
-              variant="outline" 
-              className={cn(
-                "bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 hover:text-primary hover:border-primary/50 transition-all",
-                collapsed ? "w-full h-9 p-0 justify-center" : "w-full justify-start gap-2 h-9"
-              )}
-            >
-              <FolderPlus size={16} />
-              {!collapsed && <span className="font-medium text-sm">New Show</span>}
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create New Show</DialogTitle>
-              <DialogDescription>
-                Enter details for your new show and click create.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="show-name">Show Name</Label>
-                <Input 
-                  id="show-name" 
-                  value={newShowName} 
-                  onChange={(e) => setNewShowName(e.target.value)} 
-                  placeholder="Enter show name" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="show-description">Description (Optional)</Label>
-                <Textarea 
-                  id="show-description" 
-                  value={newShowDescription} 
-                  onChange={(e) => setNewShowDescription(e.target.value)} 
-                  placeholder="Enter show description" 
-                  rows={3}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleCreateShow}>Create Show</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button 
+          variant="outline" 
+          className={cn(
+            "bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 hover:text-primary hover:border-primary/50 transition-all",
+            collapsed ? "w-full h-9 p-0 justify-center" : "w-full justify-start gap-2 h-9"
+          )}
+          onClick={handleOpenCreateModal}
+        >
+          <FolderPlus size={16} />
+          {!collapsed && <span className="font-medium text-sm">New Show</span>}
+        </Button>
       </div>
       
-      {/* Edit Show Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Show</DialogTitle>
-            <DialogDescription>
-              Update the details for this show.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-show-name">Show Name</Label>
-              <Input 
-                id="edit-show-name" 
-                value={editShowName} 
-                onChange={(e) => setEditShowName(e.target.value)} 
-                placeholder="Enter show name" 
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-show-description">Description (Optional)</Label>
-              <Textarea 
-                id="edit-show-description" 
-                value={editShowDescription} 
-                onChange={(e) => setEditShowDescription(e.target.value)} 
-                placeholder="Enter show description" 
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveEdit}>Save Changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Show Form Modal */}
+      <ShowFormModal
+        isOpen={showFormOpen}
+        onClose={() => {
+          setShowFormOpen(false);
+          setEditingShow(null);
+        }}
+        onSave={handleSaveShow}
+        onDuplicate={handleDuplicateShow}
+        editingShow={editingShow}
+      />
       
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -440,20 +385,35 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
                     <Button 
                       variant="ghost" 
                       className={cn(
-                        "w-full justify-start gap-2 h-8 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground pr-16",
+                        "w-full justify-start gap-2 h-auto py-1.5 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground pr-16",
                         activeShowId === show.id && "bg-sidebar-accent text-sidebar-foreground font-medium"
                       )}
                       onClick={() => handleSelectShow(show)}
                     >
-                      <BookOpen size={14} />
+                      <BookOpen size={14} className="shrink-0" />
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span className="truncate">{show.name}</span>
+                          <div className="flex flex-col items-start min-w-0">
+                            <span className="truncate w-full text-left">{show.name}</span>
+                            {show.venue && (
+                              <span className="text-[10px] text-sidebar-foreground/50 flex items-center gap-1 truncate w-full">
+                                <MapPin size={8} />
+                                {show.venue}
+                              </span>
+                            )}
+                          </div>
                         </TooltipTrigger>
-                        <TooltipContent side="right">
+                        <TooltipContent side="right" className="max-w-[250px]">
                           <div className="space-y-1">
                             <p className="font-medium">{show.name}</p>
+                            {show.event_name && <p className="text-xs">{show.event_name}</p>}
                             {show.description && <p className="text-xs text-muted-foreground">{show.description}</p>}
+                            {show.venue && (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <MapPin size={10} />
+                                {show.venue}{show.room_name && `, ${show.room_name}`}
+                              </p>
+                            )}
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <Calendar size={10} />
                               {new Date(show.created_at).toLocaleDateString()}
@@ -469,7 +429,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
                         className="h-6 w-6 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleEditShow(show);
+                          handleOpenEditModal(show);
                         }}
                       >
                         <Pencil size={12} />
@@ -568,7 +528,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
                       className="h-6 w-6 ml-2"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleEditShow(show);
+                        handleOpenEditModal(show);
                       }}
                     >
                       <Pencil size={12} />
@@ -576,7 +536,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
                   </DropdownMenuItem>
                 ))}
                 {shows.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuItem onClick={() => setDialogOpen(true)}>
+                <DropdownMenuItem onClick={handleOpenCreateModal}>
                   <FolderPlus size={16} className="mr-2" />
                   New Show
                 </DropdownMenuItem>

@@ -23,6 +23,40 @@ export interface Show {
   description: string | null;
   created_at: string;
   updated_at: string;
+  // Event Details
+  event_name?: string | null;
+  venue?: string | null;
+  room_name?: string | null;
+  event_start_date?: string | null;
+  event_end_date?: string | null;
+  call_time?: string | null;
+  doors_time?: string | null;
+  show_time?: string | null;
+  timezone?: string | null;
+  // Branding
+  logo_url?: string | null;
+  brand_color?: string | null;
+  secondary_color?: string | null;
+  apply_branding?: boolean | null;
+  // Settings
+  timecode_format?: string | null;
+  default_tracks?: string[] | null;
+  autosave_interval?: number | null;
+  show_template?: string | null;
+  // Advanced
+  rehearsal_mode?: boolean | null;
+  locked?: boolean | null;
+  audio_latency_offset?: number | null;
+  video_latency_offset?: number | null;
+  safety_mode?: boolean | null;
+  // Team
+  team_show_caller?: string | null;
+  team_technical_director?: string | null;
+  team_producer?: string | null;
+  team_stage_manager?: string | null;
+  team_lighting_lead?: string | null;
+  team_audio_lead?: string | null;
+  team_video_lead?: string | null;
 }
 
 export interface CueSuggestion {
@@ -33,3 +67,40 @@ export interface CueSuggestion {
 }
 
 export type ViewMode = 'timeline' | 'table';
+
+export type ShowTemplate = 'general' | 'corporate' | 'awards' | 'festival' | 'conference' | 'custom';
+
+export const SHOW_TEMPLATES: { value: ShowTemplate; label: string; description: string }[] = [
+  { value: 'general', label: 'General Session', description: 'Standard show format for most events' },
+  { value: 'corporate', label: 'Corporate Keynote', description: 'Executive presentations and product launches' },
+  { value: 'awards', label: 'Awards Show', description: 'Ceremonies with winners, presenters, and entertainment' },
+  { value: 'festival', label: 'Festival', description: 'Multi-stage music and entertainment events' },
+  { value: 'conference', label: 'Conference', description: 'Multi-session educational events' },
+  { value: 'custom', label: 'Custom', description: 'Start from scratch with your own configuration' },
+];
+
+export const TIMECODE_FORMATS = [
+  { value: '24fps', label: '24 fps (Film)' },
+  { value: '25fps', label: '25 fps (PAL)' },
+  { value: '29.97df', label: '29.97 fps Drop-Frame (NTSC)' },
+  { value: '29.97ndf', label: '29.97 fps Non-Drop (NTSC)' },
+  { value: '30fps', label: '30 fps' },
+  { value: '60fps', label: '60 fps' },
+];
+
+export const TIMEZONES = [
+  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+  { value: 'America/Denver', label: 'Mountain Time (MT)' },
+  { value: 'America/Chicago', label: 'Central Time (CT)' },
+  { value: 'America/New_York', label: 'Eastern Time (ET)' },
+  { value: 'America/Anchorage', label: 'Alaska Time (AKT)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii Time (HT)' },
+  { value: 'Europe/London', label: 'Greenwich Mean Time (GMT)' },
+  { value: 'Europe/Paris', label: 'Central European Time (CET)' },
+  { value: 'Europe/Berlin', label: 'Central European Time (CET)' },
+  { value: 'Asia/Tokyo', label: 'Japan Standard Time (JST)' },
+  { value: 'Asia/Shanghai', label: 'China Standard Time (CST)' },
+  { value: 'Asia/Dubai', label: 'Gulf Standard Time (GST)' },
+  { value: 'Australia/Sydney', label: 'Australian Eastern Time (AET)' },
+  { value: 'UTC', label: 'Coordinated Universal Time (UTC)' },
+];

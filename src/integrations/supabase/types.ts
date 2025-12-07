@@ -81,25 +81,112 @@ export type Database = {
       }
       shows: {
         Row: {
+          apply_branding: boolean | null
+          audio_latency_offset: number | null
+          autosave_interval: number | null
+          brand_color: string | null
+          call_time: string | null
           created_at: string
+          default_tracks: string[] | null
           description: string | null
+          doors_time: string | null
+          event_end_date: string | null
+          event_name: string | null
+          event_start_date: string | null
           id: string
+          locked: boolean | null
+          logo_url: string | null
           name: string
+          rehearsal_mode: boolean | null
+          room_name: string | null
+          safety_mode: boolean | null
+          secondary_color: string | null
+          show_template: string | null
+          show_time: string | null
+          team_audio_lead: string | null
+          team_lighting_lead: string | null
+          team_producer: string | null
+          team_show_caller: string | null
+          team_stage_manager: string | null
+          team_technical_director: string | null
+          team_video_lead: string | null
+          timecode_format: string | null
+          timezone: string | null
           updated_at: string
+          venue: string | null
+          video_latency_offset: number | null
         }
         Insert: {
+          apply_branding?: boolean | null
+          audio_latency_offset?: number | null
+          autosave_interval?: number | null
+          brand_color?: string | null
+          call_time?: string | null
           created_at?: string
+          default_tracks?: string[] | null
           description?: string | null
+          doors_time?: string | null
+          event_end_date?: string | null
+          event_name?: string | null
+          event_start_date?: string | null
           id?: string
+          locked?: boolean | null
+          logo_url?: string | null
           name: string
+          rehearsal_mode?: boolean | null
+          room_name?: string | null
+          safety_mode?: boolean | null
+          secondary_color?: string | null
+          show_template?: string | null
+          show_time?: string | null
+          team_audio_lead?: string | null
+          team_lighting_lead?: string | null
+          team_producer?: string | null
+          team_show_caller?: string | null
+          team_stage_manager?: string | null
+          team_technical_director?: string | null
+          team_video_lead?: string | null
+          timecode_format?: string | null
+          timezone?: string | null
           updated_at?: string
+          venue?: string | null
+          video_latency_offset?: number | null
         }
         Update: {
+          apply_branding?: boolean | null
+          audio_latency_offset?: number | null
+          autosave_interval?: number | null
+          brand_color?: string | null
+          call_time?: string | null
           created_at?: string
+          default_tracks?: string[] | null
           description?: string | null
+          doors_time?: string | null
+          event_end_date?: string | null
+          event_name?: string | null
+          event_start_date?: string | null
           id?: string
+          locked?: boolean | null
+          logo_url?: string | null
           name?: string
+          rehearsal_mode?: boolean | null
+          room_name?: string | null
+          safety_mode?: boolean | null
+          secondary_color?: string | null
+          show_template?: string | null
+          show_time?: string | null
+          team_audio_lead?: string | null
+          team_lighting_lead?: string | null
+          team_producer?: string | null
+          team_show_caller?: string | null
+          team_stage_manager?: string | null
+          team_technical_director?: string | null
+          team_video_lead?: string | null
+          timecode_format?: string | null
+          timezone?: string | null
           updated_at?: string
+          venue?: string | null
+          video_latency_offset?: number | null
         }
         Relationships: []
       }
