@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import HomeView from './HomeView';
 import Timeline, { TimelineCue } from './Timeline';
 import TableView from './TableView';
 import CuePanel from './CuePanel';
@@ -69,6 +70,8 @@ const Dashboard: React.FC = () => {
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isCreateShowOpen, setIsCreateShowOpen] = useState(false);
+  const sidebarRef = useRef<{ openCreateModal: () => void } | null>(null);
   const { toast } = useToast();
   
   // Use database hooks with active show
@@ -395,10 +398,19 @@ const Dashboard: React.FC = () => {
         
         <div className="flex flex-col flex-1 overflow-hidden">
           <TopBar 
-            showName={showName} 
-            onShare={() => setIsShareOpen(true)}
+            showName={showName || 'Home'} 
+            onShare={activeShowId ? () => setIsShareOpen(true) : undefined}
           />
           
+          {!activeShowId ? (
+            <HomeView 
+              onCreateShow={() => {
+                // Dispatch event to open create show modal in sidebar
+                document.dispatchEvent(new CustomEvent('open-create-show-modal'));
+              }}
+              onSelectShow={handleShowSelect}
+            />
+          ) : (
           <div className="flex flex-1 overflow-hidden relative">
             <ResizablePanelGroup direction="horizontal">
               <ResizablePanel defaultSize={75} minSize={50} id="timeline-panel">
@@ -505,6 +517,7 @@ const Dashboard: React.FC = () => {
               )}
             </ResizablePanelGroup>
           </div>
+          )}
         </div>
         
         {/* Add/Edit Cue Panel */}
