@@ -14,23 +14,24 @@ const TimelineRuler: React.FC<TimelineRulerProps> = ({
   gridType = 'seconds',
   className 
 }) => {
+  const formatTime = (totalSeconds: number): string => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   const generateTimeMarkers = () => {
     const markers = [];
     const totalMinutes = 60;
-    const baseInterval = 60; // Base interval in seconds
     
-    // Adjust interval based on scale
-    let interval = baseInterval;
-    if (scale >= 2) interval = 30;
-    if (scale >= 3) interval = 15;
-    if (scale < 0.75) interval = 120;
-    if (scale < 0.5) interval = 300;
+    // Adjust interval based on scale for better readability
+    let intervalSeconds = 60; // 1 minute default
+    if (scale >= 2) intervalSeconds = 30;
+    if (scale >= 3) intervalSeconds = 15;
+    if (scale < 0.75) intervalSeconds = 120;
+    if (scale < 0.5) intervalSeconds = 300;
 
-    for (let i = 0; i <= totalMinutes * 60; i += interval) {
-      const hours = Math.floor(i / 3600);
-      const minutes = Math.floor((i % 3600) / 60);
-      const seconds = i % 60;
-      
+    for (let i = 0; i <= totalMinutes * 60; i += intervalSeconds) {
       const position = (i / 0.6) * scale;
       
       // Only render markers within reasonable bounds
@@ -56,15 +57,15 @@ const TimelineRuler: React.FC<TimelineRulerProps> = ({
               "text-[10px] font-mono text-muted-foreground mt-0.5",
               isMainMarker && "text-foreground font-medium"
             )}>
-              {`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`}
+              {formatTime(i)}
             </span>
           )}
         </div>
       );
 
       // Add sub-markers for finer grid
-      if (showGrid && scale >= 1.5 && interval >= 30) {
-        for (let j = 1; j < interval / 10; j++) {
+      if (showGrid && scale >= 1.5 && intervalSeconds >= 30) {
+        for (let j = 1; j < intervalSeconds / 10; j++) {
           const subPos = ((i + j * 10) / 0.6) * scale;
           if (subPos > 3000) break;
           markers.push(
