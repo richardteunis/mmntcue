@@ -82,6 +82,9 @@ export interface TimelineProps {
   selectedCueIds?: string[];
   onSelectCue?: (cueId: string, isMultiSelect: boolean) => void;
   onBulkUpdate?: (updates: Partial<TimelineCue>) => void;
+  onPasteCue?: (cue: TimelineCue) => void;
+  onSelectAll?: (cueIds: string[]) => void;
+  onClearSelection?: () => void;
 }
 
 // Track columns configuration
@@ -150,7 +153,10 @@ const Timeline: React.FC<TimelineProps> = ({
   onCueDuplicate,
   selectedCueIds = [],
   onSelectCue,
-  onBulkUpdate
+  onBulkUpdate,
+  onPasteCue,
+  onSelectAll,
+  onClearSelection
 }) => {
   const [currentTime, setCurrentTime] = useState('00:00:00');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -291,6 +297,13 @@ const Timeline: React.FC<TimelineProps> = ({
       toast({ title: "Cue copied", description: selectedCue.name });
     }
   };
+
+  const handlePasteCue = () => {
+    if (copiedCue && onPasteCue) {
+      onPasteCue(copiedCue);
+      toast({ title: "Cue pasted", description: `${copiedCue.name} pasted to timeline` });
+    }
+  };
   
   const handleCellEdit = (cue: TimelineCue, field: keyof TimelineCue, value: string) => {
     if (onCueChange) {
@@ -413,7 +426,7 @@ const Timeline: React.FC<TimelineProps> = ({
           
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button size="sm" variant="outline" className="gap-1" disabled={!copiedCue}>
+              <Button size="sm" variant="outline" className="gap-1" disabled={!copiedCue} onClick={handlePasteCue}>
                 <ClipboardPaste size={14} />
               </Button>
             </TooltipTrigger>
