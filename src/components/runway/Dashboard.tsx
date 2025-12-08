@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
@@ -169,6 +169,35 @@ const Dashboard: React.FC = () => {
       description: `${track.label} track has been added`,
     });
   };
+
+  // Calculate countdown to show start
+  const showCountdown = useMemo(() => {
+    if (!showInfo?.eventDate || !showInfo?.showTime) return null;
+    
+    try {
+      const [year, month, day] = showInfo.eventDate.split('-').map(Number);
+      const [hours, minutes] = showInfo.showTime.split(':').map(Number);
+      const showStart = new Date(year, month - 1, day, hours, minutes);
+      const now = new Date();
+      const diff = showStart.getTime() - now.getTime();
+      
+      if (diff <= 0) return { text: 'LIVE', isLive: true };
+      
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hrs = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      
+      if (days > 0) {
+        return { text: `${days}d ${hrs}h ${mins}m`, isLive: false };
+      } else if (hrs > 0) {
+        return { text: `${hrs}h ${mins}m`, isLive: false };
+      } else {
+        return { text: `${mins}m`, isLive: false };
+      }
+    } catch {
+      return null;
+    }
+  }, [showInfo?.eventDate, showInfo?.showTime]);
 
   // Convert database cues to timeline cues (already sorted by start_time from hook)
   const timelineCues = cues.map(cueToTimelineCue);
@@ -483,6 +512,13 @@ const Dashboard: React.FC = () => {
                       <Button onClick={handleAddCue} size="sm">
                         <PlusCircle size={16} className="mr-1.5" /> Add Cue
                       </Button>
+                      <Button 
+                        onClick={() => setIsAddTrackOpen(true)} 
+                        size="sm" 
+                        variant="outline"
+                      >
+                        <Layers size={16} className="mr-1.5" /> Add Track
+                      </Button>
                       {selectedCue && (
                         <Button onClick={() => handleEditCue()} size="sm" variant="outline">
                           <Edit size={16} className="mr-1.5" /> Edit
@@ -514,13 +550,6 @@ const Dashboard: React.FC = () => {
                       >
                         <Sparkles size={16} className="mr-1.5" /> AI Suggest
                       </Button>
-                      <Button 
-                        onClick={() => setIsAddTrackOpen(true)} 
-                        size="sm" 
-                        variant="outline"
-                      >
-                        <Layers size={16} className="mr-1.5" /> Add Track
-                      </Button>
                     </div>
                     <div className="flex items-center gap-2">
                       {selectedCueIds.length > 0 && (
@@ -541,6 +570,7 @@ const Dashboard: React.FC = () => {
                       onCueChange={handleCueUpdate}
                       cues={timelineCues}
                       tracks={tracks}
+                      showCountdown={showCountdown}
                       onCueDelete={handleCueDelete}
                       onCueDuplicate={handleCueDuplicate}
                     />
