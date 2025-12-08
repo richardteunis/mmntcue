@@ -1,3 +1,5 @@
+import { Json } from '@/integrations/supabase/types';
+
 export interface Cue {
   id: string;
   show_id: string;
@@ -51,6 +53,7 @@ export interface Show {
   // Settings
   timecode_format?: string | null;
   default_tracks?: string[] | null;
+  custom_tracks?: Json | null;
   autosave_interval?: number | null;
   show_template?: string | null;
   // Advanced

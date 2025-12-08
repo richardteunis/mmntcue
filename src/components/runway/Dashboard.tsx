@@ -18,9 +18,10 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers } from 'lucide-react';
+import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings } from 'lucide-react';
 import { useCues, useAISuggestions } from '@/hooks/useCues';
-import { Cue, ViewMode, CueSuggestion } from '@/types/cue';
+import { Cue, ViewMode, CueSuggestion, Show } from '@/types/cue';
+import ShowFormModal from './ShowFormModal';
 
 // Default tracks
 const DEFAULT_TRACKS: Track[] = [
@@ -81,6 +82,8 @@ const Dashboard: React.FC = () => {
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isCreateShowOpen, setIsCreateShowOpen] = useState(false);
+  const [isEditShowOpen, setIsEditShowOpen] = useState(false);
+  const [editingShow, setEditingShow] = useState<Show | null>(null);
   const sidebarRef = useRef<{ openCreateModal: () => void } | null>(null);
   const { toast } = useToast();
   
@@ -341,6 +344,62 @@ const Dashboard: React.FC = () => {
     await getSuggestions(showName, cues, cueType);
   };
 
+  // Handle edit show
+  const handleEditShow = async () => {
+    if (!activeShowId) return;
+    
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { data } = await supabase
+      .from('shows')
+      .select('*')
+      .eq('id', activeShowId)
+      .maybeSingle();
+    
+    if (data) {
+      setEditingShow(data as Show);
+      setIsEditShowOpen(true);
+    }
+  };
+
+  // Handle save show
+  const handleSaveShow = async (showData: Partial<Show>) => {
+    if (!activeShowId) return;
+    
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { error } = await supabase
+      .from('shows')
+      .update(showData)
+      .eq('id', activeShowId);
+    
+    if (error) {
+      toast({
+        title: 'Error saving show',
+        description: error.message,
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    // Update local state
+    if (showData.name) setShowName(showData.name);
+    setShowInfo({
+      client: showData.event_name || showInfo.client,
+      eventDate: showData.event_start_date || showInfo.eventDate,
+      showTime: showData.show_time || showInfo.showTime,
+    });
+    if (showData.custom_tracks && Array.isArray(showData.custom_tracks)) {
+      setTracks(showData.custom_tracks as unknown as Track[]);
+    }
+    
+    setIsEditShowOpen(false);
+    setEditingShow(null);
+    
+    toast({
+      title: 'Show updated',
+      description: 'Your changes have been saved'
+    });
+  };
+
   // Handle quick add cue from sidebar
   const handleQuickAddCue = async (type: 'audio' | 'video' | 'lighting' | 'stage') => {
     if (!activeShowId) {
@@ -551,6 +610,13 @@ const Dashboard: React.FC = () => {
                       >
                         <Sparkles size={16} className="mr-1.5" /> AI Suggest
                       </Button>
+                      <Button 
+                        onClick={handleEditShow} 
+                        size="sm" 
+                        variant="outline"
+                      >
+                        <Settings size={16} className="mr-1.5" /> Edit Show
+                      </Button>
                     </div>
                     <div className="flex items-center gap-2">
                       {selectedCueIds.length > 0 && (
@@ -676,6 +742,17 @@ const Dashboard: React.FC = () => {
             showName={showName}
           />
         )}
+
+        {/* Edit Show Modal */}
+        <ShowFormModal
+          isOpen={isEditShowOpen}
+          onClose={() => {
+            setIsEditShowOpen(false);
+            setEditingShow(null);
+          }}
+          onSave={handleSaveShow}
+          editingShow={editingShow}
+        />
       </div>
     </TooltipProvider>
   );
