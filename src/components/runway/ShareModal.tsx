@@ -43,15 +43,30 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
   const [inviting, setInviting] = useState(false);
   const [searching, setSearching] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [showCode, setShowCode] = useState<string | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
   const { toast } = useToast();
   const { user, profile } = useAuthContext();
 
-  // Fetch members when modal opens
+  // Fetch members and show code when modal opens
   React.useEffect(() => {
     if (isOpen && showId) {
       fetchMembers();
+      fetchShowCode();
     }
   }, [isOpen, showId]);
+
+  const fetchShowCode = async () => {
+    const { data } = await supabase
+      .from('shows')
+      .select('show_code')
+      .eq('id', showId)
+      .maybeSingle();
+    
+    if (data?.show_code) {
+      setShowCode(data.show_code);
+    }
+  };
 
   const fetchMembers = async () => {
     setLoading(true);
@@ -328,6 +343,14 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
     toast({ title: 'Link copied to clipboard' });
   };
 
+  const copyShowCode = () => {
+    if (!showCode) return;
+    navigator.clipboard.writeText(showCode);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
+    toast({ title: 'Show code copied to clipboard' });
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[540px]">
@@ -342,6 +365,24 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
         </DialogHeader>
 
         <div className="space-y-5 py-2">
+          {/* Show Code Section */}
+          {showCode && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground mb-1">Show Code</p>
+                <p className="font-mono text-xl font-bold tracking-widest">{showCode}</p>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={copyShowCode}
+                className="shrink-0"
+              >
+                {codeCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+          )}
+
           {/* Search/Invite Section - Figma Style */}
           <div className="space-y-3">
             <div className="flex gap-2">

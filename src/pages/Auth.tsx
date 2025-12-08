@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Layers, Mail, Loader2, ArrowRight, Lock, Eye, EyeOff, Fingerprint, ArrowLeft } from 'lucide-react';
+import { Layers, Mail, Loader2, ArrowRight, Lock, Eye, EyeOff, Fingerprint, ArrowLeft, Ticket } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { usePasskey } from '@/hooks/usePasskey';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,7 +16,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 const emailSchema = z.string().trim().email('Please enter a valid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
 
-type AuthView = 'signin' | 'signup' | 'forgot' | 'reset' | 'verify-mfa';
+type AuthView = 'signin' | 'signup' | 'forgot' | 'reset' | 'verify-mfa' | 'join-code';
 
 const AuthPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -30,6 +30,7 @@ const AuthPage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState('');
+  const [showCode, setShowCode] = useState('');
   const { signIn, signUp, user } = useAuthContext();
   const { authenticateWithPasskey, loading: passkeyLoading } = usePasskey();
   const { toast } = useToast();
@@ -221,7 +222,101 @@ const AuthPage: React.FC = () => {
     }
   };
 
+  const handleJoinWithCode = async () => {
+    const code = showCode.toUpperCase().trim();
+    if (code.length !== 6) {
+      setError('Please enter a valid 6-character show code');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    const { data, error } = await supabase
+      .from('shows')
+      .select('id, name')
+      .eq('show_code', code)
+      .maybeSingle();
+
+    setIsLoading(false);
+
+    if (error || !data) {
+      setError('Show not found. Please check the code and try again.');
+      return;
+    }
+
+    // Store the show ID in session storage for after login
+    sessionStorage.setItem('pending_show_join', data.id);
+    
+    toast({
+      title: 'Show found!',
+      description: `Please sign in to join "${data.name}"`,
+    });
+    
+    setView('signin');
+  };
+
   const isFormLoading = isLoading || passkeyLoading;
+
+  const renderJoinCode = () => (
+    <Card className="border-border/50 shadow-xl">
+      <CardHeader className="space-y-1 text-center">
+        <CardTitle className="text-2xl">Join a Show</CardTitle>
+        <CardDescription>
+          Enter the 6-character show code to join
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="showCode">Show Code</Label>
+          <div className="relative">
+            <Ticket className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="showCode"
+              type="text"
+              placeholder="ABC123"
+              value={showCode}
+              onChange={(e) => setShowCode(e.target.value.toUpperCase().slice(0, 6))}
+              className="pl-10 uppercase font-mono text-lg tracking-widest"
+              disabled={isFormLoading}
+              maxLength={6}
+            />
+          </div>
+        </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </CardContent>
+      <CardFooter className="flex flex-col gap-4">
+        <Button 
+          className="w-full" 
+          onClick={handleJoinWithCode}
+          disabled={isLoading || showCode.length !== 6}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Looking up show...
+            </>
+          ) : (
+            <>
+              Join Show
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </>
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setView('signin');
+            setError(null);
+            setShowCode('');
+          }}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to sign in
+        </Button>
+      </CardFooter>
+    </Card>
+  );
 
   const renderMFAVerification = () => (
     <Card className="border-border/50 shadow-xl">
@@ -524,6 +619,29 @@ const AuthPage: React.FC = () => {
             )}
           </Button>
 
+          {view === 'signin' && (
+            <>
+              <div className="relative">
+                <Separator />
+                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
+                  or
+                </span>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setView('join-code');
+                  setError(null);
+                }}
+              >
+                <Ticket className="mr-2 h-4 w-4" />
+                Join with Show Code
+              </Button>
+            </>
+          )}
+
           <p className="text-sm text-center text-muted-foreground">
             {view === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
             <Button
@@ -560,6 +678,7 @@ const AuthPage: React.FC = () => {
         {view === 'verify-mfa' && renderMFAVerification()}
         {view === 'forgot' && renderForgotPassword()}
         {view === 'reset' && renderResetPassword()}
+        {view === 'join-code' && renderJoinCode()}
         {(view === 'signin' || view === 'signup') && renderSignInSignUp()}
 
         <p className="text-center text-xs text-muted-foreground mt-6">
