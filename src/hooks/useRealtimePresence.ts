@@ -2,6 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
+export interface ViewportState {
+  scrollX: number;
+  scrollY: number;
+  zoom?: number;
+}
+
 export interface PresenceUser {
   id: string;
   name: string;
@@ -11,6 +17,7 @@ export interface PresenceUser {
   cursor?: { x: number; y: number };
   area?: 'timeline' | 'cue-panel' | 'table' | 'sidebar';
   selectedCueId?: string | null;
+  viewport?: ViewportState;
   lastActive: string;
 }
 
@@ -21,6 +28,11 @@ interface PresenceState {
 interface CursorBroadcast {
   userId: string;
   cursor: { x: number; y: number };
+}
+
+interface ViewportBroadcast {
+  userId: string;
+  viewport: ViewportState;
 }
 
 // Generate a consistent color for a user based on their ID
@@ -64,9 +76,11 @@ export const useRealtimePresence = (
   const trackingRef = useRef<{
     area: PresenceUser['area'];
     selectedCueId: string | null;
+    viewport: ViewportState;
   }>({
     area: 'timeline',
     selectedCueId: null,
+    viewport: { scrollX: 0, scrollY: 0, zoom: 1 },
   });
 
   // Broadcast cursor position (fast, no persistence)
@@ -115,6 +129,22 @@ export const useRealtimePresence = (
         area: trackingRef.current.area,
         selectedCueId: cueId,
         lastActive: new Date().toISOString(),
+      });
+    }
+  }, [currentUser]);
+
+  // Broadcast viewport state (fast, for follow mode)
+  const updateViewport = useCallback((viewport: ViewportState) => {
+    trackingRef.current.viewport = viewport;
+    
+    if (channelRef.current && currentUser) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'viewport',
+        payload: {
+          userId: currentUser.id,
+          viewport,
+        },
       });
     }
   }, [currentUser]);
@@ -175,6 +205,18 @@ export const useRealtimePresence = (
           }
         }
       })
+      // Handle viewport broadcasts for follow mode
+      .on('broadcast', { event: 'viewport' }, ({ payload }) => {
+        const { userId, viewport } = payload as ViewportBroadcast;
+        
+        if (userId !== currentUser.id) {
+          const existing = usersRef.current.get(userId);
+          if (existing) {
+            usersRef.current.set(userId, { ...existing, viewport });
+            setActiveUsers(Array.from(usersRef.current.values()));
+          }
+        }
+      })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
@@ -207,5 +249,6 @@ export const useRealtimePresence = (
     updateCursor,
     updateArea,
     updateSelectedCue,
+    updateViewport,
   };
 };

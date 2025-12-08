@@ -37,6 +37,8 @@ export interface TimelineViewProps {
   onCueChange?: (updatedCue: TimelineCue) => void;
   onCueDelete?: (cueId: string) => void;
   onCueDuplicate?: (cueId: string) => void;
+  onViewportChange?: (scrollX: number, scrollY: number, zoom: number) => void;
+  scrollRef?: React.RefObject<HTMLDivElement>;
 }
 
 // Default track lanes configuration
@@ -82,6 +84,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   onCueChange,
   onCueDelete,
   onCueDuplicate,
+  onViewportChange,
+  scrollRef,
 }) => {
   const [zoom, setZoom] = useState(1); // pixels per second
   const [scrollLeft, setScrollLeft] = useState(0);
@@ -96,6 +100,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const timelineRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
   const { toast } = useToast();
+  
+  // Combine refs if external scrollRef is provided
+  const scrollContainerRef = scrollRef || containerRef;
 
   // Calculate timeline dimensions
   const pixelsPerSecond = 2 * zoom;
@@ -366,9 +373,19 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
       {/* Timeline Grid */}
       <div 
-        ref={containerRef}
+        ref={(el) => {
+          // Handle both internal and external refs
+          (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+          if (scrollRef && 'current' in scrollRef) {
+            (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+          }
+        }}
         className="flex-1 overflow-auto"
         onWheel={handleWheel}
+        onScroll={(e) => {
+          const target = e.target as HTMLDivElement;
+          onViewportChange?.(target.scrollLeft, target.scrollTop, zoom);
+        }}
         style={{ cursor: panMode ? 'grab' : 'default' }}
       >
         <div className="flex min-h-full">

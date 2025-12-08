@@ -110,10 +110,13 @@ const Dashboard: React.FC = () => {
     };
   }, [user, profile]);
   
-  const { activeUsers, isConnected, updateCursor, updateArea, updateSelectedCue } = useRealtimePresence(
+  const { activeUsers, isConnected, updateCursor, updateArea, updateSelectedCue, updateViewport } = useRealtimePresence(
     activeShowId,
     presenceUser
   );
+  
+  // Ref for timeline scroll container
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
 
   // Load show from URL parameter
   useEffect(() => {
@@ -641,6 +644,28 @@ const Dashboard: React.FC = () => {
     }
   }, [followedUser?.selectedCueId, timelineCues]);
   
+  // Sync viewport/scroll position with followed user (Figma-style)
+  useEffect(() => {
+    if (!followedUser?.viewport || !timelineScrollRef.current) return;
+    
+    const { scrollX, scrollY } = followedUser.viewport;
+    
+    // Smoothly scroll to the followed user's position
+    timelineScrollRef.current.scrollTo({
+      left: scrollX,
+      top: scrollY,
+      behavior: 'smooth',
+    });
+  }, [followedUser?.viewport?.scrollX, followedUser?.viewport?.scrollY]);
+  
+  // Broadcast our viewport when scrolling (for others following us)
+  const handleViewportScroll = useCallback((scrollX: number, scrollY: number, zoom?: number) => {
+    if (!followingUserId) {
+      // Only broadcast if we're not following someone (to avoid feedback loops)
+      updateViewport({ scrollX, scrollY, zoom });
+    }
+  }, [followingUserId, updateViewport]);
+  
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -805,6 +830,8 @@ const Dashboard: React.FC = () => {
                       animatingCues={animatingCues}
                       onCueDelete={handleCueDelete}
                       onCueDuplicate={handleCueDuplicate}
+                      onViewportChange={handleViewportScroll}
+                      scrollRef={timelineScrollRef}
                     />
                   ) : (
                     <Timeline 
@@ -822,6 +849,8 @@ const Dashboard: React.FC = () => {
                       selectedCueIds={selectedCueIds}
                       onSelectCue={handleSelectCue}
                       onBulkUpdate={handleBulkUpdate}
+                      onViewportChange={handleViewportScroll}
+                      scrollRef={timelineScrollRef}
                     />
                   )}
                 </div>
