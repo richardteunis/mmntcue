@@ -87,6 +87,8 @@ export interface TimelineProps {
   onClearSelection?: () => void;
   showCountdown?: { text: string; isLive: boolean } | null;
   animatingCues?: { id: string; type: 'add' | 'delete' | 'update' }[];
+  onViewportChange?: (scrollX: number, scrollY: number) => void;
+  scrollRef?: React.RefObject<HTMLDivElement>;
 }
 
 // Track columns configuration
@@ -160,7 +162,9 @@ const Timeline: React.FC<TimelineProps> = ({
   onSelectAll,
   onClearSelection,
   showCountdown,
-  animatingCues = []
+  animatingCues = [],
+  onViewportChange,
+  scrollRef
 }) => {
   const [currentTime, setCurrentTime] = useState('00:00:00');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -174,6 +178,7 @@ const Timeline: React.FC<TimelineProps> = ({
   
   const timeInSecondsRef = useRef(0);
   const animationFrameRef = useRef<number | null>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   
   // Sort cues by start time
@@ -509,7 +514,19 @@ const Timeline: React.FC<TimelineProps> = ({
       </div>
 
       {/* Run of Show Grid */}
-      <div className="flex-1 overflow-auto border-t border-border">
+      <div 
+        ref={(el) => {
+          tableContainerRef.current = el;
+          if (scrollRef && 'current' in scrollRef) {
+            (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+          }
+        }}
+        className="flex-1 overflow-auto border-t border-border"
+        onScroll={(e) => {
+          const target = e.target as HTMLDivElement;
+          onViewportChange?.(target.scrollLeft, target.scrollTop);
+        }}
+      >
         <Table className="border-collapse">
           <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow className="hover:bg-transparent border-b-2 border-border bg-muted/50">
