@@ -20,7 +20,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings } from 'lucide-react';
+import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings, Eye, EyeOff } from 'lucide-react';
 import { useCues, useAISuggestions } from '@/hooks/useCues';
 import { useRealtimePresence } from '@/hooks/useRealtimePresence';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -602,44 +602,44 @@ const Dashboard: React.FC = () => {
     updateArea(viewMode === 'timeline' ? 'timeline' : 'table');
   }, [viewMode, updateArea]);
   
-  // Follow mode: sync view with followed user
+  // Follow mode: sync view with followed user (Figma-style)
+  const followedUser = useMemo(() => {
+    if (!followingUserId) return null;
+    return activeUsers.find(u => u.id === followingUserId) || null;
+  }, [followingUserId, activeUsers]);
+  
+  // Stop following if user left
   useEffect(() => {
-    if (!followingUserId) return;
-    
-    const followedUser = activeUsers.find(u => u.id === followingUserId);
-    if (!followedUser) {
-      // User left, stop following
+    if (followingUserId && !followedUser) {
       setFollowingUserId(null);
       toast({
         title: 'User left',
         description: 'The user you were following has left the session',
       });
-      return;
     }
+  }, [followingUserId, followedUser, toast]);
+  
+  // Sync view mode with followed user
+  useEffect(() => {
+    if (!followedUser) return;
     
-    // Sync view mode with followed user
-    if (followedUser.area === 'timeline' && viewMode !== 'timeline') {
-      setViewMode('timeline');
-      toast({
-        title: 'Following to Timeline',
-        description: `Following ${followedUser.name?.split(' ')[0] || 'user'} to Timeline view`,
-      });
-    } else if (followedUser.area === 'table' && viewMode !== 'table') {
-      setViewMode('table');
-      toast({
-        title: 'Following to Table',
-        description: `Following ${followedUser.name?.split(' ')[0] || 'user'} to Table view`,
-      });
+    const targetView = followedUser.area === 'table' ? 'table' : 'timeline';
+    if (viewMode !== targetView && (followedUser.area === 'timeline' || followedUser.area === 'table')) {
+      setViewMode(targetView);
     }
+  }, [followedUser?.area]);
+  
+  // Sync selected cue with followed user
+  useEffect(() => {
+    if (!followedUser?.selectedCueId) return;
+    if (followedUser.selectedCueId === selectedCueId) return;
     
-    // Sync selected cue if they have one selected
-    if (followedUser.selectedCueId && followedUser.selectedCueId !== selectedCueId) {
-      const cue = timelineCues.find(c => c.id === followedUser.selectedCueId);
-      if (cue) {
-        handleCueSelect(cue.id, cue);
-      }
+    const cue = timelineCues.find(c => c.id === followedUser.selectedCueId);
+    if (cue) {
+      setSelectedCueId(cue.id);
+      setSelectedCue(cue);
     }
-  }, [followingUserId, activeUsers, viewMode, selectedCueId, timelineCues, toast]);
+  }, [followedUser?.selectedCueId, timelineCues]);
   
   if (loading) {
     return (
@@ -662,6 +662,33 @@ const Dashboard: React.FC = () => {
               containerRef={mainContentRef} 
               currentArea={viewMode === 'timeline' ? 'timeline' : 'table'}
             />
+          )}
+          {/* Following indicator banner */}
+          {followedUser && (
+            <div className="flex items-center justify-between px-4 py-2 bg-primary/10 border-b border-primary/20">
+              <div className="flex items-center gap-2 text-sm">
+                <div className="relative">
+                  <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center">
+                    <Eye className="h-3 w-3 text-primary-foreground" />
+                  </div>
+                  <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-green-500 border border-background animate-pulse" />
+                </div>
+                <span className="text-muted-foreground">Following</span>
+                <span className="font-medium text-foreground">{followedUser.name}</span>
+                <span className="text-xs text-muted-foreground">
+                  • {followedUser.area === 'timeline' ? 'Timeline' : followedUser.area === 'table' ? 'Table' : 'Editing'}
+                </span>
+              </div>
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                className="h-7 text-xs gap-1.5 hover:bg-primary/20"
+                onClick={() => setFollowingUserId(null)}
+              >
+                <EyeOff className="h-3 w-3" />
+                Stop following
+              </Button>
+            </div>
           )}
           
           <TopBar 
@@ -874,9 +901,19 @@ const Dashboard: React.FC = () => {
         {activeShowId && (
           <ShareModal
             isOpen={isShareOpen}
-            onClose={() => setIsShareOpen(false)}
+            onClose={() => {
+              setIsShareOpen(false);
+              setPermissionUserId(null);
+            }}
             showId={activeShowId}
             showName={showName}
+            activeUsers={activeUsers.map(u => ({
+              id: u.id,
+              name: u.name,
+              email: u.email,
+              avatar_url: u.avatar_url,
+            }))}
+            highlightUserId={permissionUserId}
           />
         )}
 
