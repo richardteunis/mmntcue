@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useAvatarUpload } from '@/hooks/useAvatarUpload';
+import { usePasskey } from '@/hooks/usePasskey';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,13 +11,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, User, Bell, Keyboard, Palette, Loader2, Save, Upload } from 'lucide-react';
+import { ArrowLeft, User, Bell, Keyboard, Palette, Loader2, Save, Upload, Fingerprint, Shield, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
 
 const SettingsPage: React.FC = () => {
   const { user, profile, updateProfile, loading, refetchProfile } = useAuthContext();
   const { uploadAvatar, uploading } = useAvatarUpload();
+  const { passkeys, fetchPasskeys, registerPasskey, deletePasskey, loading: passkeyLoading } = usePasskey();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
@@ -28,7 +31,7 @@ const SettingsPage: React.FC = () => {
     email_notifications: boolean;
   } | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (profile && !formData) {
       setFormData({
         full_name: profile.full_name || '',
@@ -39,6 +42,12 @@ const SettingsPage: React.FC = () => {
       });
     }
   }, [profile, formData]);
+
+  useEffect(() => {
+    if (user) {
+      fetchPasskeys();
+    }
+  }, [user, fetchPasskeys]);
 
   const handleSave = async () => {
     if (!formData) return;
@@ -60,6 +69,14 @@ const SettingsPage: React.FC = () => {
         description: 'Your profile picture has been updated',
       });
     }
+  };
+
+  const handleAddPasskey = async () => {
+    await registerPasskey();
+  };
+
+  const handleDeletePasskey = async (id: string) => {
+    await deletePasskey(id);
   };
 
   const timezones = [
@@ -98,9 +115,12 @@ const SettingsPage: React.FC = () => {
 
       <div className="container max-w-4xl py-8">
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="profile" className="gap-2">
               <User className="h-4 w-4" /> Profile
+            </TabsTrigger>
+            <TabsTrigger value="security" className="gap-2">
+              <Shield className="h-4 w-4" /> Security
             </TabsTrigger>
             <TabsTrigger value="notifications" className="gap-2">
               <Bell className="h-4 w-4" /> Notifications
@@ -199,6 +219,80 @@ const SettingsPage: React.FC = () => {
                     {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save Changes
                   </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="security">
+            <Card>
+              <CardHeader>
+                <CardTitle>Security</CardTitle>
+                <CardDescription>Manage your authentication methods</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-medium flex items-center gap-2">
+                        <Fingerprint className="h-5 w-5" />
+                        Passkeys
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Sign in securely with biometrics like Face ID, Touch ID, or Windows Hello
+                      </p>
+                    </div>
+                    <Button onClick={handleAddPasskey} disabled={passkeyLoading}>
+                      {passkeyLoading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Fingerprint className="mr-2 h-4 w-4" />
+                      )}
+                      Add Passkey
+                    </Button>
+                  </div>
+
+                  <Separator className="my-4" />
+
+                  {passkeys.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Fingerprint className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p>No passkeys registered yet</p>
+                      <p className="text-sm">Add a passkey for faster, more secure sign-in</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {passkeys.map((passkey) => (
+                        <div 
+                          key={passkey.id} 
+                          className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                              <Fingerprint className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                              <p className="font-medium">{passkey.device_type || 'Unknown Device'}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Added {format(new Date(passkey.created_at), 'MMM d, yyyy')}
+                                {passkey.last_used_at && (
+                                  <> · Last used {format(new Date(passkey.last_used_at), 'MMM d, yyyy')}</>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => handleDeletePasskey(passkey.id)}
+                            disabled={passkeyLoading}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
