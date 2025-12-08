@@ -583,6 +583,7 @@ const Dashboard: React.FC = () => {
                       onCueChange={handleCueUpdate}
                       selectedCue={selectedCue}
                       cues={timelineCues}
+                      showCountdown={showCountdown}
                       onCueDelete={handleCueDelete}
                       onCueDuplicate={handleCueDuplicate}
                       onCueReorder={handleCueReorder}

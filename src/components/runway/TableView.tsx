@@ -51,6 +51,7 @@ interface TableViewProps {
   onCueDelete: (id: string) => void;
   onCueDuplicate: (id: string) => void;
   onEditCue: (cue: Cue) => void;
+  showCountdown?: { text: string; isLive: boolean } | null;
 }
 
 type SortField = 'name' | 'type' | 'track' | 'start_time' | 'duration';
@@ -112,7 +113,8 @@ const TableView: React.FC<TableViewProps> = ({
   onCueUpdate,
   onCueDelete,
   onCueDuplicate,
-  onEditCue
+  onEditCue,
+  showCountdown
 }) => {
   const [sortField, setSortField] = useState<SortField>('start_time');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -282,6 +284,21 @@ const TableView: React.FC<TableViewProps> = ({
           </TooltipTrigger>
           <TooltipContent>Simplified view for live show operation</TooltipContent>
         </Tooltip>
+
+        {showCountdown && (
+          <div className={cn(
+            "flex items-center gap-2 px-3 py-1 rounded",
+            showCountdown.isLive ? "bg-runway-success/20" : "bg-muted/50"
+          )}>
+            <Clock className={cn("h-3.5 w-3.5", showCountdown.isLive ? "text-runway-success" : "text-primary")} />
+            <span className={cn(
+              "text-xs font-mono font-medium",
+              showCountdown.isLive && "text-runway-success"
+            )}>
+              {showCountdown.isLive ? "LIVE" : `T-${showCountdown.text}`}
+            </span>
+          </div>
+        )}
 
         <div className="text-xs text-muted-foreground">
           {filteredAndSortedCues.length} cue{filteredAndSortedCues.length !== 1 ? 's' : ''}

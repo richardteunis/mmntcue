@@ -85,6 +85,7 @@ export interface TimelineProps {
   onPasteCue?: (cue: TimelineCue) => void;
   onSelectAll?: (cueIds: string[]) => void;
   onClearSelection?: () => void;
+  showCountdown?: { text: string; isLive: boolean } | null;
 }
 
 // Track columns configuration
@@ -156,7 +157,8 @@ const Timeline: React.FC<TimelineProps> = ({
   onBulkUpdate,
   onPasteCue,
   onSelectAll,
-  onClearSelection
+  onClearSelection,
+  showCountdown
 }) => {
   const [currentTime, setCurrentTime] = useState('00:00:00');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -365,6 +367,22 @@ const Timeline: React.FC<TimelineProps> = ({
             <div className="font-mono text-lg font-bold text-foreground">{totalRuntime}</div>
           </div>
         </div>
+        
+        {/* Center: Countdown */}
+        {showCountdown && (
+          <div className={cn(
+            "flex items-center gap-2 px-4 py-1 rounded-full",
+            showCountdown.isLive ? "bg-runway-success/20" : "bg-muted/50"
+          )}>
+            <Clock className={cn("h-4 w-4", showCountdown.isLive ? "text-runway-success" : "text-primary")} />
+            <span className={cn(
+              "font-mono text-lg font-bold",
+              showCountdown.isLive ? "text-runway-success" : "text-foreground"
+            )}>
+              {showCountdown.isLive ? "LIVE" : `T-${showCountdown.text}`}
+            </span>
+          </div>
+        )}
         
         <div className="flex items-center gap-4">
           <div className="text-center">
