@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Layers, Mail, Loader2, ArrowRight, Lock, Eye, EyeOff, Fingerprint } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { usePasskey } from '@/hooks/usePasskey';
 import { z } from 'zod';
 import { Separator } from '@/components/ui/separator';
 
@@ -20,6 +21,7 @@ const AuthPage: React.FC = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { signIn, signUp, user } = useAuthContext();
+  const { authenticateWithPasskey, loading: passkeyLoading } = usePasskey();
   const navigate = useNavigate();
 
   // Redirect if already logged in
@@ -66,24 +68,13 @@ const AuthPage: React.FC = () => {
 
   const handlePasskeyAuth = async () => {
     setError(null);
-    setIsLoading(true);
-    
-    try {
-      // Check if WebAuthn is supported
-      if (!window.PublicKeyCredential) {
-        setError('Passkeys are not supported in this browser');
-        setIsLoading(false);
-        return;
-      }
-
-      // For now, show a message that passkey setup requires initial email/password login
-      setError('Sign in with email first, then set up a passkey in Settings');
-    } catch (err: any) {
-      setError(err.message || 'Passkey authentication failed');
+    const result = await authenticateWithPasskey();
+    if (result.success) {
+      navigate('/');
     }
-    
-    setIsLoading(false);
   };
+
+  const isFormLoading = isLoading || passkeyLoading;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -113,6 +104,33 @@ const AuthPage: React.FC = () => {
 
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
+              {/* Passkey button first for returning users */}
+              {!isSignUp && (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-12 text-base"
+                    onClick={handlePasskeyAuth}
+                    disabled={isFormLoading}
+                  >
+                    {passkeyLoading ? (
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    ) : (
+                      <Fingerprint className="mr-2 h-5 w-5" />
+                    )}
+                    Sign in with Passkey
+                  </Button>
+
+                  <div className="relative">
+                    <Separator />
+                    <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
+                      or use email
+                    </span>
+                  </div>
+                </>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <div className="relative">
@@ -124,7 +142,7 @@ const AuthPage: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
-                    disabled={isLoading}
+                    disabled={isFormLoading}
                     autoComplete="email"
                   />
                 </div>
@@ -141,7 +159,7 @@ const AuthPage: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10"
-                    disabled={isLoading}
+                    disabled={isFormLoading}
                     autoComplete={isSignUp ? 'new-password' : 'current-password'}
                   />
                   <Button
@@ -162,7 +180,7 @@ const AuthPage: React.FC = () => {
             </CardContent>
 
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full" disabled={isFormLoading}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -174,24 +192,6 @@ const AuthPage: React.FC = () => {
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </>
                 )}
-              </Button>
-
-              <div className="relative w-full">
-                <Separator />
-                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
-                  or
-                </span>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={handlePasskeyAuth}
-                disabled={isLoading}
-              >
-                <Fingerprint className="mr-2 h-4 w-4" />
-                Continue with Passkey
               </Button>
 
               <p className="text-sm text-center text-muted-foreground">
