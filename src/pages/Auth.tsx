@@ -4,18 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Layers, Mail, Loader2, ArrowRight } from 'lucide-react';
+import { Layers, Mail, Loader2, ArrowRight, Lock, Eye, EyeOff, Fingerprint } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { z } from 'zod';
+import { Separator } from '@/components/ui/separator';
 
-const emailSchema = z.string().email('Please enter a valid email address');
+const emailSchema = z.string().trim().email('Please enter a valid email address');
+const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
 
 const AuthPage: React.FC = () => {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { signInWithMagicLink, user } = useAuthContext();
+  const { signIn, signUp, user } = useAuthContext();
   const navigate = useNavigate();
 
   // Redirect if already logged in
@@ -30,21 +34,55 @@ const AuthPage: React.FC = () => {
     setError(null);
 
     // Validate email
-    const result = emailSchema.safeParse(email);
-    if (!result.success) {
-      setError(result.error.errors[0].message);
+    const emailResult = emailSchema.safeParse(email);
+    if (!emailResult.success) {
+      setError(emailResult.error.errors[0].message);
+      return;
+    }
+
+    // Validate password
+    const passwordResult = passwordSchema.safeParse(password);
+    if (!passwordResult.success) {
+      setError(passwordResult.error.errors[0].message);
       return;
     }
 
     setIsLoading(true);
 
-    const { error } = await signInWithMagicLink(email);
+    if (isSignUp) {
+      const { error } = await signUp(email, password);
+      if (error) {
+        setError(error.message);
+      }
+    } else {
+      const { error } = await signIn(email, password);
+      if (error) {
+        setError(error.message);
+      }
+    }
 
     setIsLoading(false);
+  };
 
-    if (!error) {
-      setEmailSent(true);
+  const handlePasskeyAuth = async () => {
+    setError(null);
+    setIsLoading(true);
+    
+    try {
+      // Check if WebAuthn is supported
+      if (!window.PublicKeyCredential) {
+        setError('Passkeys are not supported in this browser');
+        setIsLoading(false);
+        return;
+      }
+
+      // For now, show a message that passkey setup requires initial email/password login
+      setError('Sign in with email first, then set up a passkey in Settings');
+    } catch (err: any) {
+      setError(err.message || 'Passkey authentication failed');
     }
+    
+    setIsLoading(false);
   };
 
   return (
@@ -64,75 +102,114 @@ const AuthPage: React.FC = () => {
         <Card className="border-border/50 shadow-xl">
           <CardHeader className="space-y-1 text-center">
             <CardTitle className="text-2xl">
-              {emailSent ? 'Check your email' : 'Sign in or Sign up'}
+              {isSignUp ? 'Create an account' : 'Welcome back'}
             </CardTitle>
             <CardDescription>
-              {emailSent
-                ? `We sent a magic link to ${email}`
-                : 'Enter your email to continue. New users will be signed up automatically.'}
+              {isSignUp
+                ? 'Enter your email and password to get started'
+                : 'Sign in to your account to continue'}
             </CardDescription>
           </CardHeader>
 
-          {!emailSent ? (
-            <form onSubmit={handleSubmit}>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10"
-                      disabled={isLoading}
-                      autoComplete="email"
-                    />
-                  </div>
-                  {error && (
-                    <p className="text-sm text-destructive">{error}</p>
-                  )}
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Sending magic link...
-                    </>
-                  ) : (
-                    <>
-                      Continue with Email
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </form>
-          ) : (
+          <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
-              <div className="text-center py-8">
-                <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                  <Mail className="h-8 w-8 text-primary" />
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10"
+                    disabled={isLoading}
+                    autoComplete="email"
+                  />
                 </div>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Click the link in your email to sign in. The link will expire in 1 hour.
-                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-10 pr-10"
+                    disabled={isLoading}
+                    autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1 h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              {error && (
+                <p className="text-sm text-destructive">{error}</p>
+              )}
+            </CardContent>
+
+            <CardFooter className="flex flex-col gap-4">
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isSignUp ? 'Creating account...' : 'Signing in...'}
+                  </>
+                ) : (
+                  <>
+                    {isSignUp ? 'Create Account' : 'Sign In'}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+
+              <div className="relative w-full">
+                <Separator />
+                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
+                  or
+                </span>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handlePasskeyAuth}
+                disabled={isLoading}
+              >
+                <Fingerprint className="mr-2 h-4 w-4" />
+                Continue with Passkey
+              </Button>
+
+              <p className="text-sm text-center text-muted-foreground">
+                {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
                 <Button
-                  variant="outline"
+                  type="button"
+                  variant="link"
+                  className="p-0 h-auto font-medium text-primary"
                   onClick={() => {
-                    setEmailSent(false);
-                    setEmail('');
+                    setIsSignUp(!isSignUp);
+                    setError(null);
                   }}
                 >
-                  Use a different email
+                  {isSignUp ? 'Sign in' : 'Sign up'}
                 </Button>
-              </div>
-            </CardContent>
-          )}
+              </p>
+            </CardFooter>
+          </form>
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
