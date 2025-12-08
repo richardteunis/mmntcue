@@ -26,9 +26,22 @@ interface TopBarProps {
   onShare?: () => void;
   activeUsers?: PresenceUser[];
   isConnected?: boolean;
+  followingUserId?: string | null;
+  onFollowUser?: (userId: string | null) => void;
+  onManagePermissions?: (userId: string) => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ showName, showInfo, onShowcallerMode, onShare, activeUsers = [], isConnected = false }) => {
+const TopBar: React.FC<TopBarProps> = ({ 
+  showName, 
+  showInfo, 
+  onShowcallerMode, 
+  onShare, 
+  activeUsers = [], 
+  isConnected = false,
+  followingUserId,
+  onFollowUser,
+  onManagePermissions
+}) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [saveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const { user } = useAuthContext();
@@ -114,7 +127,13 @@ const TopBar: React.FC<TopBarProps> = ({ showName, showInfo, onShowcallerMode, o
           {/* Active collaborators */}
           {activeUsers.length > 0 && (
             <>
-              <CollaboratorAvatars users={activeUsers} maxVisible={4} />
+              <CollaboratorAvatars 
+                users={activeUsers} 
+                maxVisible={4} 
+                followingUserId={followingUserId}
+                onFollowUser={onFollowUser}
+                onManagePermissions={onManagePermissions}
+              />
               <Separator orientation="vertical" className="h-6" />
             </>
           )}
