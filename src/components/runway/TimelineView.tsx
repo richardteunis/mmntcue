@@ -32,6 +32,7 @@ export interface TimelineViewProps {
   tracks?: TimelineTrack[];
   selectedCueId?: string | null;
   showCountdown?: { text: string; isLive: boolean } | null;
+  animatingCues?: { id: string; type: 'add' | 'delete' | 'update' }[];
   onCueSelect?: (cueId: string | null, cue: TimelineCue | null) => void;
   onCueChange?: (updatedCue: TimelineCue) => void;
   onCueDelete?: (cueId: string) => void;
@@ -76,6 +77,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   tracks = DEFAULT_TRACKS,
   selectedCueId,
   showCountdown,
+  animatingCues = [],
   onCueSelect,
   onCueChange,
   onCueDelete,
@@ -440,15 +442,19 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                 {cuesByTrack[track.id]?.map(cue => {
                   const startX = timeToSeconds(cue.time) * pixelsPerSecond;
                   const width = Math.max(timeToSeconds(cue.duration) * pixelsPerSecond, 40);
+                  const animation = animatingCues.find(a => a.id === cue.id);
                   
                   return (
                     <div
                       key={cue.id}
                       data-cue={cue.id}
                       className={cn(
-                        "absolute top-2 h-12 rounded-md cursor-pointer transition-all",
+                        "absolute top-2 h-12 rounded-md cursor-pointer transition-all duration-300",
                         "border-2 shadow-sm hover:shadow-md",
-                        selectedCueId === cue.id && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                        selectedCueId === cue.id && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                        animation?.type === 'add' && "animate-scale-in",
+                        animation?.type === 'delete' && "animate-fade-out opacity-0 scale-95",
+                        animation?.type === 'update' && "ring-2 ring-runway-teal ring-offset-1"
                       )}
                       style={{ 
                         left: startX, 

@@ -86,6 +86,7 @@ export interface TimelineProps {
   onSelectAll?: (cueIds: string[]) => void;
   onClearSelection?: () => void;
   showCountdown?: { text: string; isLive: boolean } | null;
+  animatingCues?: { id: string; type: 'add' | 'delete' | 'update' }[];
 }
 
 // Track columns configuration
@@ -158,7 +159,8 @@ const Timeline: React.FC<TimelineProps> = ({
   onPasteCue,
   onSelectAll,
   onClearSelection,
-  showCountdown
+  showCountdown,
+  animatingCues = []
 }) => {
   const [currentTime, setCurrentTime] = useState('00:00:00');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -562,6 +564,7 @@ const Timeline: React.FC<TimelineProps> = ({
               const isMultiSelected = selectedCueIds.includes(cue.id);
               const isDragging = draggedCueId === cue.id;
               const isDragOver = dragOverIndex === index;
+              const animation = animatingCues.find(a => a.id === cue.id);
               
               return (
                 <TableRow 
@@ -572,11 +575,14 @@ const Timeline: React.FC<TimelineProps> = ({
                   onDragEnd={handleDragEnd}
                   onDrop={(e) => handleDrop(e, index)}
                   className={cn(
-                    "cursor-pointer transition-all group border-b border-border hover:bg-muted/30",
+                    "cursor-pointer transition-all duration-300 group border-b border-border hover:bg-muted/30",
                     (isSelected || isMultiSelected) && "bg-primary/10 border-l-2 border-l-primary",
                     isCurrentCue && "bg-runway-success/20 ring-1 ring-runway-success",
                     isDragging && "opacity-50",
-                    isDragOver && "border-t-2 border-t-primary"
+                    isDragOver && "border-t-2 border-t-primary",
+                    animation?.type === 'add' && "animate-fade-in bg-runway-success/10",
+                    animation?.type === 'delete' && "animate-fade-out opacity-0",
+                    animation?.type === 'update' && "bg-runway-teal/10"
                   )}
                   onClick={(e) => {
                     if (e.ctrlKey || e.metaKey || e.shiftKey) {

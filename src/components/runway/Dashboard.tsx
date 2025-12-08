@@ -85,7 +85,7 @@ const Dashboard: React.FC = () => {
   const { toast } = useToast();
   
   // Use database hooks with active show
-  const { cues, loading, addCue, updateCue, deleteCue, duplicateCue, reorderCues, bulkUpdateCues, bulkDeleteCues, getNextStartTime } = useCues(activeShowId);
+  const { cues, loading, animatingCues, addCue, updateCue, deleteCue, duplicateCue, reorderCues, bulkUpdateCues, bulkDeleteCues, getNextStartTime } = useCues(activeShowId);
   const { suggestions, loading: aiLoading, getSuggestions, setSuggestions } = useAISuggestions();
 
   // Load show from URL parameter
@@ -572,6 +572,7 @@ const Dashboard: React.FC = () => {
                       cues={timelineCues}
                       tracks={tracks}
                       showCountdown={showCountdown}
+                      animatingCues={animatingCues}
                       onCueDelete={handleCueDelete}
                       onCueDuplicate={handleCueDuplicate}
                     />
@@ -584,6 +585,7 @@ const Dashboard: React.FC = () => {
                       selectedCue={selectedCue}
                       cues={timelineCues}
                       showCountdown={showCountdown}
+                      animatingCues={animatingCues}
                       onCueDelete={handleCueDelete}
                       onCueDuplicate={handleCueDuplicate}
                       onCueReorder={handleCueReorder}

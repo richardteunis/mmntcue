@@ -36,6 +36,7 @@ const parseDuration = (duration: string): number => {
 export function useCues(showId: string | null) {
   const [cues, setCues] = useState<Cue[]>([]);
   const [loading, setLoading] = useState(true);
+  const [animatingCues, setAnimatingCues] = useState<{ id: string; type: 'add' | 'delete' | 'update' }[]>([]);
   const { toast } = useToast();
 
   const fetchCues = useCallback(async () => {
@@ -81,19 +82,71 @@ export function useCues(showId: string | null) {
 
     if (!showId) return;
 
-    // Subscribe to realtime changes
+    // Subscribe to realtime changes with optimistic updates
     const channel = supabase
       .channel(`cues-changes-${showId}`)
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'cues',
           filter: `show_id=eq.${showId}`
         },
-        () => {
-          fetchCues();
+        (payload) => {
+          const newCue = payload.new as Cue;
+          // Trigger add animation
+          setAnimatingCues(prev => [...prev, { id: newCue.id, type: 'add' }]);
+          setCues(prev => {
+            const exists = prev.some(c => c.id === newCue.id);
+            if (exists) return prev;
+            const updated = [...prev, { ...newCue, effects: newCue.effects || [] }];
+            return updated.sort((a, b) => timeToSeconds(a.start_time) - timeToSeconds(b.start_time));
+          });
+          // Clear animation after delay
+          setTimeout(() => {
+            setAnimatingCues(prev => prev.filter(a => a.id !== newCue.id));
+          }, 500);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'cues',
+          filter: `show_id=eq.${showId}`
+        },
+        (payload) => {
+          const updatedCue = payload.new as Cue;
+          // Trigger update animation
+          setAnimatingCues(prev => [...prev, { id: updatedCue.id, type: 'update' }]);
+          setCues(prev => {
+            const updated = prev.map(c => c.id === updatedCue.id ? { ...updatedCue, effects: updatedCue.effects || [] } : c);
+            return updated.sort((a, b) => timeToSeconds(a.start_time) - timeToSeconds(b.start_time));
+          });
+          // Clear animation after delay
+          setTimeout(() => {
+            setAnimatingCues(prev => prev.filter(a => a.id !== updatedCue.id));
+          }, 400);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'cues',
+          filter: `show_id=eq.${showId}`
+        },
+        (payload) => {
+          const deletedId = payload.old.id;
+          // Trigger delete animation, then remove
+          setAnimatingCues(prev => [...prev, { id: deletedId, type: 'delete' }]);
+          setTimeout(() => {
+            setCues(prev => prev.filter(c => c.id !== deletedId));
+            setAnimatingCues(prev => prev.filter(a => a.id !== deletedId));
+          }, 300);
         }
       )
       .subscribe();
@@ -341,6 +394,7 @@ export function useCues(showId: string | null) {
   return {
     cues,
     loading,
+    animatingCues,
     addCue,
     updateCue,
     deleteCue,
