@@ -170,7 +170,7 @@ const Dashboard: React.FC = () => {
     });
   };
 
-  // Calculate countdown to show start
+  // Calculate countdown to show start (with seconds)
   const showCountdown = useMemo(() => {
     if (!showInfo?.eventDate || !showInfo?.showTime) return null;
     
@@ -186,13 +186,14 @@ const Dashboard: React.FC = () => {
       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
       const hrs = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((diff % (1000 * 60)) / 1000);
       
       if (days > 0) {
-        return { text: `${days}d ${hrs}h ${mins}m`, isLive: false };
+        return { text: `${days}d ${hrs}h ${mins}m ${secs}s`, isLive: false };
       } else if (hrs > 0) {
-        return { text: `${hrs}h ${mins}m`, isLive: false };
+        return { text: `${hrs}h ${mins}m ${secs}s`, isLive: false };
       } else {
-        return { text: `${mins}m`, isLive: false };
+        return { text: `${mins}m ${secs}s`, isLive: false };
       }
     } catch {
       return null;

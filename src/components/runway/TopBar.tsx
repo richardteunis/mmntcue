@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Share2, Check, Presentation, Timer } from 'lucide-react';
+import { Clock, Share2, Check, Presentation } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import NotificationPopover from './NotificationPopover';
 import UserMenu from './UserMenu';
@@ -62,35 +62,6 @@ const TopBar: React.FC<TopBarProps> = ({ showName, showInfo, onShowcallerMode, o
     }
   };
 
-  // Calculate countdown to show start
-  const countdown = useMemo(() => {
-    if (!showInfo?.eventDate || !showInfo?.showTime) return null;
-    
-    try {
-      const [year, month, day] = showInfo.eventDate.split('-').map(Number);
-      const [hours, minutes] = showInfo.showTime.split(':').map(Number);
-      const showStart = new Date(year, month - 1, day, hours, minutes);
-      const diff = showStart.getTime() - currentTime.getTime();
-      
-      if (diff <= 0) return { text: 'LIVE', isLive: true };
-      
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hrs = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const secs = Math.floor((diff % (1000 * 60)) / 1000);
-      
-      if (days > 0) {
-        return { text: `${days}d ${hrs}h ${mins}m`, isLive: false };
-      } else if (hrs > 0) {
-        return { text: `${hrs}h ${mins}m ${secs}s`, isLive: false };
-      } else {
-        return { text: `${mins}m ${secs}s`, isLive: false };
-      }
-    } catch {
-      return null;
-    }
-  }, [showInfo?.eventDate, showInfo?.showTime, currentTime]);
-
   const eventDate = formatEventDate(showInfo?.eventDate);
   const showTime = formatShowTime(showInfo?.showTime);
   const hasShowInfo = showInfo?.client || eventDate || showTime;
@@ -116,22 +87,6 @@ const TopBar: React.FC<TopBarProps> = ({ showName, showInfo, onShowcallerMode, o
             Saved
           </Badge>
         </div>
-
-        {/* Center: Countdown */}
-        {countdown && (
-          <div className="absolute left-1/2 -translate-x-1/2">
-            <Badge 
-              variant={countdown.isLive ? "default" : "secondary"} 
-              className={cn(
-                "font-mono text-sm px-3 py-1",
-                countdown.isLive && "bg-runway-error animate-pulse"
-              )}
-            >
-              <Timer size={14} className="mr-1.5 opacity-70" />
-              {countdown.isLive ? 'LIVE' : `T-${countdown.text}`}
-            </Badge>
-          </div>
-        )}
         
         {/* Right: Actions */}
         <div className="flex items-center gap-3">
