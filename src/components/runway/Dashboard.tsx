@@ -13,16 +13,22 @@ import BulkEditModal from './BulkEditModal';
 import ConfirmDialog from './ConfirmDialog';
 import ShareModal from './ShareModal';
 import ViewToggle from './ViewToggle';
+import AddTrackModal, { Track } from './AddTrackModal';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil } from 'lucide-react';
+import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers } from 'lucide-react';
 import { useCues, useAISuggestions } from '@/hooks/useCues';
 import { Cue, ViewMode, CueSuggestion } from '@/types/cue';
 
-// Available tracks for cues
-const availableTracks = ['Audio Main', 'Video Wall', 'Stage Lighting', 'Stage Direction'];
+// Default tracks
+const DEFAULT_TRACKS: Track[] = [
+  { id: 'audio', label: 'Audio', color: '#14B8A6' },
+  { id: 'video', label: 'Video', color: '#22C55E' },
+  { id: 'lighting', label: 'Lights', color: '#EAB308' },
+  { id: 'stage', label: 'Stage', color: '#F97316' },
+];
 
 // Convert database Cue to TimelineCue for Timeline component
 const cueToTimelineCue = (cue: Cue): TimelineCue => ({
@@ -61,6 +67,8 @@ const Dashboard: React.FC = () => {
   const [activeShowId, setActiveShowId] = useState<string | null>(urlShowId || null);
   const [showName, setShowName] = useState<string>('');
   const [showInfo, setShowInfo] = useState<{ client?: string; eventDate?: string; showTime?: string }>({});
+  const [tracks, setTracks] = useState<Track[]>(DEFAULT_TRACKS);
+  const [isAddTrackOpen, setIsAddTrackOpen] = useState(false);
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
   const [selectedCue, setSelectedCue] = useState<TimelineCue | null>(null);
   const [selectedCueIds, setSelectedCueIds] = useState<string[]>([]);
@@ -88,7 +96,7 @@ const Dashboard: React.FC = () => {
         const { supabase } = await import('@/integrations/supabase/client');
         const { data } = await supabase
           .from('shows')
-          .select('name, event_name, event_start_date, show_time')
+          .select('name, event_name, event_start_date, show_time, custom_tracks')
           .eq('id', urlShowId)
           .maybeSingle();
         
@@ -100,6 +108,9 @@ const Dashboard: React.FC = () => {
             eventDate: data.event_start_date || undefined,
             showTime: data.show_time || undefined,
           });
+          if (data.custom_tracks && Array.isArray(data.custom_tracks)) {
+            setTracks(data.custom_tracks as unknown as Track[]);
+          }
         }
       };
       fetchShowDetails();
@@ -118,7 +129,7 @@ const Dashboard: React.FC = () => {
     const { supabase } = await import('@/integrations/supabase/client');
     const { data } = await supabase
       .from('shows')
-      .select('event_name, event_start_date, show_time')
+      .select('event_name, event_start_date, show_time, custom_tracks')
       .eq('id', showId)
       .maybeSingle();
     
@@ -128,9 +139,35 @@ const Dashboard: React.FC = () => {
         eventDate: data.event_start_date || undefined,
         showTime: data.show_time || undefined,
       });
+      if (data.custom_tracks && Array.isArray(data.custom_tracks)) {
+        setTracks(data.custom_tracks as unknown as Track[]);
+      } else {
+        setTracks(DEFAULT_TRACKS);
+      }
     } else {
       setShowInfo({});
+      setTracks(DEFAULT_TRACKS);
     }
+  };
+
+  // Handle adding a new track
+  const handleAddTrack = async (track: Track) => {
+    const newTracks = [...tracks, track];
+    setTracks(newTracks);
+    
+    // Save to database
+    if (activeShowId) {
+      const { supabase } = await import('@/integrations/supabase/client');
+      await supabase
+        .from('shows')
+        .update({ custom_tracks: JSON.parse(JSON.stringify(newTracks)) })
+        .eq('id', activeShowId);
+    }
+    
+    toast({
+      title: 'Track added',
+      description: `${track.label} track has been added`,
+    });
   };
 
   // Convert database cues to timeline cues (already sorted by start_time from hook)
@@ -477,6 +514,13 @@ const Dashboard: React.FC = () => {
                       >
                         <Sparkles size={16} className="mr-1.5" /> AI Suggest
                       </Button>
+                      <Button 
+                        onClick={() => setIsAddTrackOpen(true)} 
+                        size="sm" 
+                        variant="outline"
+                      >
+                        <Layers size={16} className="mr-1.5" /> Add Track
+                      </Button>
                     </div>
                     <div className="flex items-center gap-2">
                       {selectedCueIds.length > 0 && (
@@ -496,6 +540,7 @@ const Dashboard: React.FC = () => {
                       selectedCueId={selectedCueId}
                       onCueChange={handleCueUpdate}
                       cues={timelineCues}
+                      tracks={tracks}
                       onCueDelete={handleCueDelete}
                       onCueDuplicate={handleCueDuplicate}
                     />
@@ -547,8 +592,16 @@ const Dashboard: React.FC = () => {
           onClose={() => setIsAddEditPanelOpen(false)}
           onSave={handleSaveCue}
           editingCue={editingCue}
-          tracks={availableTracks}
+          tracks={tracks.map(t => t.label)}
           nextStartTime={getNextStartTime()}
+        />
+
+        {/* Add Track Modal */}
+        <AddTrackModal
+          isOpen={isAddTrackOpen}
+          onClose={() => setIsAddTrackOpen(false)}
+          onAdd={handleAddTrack}
+          existingTracks={tracks}
         />
 
         {/* AI Suggest Panel */}

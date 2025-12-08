@@ -57,7 +57,7 @@ import {
 export interface TimelineCue {
   id: string;
   name: string;
-  type: 'audio' | 'video' | 'lighting' | 'stage';
+  type: string;
   time: string;
   duration: string;
   position: number;
