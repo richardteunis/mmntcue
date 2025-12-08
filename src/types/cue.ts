@@ -2,7 +2,7 @@ export interface Cue {
   id: string;
   show_id: string;
   name: string;
-  type: 'audio' | 'video' | 'lighting' | 'stage';
+  type: string;
   track: string;
   start_time: string;
   duration: string;
@@ -71,7 +71,7 @@ export interface Show {
 
 export interface CueSuggestion {
   name: string;
-  type: 'audio' | 'video' | 'lighting' | 'stage';
+  type: string;
   duration: string;
   notes: string;
 }

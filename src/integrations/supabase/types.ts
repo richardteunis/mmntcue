@@ -329,6 +329,7 @@ export type Database = {
           brand_color: string | null
           call_time: string | null
           created_at: string
+          custom_tracks: Json | null
           default_tracks: string[] | null
           description: string | null
           doors_time: string | null
@@ -367,6 +368,7 @@ export type Database = {
           brand_color?: string | null
           call_time?: string | null
           created_at?: string
+          custom_tracks?: Json | null
           default_tracks?: string[] | null
           description?: string | null
           doors_time?: string | null
@@ -405,6 +407,7 @@ export type Database = {
           brand_color?: string | null
           call_time?: string | null
           created_at?: string
+          custom_tracks?: Json | null
           default_tracks?: string[] | null
           description?: string | null
           doors_time?: string | null

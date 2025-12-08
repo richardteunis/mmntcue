@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 export interface TimelineCue {
   id: string;
   name: string;
-  type: 'audio' | 'video' | 'lighting' | 'stage';
+  type: string;
   time: string;
   duration: string;
   position: number;
@@ -20,9 +20,16 @@ export interface TimelineCue {
   track?: string;
 }
 
+export interface TimelineTrack {
+  id: string;
+  label: string;
+  color: string;
+}
+
 export interface TimelineViewProps {
   className?: string;
   cues?: TimelineCue[];
+  tracks?: TimelineTrack[];
   selectedCueId?: string | null;
   onCueSelect?: (cueId: string | null, cue: TimelineCue | null) => void;
   onCueChange?: (updatedCue: TimelineCue) => void;
@@ -30,12 +37,12 @@ export interface TimelineViewProps {
   onCueDuplicate?: (cueId: string) => void;
 }
 
-// Track lanes configuration
-const TRACKS = [
-  { id: 'audio', label: 'Audio', color: 'bg-runway-teal', borderColor: 'border-runway-teal' },
-  { id: 'video', label: 'Video', color: 'bg-runway-success', borderColor: 'border-runway-success' },
-  { id: 'lighting', label: 'Lights', color: 'bg-runway-highlight', borderColor: 'border-runway-highlight' },
-  { id: 'stage', label: 'Stage', color: 'bg-runway-warning', borderColor: 'border-runway-warning' },
+// Default track lanes configuration
+const DEFAULT_TRACKS: TimelineTrack[] = [
+  { id: 'audio', label: 'Audio', color: '#14B8A6' },
+  { id: 'video', label: 'Video', color: '#22C55E' },
+  { id: 'lighting', label: 'Lights', color: '#EAB308' },
+  { id: 'stage', label: 'Stage', color: '#F97316' },
 ];
 
 // Helper functions
@@ -65,6 +72,7 @@ const formatTimeShort = (seconds: number): string => {
 const TimelineView: React.FC<TimelineViewProps> = ({
   className,
   cues = [],
+  tracks = DEFAULT_TRACKS,
   selectedCueId,
   onCueSelect,
   onCueChange,
@@ -98,11 +106,11 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   // Group cues by track
   const cuesByTrack = useMemo(() => {
     const grouped: Record<string, TimelineCue[]> = {};
-    TRACKS.forEach(track => {
+    tracks.forEach(track => {
       grouped[track.id] = cues.filter(c => c.type === track.id);
     });
     return grouped;
-  }, [cues]);
+  }, [cues, tracks]);
 
   // Playback animation
   useEffect(() => {
@@ -337,7 +345,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
             </div>
             
             {/* Track labels */}
-            {TRACKS.map(track => (
+            {tracks.map(track => (
               <div 
                 key={track.id}
                 className={cn(
@@ -345,7 +353,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   "hover:bg-muted/30 transition-colors"
                 )}
               >
-                <div className={cn("w-3 h-3 rounded-full mr-2", track.color)} />
+                <div 
+                  className="w-3 h-3 rounded-full mr-2"
+                  style={{ backgroundColor: track.color }}
+                />
                 <span className="text-sm font-medium">{track.label}</span>
                 <span className="ml-auto text-xs text-muted-foreground">
                   {cuesByTrack[track.id]?.length || 0}
@@ -384,7 +395,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
             </div>
 
             {/* Track Lanes */}
-            {TRACKS.map(track => (
+            {tracks.map(track => (
               <div 
                 key={track.id}
                 className="h-16 border-b border-border relative"
@@ -403,11 +414,14 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                       className={cn(
                         "absolute top-2 h-12 rounded-md cursor-pointer transition-all",
                         "border-2 shadow-sm hover:shadow-md",
-                        track.color,
-                        track.borderColor,
                         selectedCueId === cue.id && "ring-2 ring-primary ring-offset-2 ring-offset-background"
                       )}
-                      style={{ left: startX, width }}
+                      style={{ 
+                        left: startX, 
+                        width,
+                        backgroundColor: track.color,
+                        borderColor: track.color,
+                      }}
                       onClick={(e) => handleCueClick(e, cue)}
                     >
                       <div className="px-2 py-1 h-full flex flex-col justify-center overflow-hidden">
