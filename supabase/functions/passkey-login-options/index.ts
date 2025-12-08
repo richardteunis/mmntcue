@@ -26,8 +26,12 @@ serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Clean up expired challenges
-    await adminClient.rpc('cleanup_expired_challenges').catch(() => {});
+    // Clean up expired challenges (ignore errors)
+    try {
+      await adminClient.rpc('cleanup_expired_challenges');
+    } catch (e) {
+      // Ignore cleanup errors
+    }
 
     // Generate challenge
     const challenge = new Uint8Array(32);
