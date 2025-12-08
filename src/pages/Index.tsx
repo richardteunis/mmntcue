@@ -21,6 +21,14 @@ const Index = () => {
         navigate('/onboarding');
         return;
       }
+
+      // Check for pending show join from show code
+      const pendingShowId = sessionStorage.getItem('pending_show_join');
+      if (pendingShowId) {
+        sessionStorage.removeItem('pending_show_join');
+        navigate(`/show/${pendingShowId}`);
+        return;
+      }
     }
   }, [user, profile, loading, navigate]);
 

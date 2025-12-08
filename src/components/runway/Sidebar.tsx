@@ -333,15 +333,41 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
     if (!showToDuplicate) return;
     
     const { data: { user } } = await supabase.auth.getUser();
-    const { id, created_at, updated_at, ...showFields } = showToDuplicate;
+    const { id, created_at, updated_at, show_code, ...showFields } = showToDuplicate;
+    
+    const insertData = {
+      name: `${showToDuplicate.name} (Copy)`,
+      description: showToDuplicate.description,
+      event_name: showToDuplicate.event_name,
+      venue: showToDuplicate.venue,
+      room_name: showToDuplicate.room_name,
+      event_start_date: showToDuplicate.event_start_date,
+      event_end_date: showToDuplicate.event_end_date,
+      call_time: showToDuplicate.call_time,
+      doors_time: showToDuplicate.doors_time,
+      show_time: showToDuplicate.show_time,
+      timezone: showToDuplicate.timezone,
+      logo_url: showToDuplicate.logo_url,
+      brand_color: showToDuplicate.brand_color,
+      secondary_color: showToDuplicate.secondary_color,
+      apply_branding: showToDuplicate.apply_branding,
+      timecode_format: showToDuplicate.timecode_format,
+      default_tracks: showToDuplicate.default_tracks,
+      custom_tracks: showToDuplicate.custom_tracks as unknown,
+      autosave_interval: showToDuplicate.autosave_interval,
+      show_template: showToDuplicate.show_template,
+      rehearsal_mode: showToDuplicate.rehearsal_mode,
+      locked: showToDuplicate.locked,
+      audio_latency_offset: showToDuplicate.audio_latency_offset,
+      video_latency_offset: showToDuplicate.video_latency_offset,
+      safety_mode: showToDuplicate.safety_mode,
+      folder_id: showToDuplicate.folder_id,
+      user_id: user?.id || null 
+    };
     
     const { data, error } = await supabase
       .from('shows')
-      .insert({ 
-        ...showFields, 
-        name: `${showToDuplicate.name} (Copy)`,
-        user_id: user?.id || null 
-      })
+      .insert(insertData as any)
       .select()
       .single();
     

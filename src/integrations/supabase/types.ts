@@ -345,6 +345,7 @@ export type Database = {
           room_name: string | null
           safety_mode: boolean | null
           secondary_color: string | null
+          show_code: string
           show_template: string | null
           show_time: string | null
           team_audio_lead: string | null
@@ -384,6 +385,7 @@ export type Database = {
           room_name?: string | null
           safety_mode?: boolean | null
           secondary_color?: string | null
+          show_code: string
           show_template?: string | null
           show_time?: string | null
           team_audio_lead?: string | null
@@ -423,6 +425,7 @@ export type Database = {
           room_name?: string | null
           safety_mode?: boolean | null
           secondary_color?: string | null
+          show_code?: string
           show_template?: string | null
           show_time?: string | null
           team_audio_lead?: string | null
@@ -482,6 +485,7 @@ export type Database = {
     }
     Functions: {
       cleanup_expired_challenges: { Args: never; Returns: undefined }
+      generate_show_code: { Args: never; Returns: string }
       is_show_member: {
         Args: { _roles?: string[]; _show_id: string; _user_id: string }
         Returns: boolean

@@ -70,6 +70,8 @@ export interface Show {
   team_lighting_lead?: string | null;
   team_audio_lead?: string | null;
   team_video_lead?: string | null;
+  // Show Code
+  show_code?: string;
 }
 
 export interface CueSuggestion {
