@@ -370,17 +370,18 @@ const Timeline: React.FC<TimelineProps> = ({
         
         {/* Center: Countdown */}
         {showCountdown && (
-          <div className={cn(
-            "flex items-center gap-2 px-4 py-1 rounded-full",
-            showCountdown.isLive ? "bg-runway-success/20" : "bg-muted/50"
-          )}>
-            <Clock className={cn("h-4 w-4", showCountdown.isLive ? "text-runway-success" : "text-primary")} />
-            <span className={cn(
-              "font-mono text-lg font-bold",
-              showCountdown.isLive ? "text-runway-success" : "text-foreground"
-            )}>
-              {showCountdown.isLive ? "LIVE" : `T-${showCountdown.text}`}
-            </span>
+          <div className="absolute left-1/2 -translate-x-1/2">
+            <div className="text-center">
+              <div className="text-[10px] uppercase text-muted-foreground tracking-wider">
+                {showCountdown.isLive ? 'Status' : 'Countdown'}
+              </div>
+              <div className={cn(
+                "font-mono text-xl font-bold",
+                showCountdown.isLive ? "text-runway-error animate-pulse" : "text-runway-teal"
+              )}>
+                {showCountdown.isLive ? 'LIVE' : `T-${showCountdown.text}`}
+              </div>
+            </div>
           </div>
         )}
         
