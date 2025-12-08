@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
@@ -14,12 +14,15 @@ import ConfirmDialog from './ConfirmDialog';
 import ShareModal from './ShareModal';
 import ViewToggle from './ViewToggle';
 import AddTrackModal, { Track } from './AddTrackModal';
+import CollaboratorCursors from './CollaboratorCursors';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings } from 'lucide-react';
 import { useCues, useAISuggestions } from '@/hooks/useCues';
+import { useRealtimePresence } from '@/hooks/useRealtimePresence';
+import { useAuthContext } from '@/contexts/AuthContext';
 import { Cue, ViewMode, CueSuggestion, Show } from '@/types/cue';
 import ShowFormModal from './ShowFormModal';
 
@@ -85,11 +88,29 @@ const Dashboard: React.FC = () => {
   const [isEditShowOpen, setIsEditShowOpen] = useState(false);
   const [editingShow, setEditingShow] = useState<Show | null>(null);
   const sidebarRef = useRef<{ openCreateModal: () => void } | null>(null);
+  const mainContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { user, profile } = useAuthContext();
   
   // Use database hooks with active show
   const { cues, loading, animatingCues, addCue, updateCue, deleteCue, duplicateCue, reorderCues, bulkUpdateCues, bulkDeleteCues, getNextStartTime } = useCues(activeShowId);
   const { suggestions, loading: aiLoading, getSuggestions, setSuggestions } = useAISuggestions();
+  
+  // Realtime presence
+  const presenceUser = useMemo(() => {
+    if (!user) return null;
+    return {
+      id: user.id,
+      name: profile?.full_name || user.email?.split('@')[0] || 'Anonymous',
+      email: user.email || '',
+      avatar_url: profile?.avatar_url || undefined,
+    };
+  }, [user, profile]);
+  
+  const { activeUsers, isConnected, updateCursor, updateArea, updateSelectedCue } = useRealtimePresence(
+    activeShowId,
+    presenceUser
+  );
 
   // Load show from URL parameter
   useEffect(() => {
@@ -207,10 +228,14 @@ const Dashboard: React.FC = () => {
   const timelineCues = cues.map(cueToTimelineCue);
   
   // Handle cue selection
-  const handleCueSelect = (cueId: string | null, cue: TimelineCue | null) => {
+  const handleCueSelect = useCallback((cueId: string | null, cue: TimelineCue | null) => {
     setSelectedCueId(cueId);
     setSelectedCue(cue);
-  };
+    updateSelectedCue(cueId);
+    if (cueId) {
+      updateArea('cue-panel');
+    }
+  }, [updateSelectedCue, updateArea]);
   
   // Handle cue update
   const handleCueUpdate = async (updatedCue: TimelineCue) => {
@@ -534,6 +559,38 @@ const Dashboard: React.FC = () => {
     };
   }, [selectedCue, copiedCue, cues.length, getNextStartTime]);
   
+  // Track cursor movement for presence
+  useEffect(() => {
+    if (!activeShowId || !mainContentRef.current) return;
+    
+    const throttledUpdate = (() => {
+      let lastUpdate = 0;
+      return (x: number, y: number) => {
+        const now = Date.now();
+        if (now - lastUpdate > 50) { // Throttle to 20fps
+          updateCursor(x, y);
+          lastUpdate = now;
+        }
+      };
+    })();
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      throttledUpdate(e.clientX, e.clientY);
+    };
+    
+    const container = mainContentRef.current;
+    container.addEventListener('mousemove', handleMouseMove);
+    
+    return () => {
+      container.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [activeShowId, updateCursor]);
+  
+  // Update area when view mode changes
+  useEffect(() => {
+    updateArea(viewMode === 'timeline' ? 'timeline' : 'table');
+  }, [viewMode, updateArea]);
+  
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -547,11 +604,18 @@ const Dashboard: React.FC = () => {
       <div className="flex h-screen overflow-hidden bg-background text-foreground">
         <Sidebar activeShowId={activeShowId} onShowSelect={handleShowSelect} onQuickAddCue={handleQuickAddCue} />
         
-        <div className="flex flex-col flex-1 overflow-hidden">
+        <div ref={mainContentRef} className="flex flex-col flex-1 overflow-hidden relative">
+          {/* Collaborator cursors */}
+          {activeShowId && activeUsers.length > 0 && (
+            <CollaboratorCursors users={activeUsers} containerRef={mainContentRef} />
+          )}
+          
           <TopBar 
             showName={showName || 'Home'} 
             showInfo={showInfo}
             onShare={activeShowId ? () => setIsShareOpen(true) : undefined}
+            activeUsers={activeUsers}
+            isConnected={isConnected}
           />
           
           {!activeShowId ? (

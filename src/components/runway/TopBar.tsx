@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Share2, Check, Presentation } from 'lucide-react';
+import { Clock, Share2, Check, Presentation, Wifi, WifiOff } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import NotificationPopover from './NotificationPopover';
 import UserMenu from './UserMenu';
+import CollaboratorAvatars from './CollaboratorAvatars';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
+import { PresenceUser } from '@/hooks/useRealtimePresence';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
@@ -22,9 +24,11 @@ interface TopBarProps {
   showInfo?: ShowInfo;
   onShowcallerMode?: () => void;
   onShare?: () => void;
+  activeUsers?: PresenceUser[];
+  isConnected?: boolean;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ showName, showInfo, onShowcallerMode, onShare }) => {
+const TopBar: React.FC<TopBarProps> = ({ showName, showInfo, onShowcallerMode, onShare, activeUsers = [], isConnected = false }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [saveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const { user } = useAuthContext();
@@ -88,8 +92,33 @@ const TopBar: React.FC<TopBarProps> = ({ showName, showInfo, onShowcallerMode, o
           </Badge>
         </div>
         
-        {/* Right: Actions */}
+        {/* Right: Collaborators and Actions */}
         <div className="flex items-center gap-3">
+          {/* Connection status */}
+          {showName && (
+            <div className="flex items-center gap-2">
+              {isConnected ? (
+                <Badge variant="outline" className="text-xs gap-1 text-green-500 border-green-500/30">
+                  <Wifi size={10} />
+                  Live
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                  <WifiOff size={10} />
+                  Offline
+                </Badge>
+              )}
+            </div>
+          )}
+
+          {/* Active collaborators */}
+          {activeUsers.length > 0 && (
+            <>
+              <CollaboratorAvatars users={activeUsers} maxVisible={4} />
+              <Separator orientation="vertical" className="h-6" />
+            </>
+          )}
+
           {onShowcallerMode && (
             <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={onShowcallerMode}>
               <Presentation size={14} />
