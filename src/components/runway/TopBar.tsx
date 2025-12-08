@@ -41,7 +41,9 @@ const TopBar: React.FC<TopBarProps> = ({ showName, showInfo, onShowcallerMode, o
   const formatEventDate = (dateStr?: string) => {
     if (!dateStr) return null;
     try {
-      const date = new Date(dateStr);
+      // Parse as local date to avoid timezone shift
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
       return format(date, 'EEEE, MMM d');
     } catch {
       return null;
