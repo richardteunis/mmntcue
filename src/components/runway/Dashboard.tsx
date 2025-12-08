@@ -3,8 +3,9 @@ import { useParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import HomeView from './HomeView';
-import Timeline, { TimelineCue } from './Timeline';
+import TimelineView, { TimelineCue } from './TimelineView';
 import TableView from './TableView';
+import Timeline from './Timeline';
 import CuePanel from './CuePanel';
 import AddEditCuePanel from './AddEditCuePanel';
 import AISuggestPanel from './AISuggestPanel';
@@ -464,6 +465,16 @@ const Dashboard: React.FC = () => {
                   </div>
                   
                   {viewMode === 'timeline' ? (
+                    <TimelineView 
+                      className="flex-1" 
+                      onCueSelect={handleCueSelect}
+                      selectedCueId={selectedCueId}
+                      onCueChange={handleCueUpdate}
+                      cues={timelineCues}
+                      onCueDelete={handleCueDelete}
+                      onCueDuplicate={handleCueDuplicate}
+                    />
+                  ) : (
                     <Timeline 
                       className="flex-1" 
                       onCueSelect={handleCueSelect}
@@ -477,21 +488,6 @@ const Dashboard: React.FC = () => {
                       selectedCueIds={selectedCueIds}
                       onSelectCue={handleSelectCue}
                       onBulkUpdate={handleBulkUpdate}
-                    />
-                  ) : (
-                    <TableView
-                      cues={cues}
-                      selectedCueId={selectedCueId}
-                      onCueSelect={(id, cue) => {
-                        setSelectedCueId(id);
-                        setSelectedCue(cue ? cueToTimelineCue(cue as unknown as Cue) : null);
-                      }}
-                      onCueUpdate={(cue) => {
-                        updateCue(cue.id, cue);
-                      }}
-                      onCueDelete={handleCueDelete}
-                      onCueDuplicate={handleCueDuplicate}
-                      onEditCue={(cue) => handleEditCue(cueToTimelineCue(cue))}
                     />
                   )}
                 </div>
