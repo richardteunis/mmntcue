@@ -5,6 +5,7 @@ import { PresenceUser } from '@/hooks/useRealtimePresence';
 interface CollaboratorCursorsProps {
   users: PresenceUser[];
   containerRef: React.RefObject<HTMLElement>;
+  currentArea: 'timeline' | 'table' | 'cue-panel' | 'sidebar';
 }
 
 // Map Tailwind bg colors to actual hex values for SVG
@@ -34,10 +35,13 @@ const getHexColor = (bgClass: string): string => {
 
 const CollaboratorCursors: React.FC<CollaboratorCursorsProps> = ({
   users,
-  containerRef
+  containerRef,
+  currentArea
 }) => {
-  // Only show users with cursor positions
-  const usersWithCursors = users.filter(user => user.cursor);
+  // Only show users with cursor positions AND in the same area
+  const usersWithCursors = users.filter(
+    user => user.cursor && user.area === currentArea
+  );
 
   if (usersWithCursors.length === 0 || !containerRef.current) return null;
 
