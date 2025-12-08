@@ -57,6 +57,59 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
 
+  const signIn = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Welcome back!',
+        description: 'You have signed in successfully.',
+      });
+
+      return { error: null };
+    } catch (error: any) {
+      toast({
+        title: 'Sign in failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return { error };
+    }
+  };
+
+  const signUp = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Account created!',
+        description: 'Welcome to MMNT.Cue.',
+      });
+
+      return { error: null };
+    } catch (error: any) {
+      toast({
+        title: 'Sign up failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return { error };
+    }
+  };
+
   const signInWithMagicLink = async (email: string) => {
     try {
       const { error } = await supabase.auth.signInWithOtp({
@@ -136,6 +189,8 @@ export function useAuth() {
     session,
     profile,
     loading,
+    signIn,
+    signUp,
     signInWithMagicLink,
     signOut,
     updateProfile,
