@@ -20,11 +20,20 @@ import { ShowMember, Profile } from '@/types/user';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
+interface ActiveUser {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url?: string;
+}
+
 interface ShareModalProps {
   isOpen: boolean;
   onClose: () => void;
   showId: string;
   showName: string;
+  activeUsers?: ActiveUser[];
+  highlightUserId?: string | null;
 }
 
 const roleLabels: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -34,7 +43,7 @@ const roleLabels: Record<string, { label: string; icon: React.ReactNode; color: 
   guest: { label: 'Guest', icon: <Eye className="h-3 w-3" />, color: 'bg-purple-500/20 text-purple-500' },
 };
 
-const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showName }) => {
+const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showName, activeUsers = [], highlightUserId }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [role, setRole] = useState<'editor' | 'viewer'>('viewer');
   const [members, setMembers] = useState<ShowMember[]>([]);
@@ -477,6 +486,83 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
               </Button>
             </div>
           </div>
+
+          {/* Active Users Not Yet Members */}
+          {(() => {
+            const memberUserIds = members.map(m => m.user_id).filter(Boolean);
+            const nonMemberActiveUsers = activeUsers.filter(u => 
+              u.id !== user?.id && !memberUserIds.includes(u.id)
+            );
+            
+            if (nonMemberActiveUsers.length === 0) return null;
+            
+            return (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                  Currently online ({nonMemberActiveUsers.length})
+                </Label>
+                <div className="border border-green-500/30 rounded-lg divide-y divide-border bg-green-500/5">
+                  {nonMemberActiveUsers.map((activeUser) => {
+                    const isHighlighted = highlightUserId === activeUser.id;
+                    return (
+                      <div 
+                        key={activeUser.id} 
+                        className={cn(
+                          "flex items-center gap-3 p-3 transition-colors",
+                          isHighlighted && "bg-primary/10"
+                        )}
+                      >
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={activeUser.avatar_url} />
+                          <AvatarFallback className="text-xs bg-green-500 text-white">
+                            {(activeUser.name || activeUser.email || '?').charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium truncate">{activeUser.name}</p>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-green-500/30 text-green-500">
+                              Online
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">{activeUser.email}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0 text-xs h-7 gap-1"
+                          onClick={() => {
+                            // Add them as a member - create minimal profile object
+                            const profile: Profile = {
+                              id: activeUser.id,
+                              email: activeUser.email,
+                              full_name: activeUser.name,
+                              avatar_url: activeUser.avatar_url || null,
+                              timezone: null,
+                              theme: null,
+                              keyboard_shortcuts_enabled: null,
+                              email_notifications: null,
+                              created_at: new Date().toISOString(),
+                              updated_at: new Date().toISOString(),
+                            };
+                            handleInviteUser(profile);
+                          }}
+                          disabled={inviting}
+                        >
+                          <UserPlus className="h-3 w-3" />
+                          Add
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Members List */}
           <div className="space-y-2">
