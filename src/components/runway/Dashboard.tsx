@@ -60,6 +60,7 @@ const Dashboard: React.FC = () => {
   const { showId: urlShowId } = useParams<{ showId?: string }>();
   const [activeShowId, setActiveShowId] = useState<string | null>(urlShowId || null);
   const [showName, setShowName] = useState<string>('');
+  const [showInfo, setShowInfo] = useState<{ client?: string; eventDate?: string; showTime?: string }>({});
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
   const [selectedCue, setSelectedCue] = useState<TimelineCue | null>(null);
   const [selectedCueIds, setSelectedCueIds] = useState<string[]>([]);
@@ -82,31 +83,54 @@ const Dashboard: React.FC = () => {
   // Load show from URL parameter
   useEffect(() => {
     if (urlShowId && !showName) {
-      // Fetch show name from database
-      const fetchShowName = async () => {
+      // Fetch show details from database
+      const fetchShowDetails = async () => {
         const { supabase } = await import('@/integrations/supabase/client');
         const { data } = await supabase
           .from('shows')
-          .select('name')
+          .select('name, event_name, event_start_date, show_time')
           .eq('id', urlShowId)
           .maybeSingle();
         
         if (data) {
           setShowName(data.name);
           setActiveShowId(urlShowId);
+          setShowInfo({
+            client: data.event_name || undefined,
+            eventDate: data.event_start_date || undefined,
+            showTime: data.show_time || undefined,
+          });
         }
       };
-      fetchShowName();
+      fetchShowDetails();
     }
   }, [urlShowId, showName]);
 
   // Handle show selection from sidebar
-  const handleShowSelect = (showId: string, name: string) => {
+  const handleShowSelect = async (showId: string, name: string) => {
     setActiveShowId(showId);
     setShowName(name);
     setSelectedCueId(null);
     setSelectedCue(null);
     setSelectedCueIds([]);
+    
+    // Fetch additional show info
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { data } = await supabase
+      .from('shows')
+      .select('event_name, event_start_date, show_time')
+      .eq('id', showId)
+      .maybeSingle();
+    
+    if (data) {
+      setShowInfo({
+        client: data.event_name || undefined,
+        eventDate: data.event_start_date || undefined,
+        showTime: data.show_time || undefined,
+      });
+    } else {
+      setShowInfo({});
+    }
   };
 
   // Convert database cues to timeline cues (already sorted by start_time from hook)
@@ -400,6 +424,7 @@ const Dashboard: React.FC = () => {
         <div className="flex flex-col flex-1 overflow-hidden">
           <TopBar 
             showName={showName || 'Home'} 
+            showInfo={showInfo}
             onShare={activeShowId ? () => setIsShareOpen(true) : undefined}
           />
           
