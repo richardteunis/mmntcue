@@ -488,11 +488,11 @@ const Timeline: React.FC<TimelineProps> = ({
       </div>
 
       {/* Run of Show Grid */}
-      <div className="flex-1 overflow-auto">
-        <Table>
+      <div className="flex-1 overflow-auto border-t border-border">
+        <Table className="border-collapse">
           <TableHeader className="sticky top-0 bg-card z-10">
-            <TableRow className="hover:bg-transparent border-b-2 border-border">
-              <TableHead className="w-[40px] text-center font-semibold text-[10px] uppercase tracking-wider">
+            <TableRow className="hover:bg-transparent border-b-2 border-border bg-muted/50">
+              <TableHead className="w-[40px] text-center font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">
                 <Checkbox 
                   checked={selectedCueIds.length > 0 && selectedCueIds.length === filteredCues.length}
                   onCheckedChange={(checked) => {
@@ -509,25 +509,25 @@ const Timeline: React.FC<TimelineProps> = ({
                   }}
                 />
               </TableHead>
-              <TableHead className="w-[40px] text-center font-semibold text-[10px] uppercase tracking-wider">#</TableHead>
-              <TableHead className="min-w-[250px] font-semibold text-[10px] uppercase tracking-wider">Items</TableHead>
-              <TableHead className="w-[100px] font-semibold text-[10px] uppercase tracking-wider">
+              <TableHead className="w-[50px] text-center font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">Cue</TableHead>
+              <TableHead className="min-w-[250px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">Items</TableHead>
+              <TableHead className="w-[100px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">
                 <div className="flex items-center gap-1">
                   <ChevronDown className="h-3 w-3" /> Start
                 </div>
               </TableHead>
-              <TableHead className="w-[80px] font-semibold text-[10px] uppercase tracking-wider">Duration</TableHead>
-              <TableHead className="w-[140px] font-semibold text-[10px] uppercase tracking-wider">Notes</TableHead>
+              <TableHead className="w-[80px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">Duration</TableHead>
+              <TableHead className="w-[160px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">Notes</TableHead>
               {visibleColumns.map(colId => {
                 const col = TRACK_COLUMNS.find(c => c.id === colId);
                 if (!col) return null;
                 return (
                   <TableHead 
                     key={col.id} 
-                    className={cn("w-[120px] text-center font-semibold text-[10px] uppercase tracking-wider", col.lightBg)}
+                    className={cn("w-[120px] text-center font-semibold text-[10px] uppercase tracking-wider border-r border-border/50", col.lightBg)}
                   >
                     <div className="flex items-center justify-center gap-1">
-                      <ChevronDown className="h-3 w-3 opacity-50" />
+                      <div className={cn("w-2 h-2 rounded-full", col.color)} />
                       {col.label}
                     </div>
                   </TableHead>
@@ -553,8 +553,8 @@ const Timeline: React.FC<TimelineProps> = ({
                   onDragEnd={handleDragEnd}
                   onDrop={(e) => handleDrop(e, index)}
                   className={cn(
-                    "cursor-pointer transition-all group",
-                    (isSelected || isMultiSelected) && "bg-primary/10",
+                    "cursor-pointer transition-all group border-b border-border hover:bg-muted/30",
+                    (isSelected || isMultiSelected) && "bg-primary/10 border-l-2 border-l-primary",
                     isCurrentCue && "bg-runway-success/20 ring-1 ring-runway-success",
                     isDragging && "opacity-50",
                     isDragOver && "border-t-2 border-t-primary"
@@ -568,7 +568,7 @@ const Timeline: React.FC<TimelineProps> = ({
                     }
                   }}
                 >
-                  <TableCell className="text-center py-3" onClick={(e) => e.stopPropagation()}>
+                  <TableCell className="text-center py-3 border-r border-border/50" onClick={(e) => e.stopPropagation()}>
                     <Checkbox 
                       checked={isMultiSelected}
                       onCheckedChange={(checked) => {
@@ -576,10 +576,10 @@ const Timeline: React.FC<TimelineProps> = ({
                       }}
                     />
                   </TableCell>
-                  <TableCell className="text-center font-mono text-xs text-muted-foreground py-3">
+                  <TableCell className="text-center font-mono text-xs text-muted-foreground py-3 border-r border-border/50">
                     {index + 1}
                   </TableCell>
-                  <TableCell className="py-3">
+                  <TableCell className="py-3 border-r border-border/50">
                     <div className="flex items-center gap-2">
                       <GripVertical 
                         size={14} 
@@ -613,7 +613,7 @@ const Timeline: React.FC<TimelineProps> = ({
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="py-3">
+                  <TableCell className="py-3 border-r border-border/50">
                     {editingCell?.id === cue.id && editingCell?.field === 'time' ? (
                       <Input
                         autoFocus
@@ -639,7 +639,7 @@ const Timeline: React.FC<TimelineProps> = ({
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="py-3">
+                  <TableCell className="py-3 border-r border-border/50">
                     {editingCell?.id === cue.id && editingCell?.field === 'duration' ? (
                       <Input
                         autoFocus
@@ -664,8 +664,8 @@ const Timeline: React.FC<TimelineProps> = ({
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="py-3">
-                    <span className="text-xs text-muted-foreground truncate block max-w-[130px]">
+                  <TableCell className="py-3 border-r border-border/50">
+                    <span className="text-xs text-muted-foreground truncate block max-w-[150px]">
                       {cue.notes || '—'}
                     </span>
                   </TableCell>
@@ -675,12 +675,12 @@ const Timeline: React.FC<TimelineProps> = ({
                       <TableCell 
                         key={colId} 
                         className={cn(
-                          "py-3 text-center",
+                          "py-3 text-center border-r border-border/50",
                           getTrackCellColor(cue.type, colId)
                         )}
                       >
                         {isActiveColumn && (
-                          <div className="text-xs px-2 truncate">
+                          <div className="text-xs px-2 truncate font-medium">
                             {cue.notes || cue.name.slice(0, 20)}
                           </div>
                         )}

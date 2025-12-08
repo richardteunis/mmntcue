@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutGrid, Table2 } from 'lucide-react';
+import { Clock, Table2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ViewMode } from '@/types/cue';
@@ -13,7 +13,7 @@ interface ViewToggleProps {
 
 const ViewToggle: React.FC<ViewToggleProps> = ({ viewMode, onViewModeChange, className }) => {
   const views = [
-    { mode: 'timeline' as ViewMode, icon: LayoutGrid, label: 'Timeline View', shortcut: 'Ctrl+1' },
+    { mode: 'timeline' as ViewMode, icon: Clock, label: 'Timeline View', shortcut: 'Ctrl+1' },
     { mode: 'table' as ViewMode, icon: Table2, label: 'Table View', shortcut: 'Ctrl+2' },
   ];
 
