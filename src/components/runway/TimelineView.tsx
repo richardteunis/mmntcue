@@ -78,6 +78,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const [panMode, setPanMode] = useState(false);
   
+  const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
+  
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
@@ -168,12 +170,42 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   };
 
   const handleTimelineClick = (e: React.MouseEvent) => {
-    if (!timelineRef.current || panMode) return;
+    if (!timelineRef.current || panMode || isDraggingPlayhead) return;
     const rect = timelineRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left + (containerRef.current?.scrollLeft || 0);
     const time = x / pixelsPerSecond;
     setCurrentTime(Math.max(0, Math.min(time, totalDuration)));
   };
+
+  const handlePlayheadMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDraggingPlayhead(true);
+    setIsPlaying(false);
+  };
+
+  useEffect(() => {
+    if (!isDraggingPlayhead) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!timelineRef.current) return;
+      const rect = timelineRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left + (containerRef.current?.scrollLeft || 0);
+      const time = x / pixelsPerSecond;
+      setCurrentTime(Math.max(0, Math.min(time, totalDuration)));
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingPlayhead(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingPlayhead, pixelsPerSecond, totalDuration]);
 
   const handleCueClick = (e: React.MouseEvent, cue: TimelineCue) => {
     e.stopPropagation();
@@ -394,10 +426,19 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
             {/* Playhead */}
             <div 
-              className="absolute top-0 bottom-0 w-0.5 bg-primary z-30 pointer-events-none"
+              className={cn(
+                "absolute top-0 bottom-0 w-0.5 bg-primary z-30 cursor-ew-resize",
+                isDraggingPlayhead && "bg-primary/80"
+              )}
               style={{ left: currentTime * pixelsPerSecond }}
+              onMouseDown={handlePlayheadMouseDown}
             >
-              <div className="absolute -top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-primary rotate-45" />
+              <div 
+                className={cn(
+                  "absolute -top-0 left-1/2 -translate-x-1/2 w-4 h-4 bg-primary rotate-45 cursor-ew-resize hover:scale-110 transition-transform",
+                  isDraggingPlayhead && "scale-110"
+                )} 
+              />
             </div>
           </div>
         </div>
