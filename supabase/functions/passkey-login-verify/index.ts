@@ -20,6 +20,8 @@ serve(async (req) => {
     const body = await req.json();
     const { credential, challenge } = body;
 
+    console.log('Verifying passkey login with credential:', credential?.id);
+
     if (!credential || !credential.id) {
       return new Response(JSON.stringify({ error: 'Invalid credential data' }), {
         status: 400,
@@ -29,12 +31,14 @@ serve(async (req) => {
 
     // Verify challenge exists and hasn't expired
     const { data: challengeData, error: challengeError } = await adminClient
-      .from('passkey_credentials')
+      .from('webauthn_challenges')
       .select('*')
-      .eq('credential_id', `login_challenge_${challenge}`)
+      .eq('challenge', challenge)
+      .eq('type', 'login')
       .single();
 
     if (challengeError || !challengeData) {
+      console.error('Challenge not found:', challengeError);
       return new Response(JSON.stringify({ error: 'Invalid or expired challenge' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -42,11 +46,11 @@ serve(async (req) => {
     }
 
     // Check if challenge expired
-    if (Date.now() > challengeData.counter) {
+    if (new Date(challengeData.expires_at) < new Date()) {
       await adminClient
-        .from('passkey_credentials')
+        .from('webauthn_challenges')
         .delete()
-        .eq('credential_id', `login_challenge_${challenge}`);
+        .eq('id', challengeData.id);
       
       return new Response(JSON.stringify({ error: 'Login expired, please try again' }), {
         status: 400,
@@ -54,11 +58,11 @@ serve(async (req) => {
       });
     }
 
-    // Delete the challenge
+    // Delete the challenge (one-time use)
     await adminClient
-      .from('passkey_credentials')
+      .from('webauthn_challenges')
       .delete()
-      .eq('credential_id', `login_challenge_${challenge}`);
+      .eq('id', challengeData.id);
 
     // Find the credential and associated user
     const { data: storedCredential, error: credError } = await adminClient
@@ -68,11 +72,14 @@ serve(async (req) => {
       .single();
 
     if (credError || !storedCredential) {
-      return new Response(JSON.stringify({ error: 'Passkey not found' }), {
+      console.error('Credential not found:', credError);
+      return new Response(JSON.stringify({ error: 'Passkey not found. Please sign in with email first and register a passkey.' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    console.log('Found credential for user:', storedCredential.user_id);
 
     // Update last used timestamp and counter
     await adminClient
@@ -89,11 +96,14 @@ serve(async (req) => {
     );
 
     if (userError || !userData.user) {
+      console.error('User not found:', userError);
       return new Response(JSON.stringify({ error: 'User not found' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    console.log('Generating magic link for user:', userData.user.email);
 
     // Generate a magic link token for the user (passwordless sign-in)
     const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
@@ -117,6 +127,8 @@ serve(async (req) => {
     const token = linkUrl.searchParams.get('token');
     const type = linkUrl.searchParams.get('type');
 
+    console.log('Login successful, returning token');
+
     return new Response(JSON.stringify({ 
       success: true,
       token,
@@ -126,7 +138,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error in passkey-login-verify:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

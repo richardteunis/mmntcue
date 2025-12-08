@@ -40,6 +40,8 @@ serve(async (req) => {
     const body = await req.json();
     const { credential, deviceName } = body;
 
+    console.log('Verifying passkey registration for user:', user.id);
+
     if (!credential || !credential.id || !credential.response) {
       return new Response(JSON.stringify({ error: 'Invalid credential data' }), {
         status: 400,
@@ -51,12 +53,16 @@ serve(async (req) => {
 
     // Verify challenge exists and hasn't expired
     const { data: challengeData, error: challengeError } = await adminClient
-      .from('passkey_credentials')
+      .from('webauthn_challenges')
       .select('*')
-      .eq('credential_id', `challenge_${user.id}`)
+      .eq('user_id', user.id)
+      .eq('type', 'register')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single();
 
     if (challengeError || !challengeData) {
+      console.error('Challenge not found:', challengeError);
       return new Response(JSON.stringify({ error: 'No pending registration' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -64,11 +70,11 @@ serve(async (req) => {
     }
 
     // Check if challenge expired
-    if (Date.now() > challengeData.counter) {
+    if (new Date(challengeData.expires_at) < new Date()) {
       await adminClient
-        .from('passkey_credentials')
+        .from('webauthn_challenges')
         .delete()
-        .eq('credential_id', `challenge_${user.id}`);
+        .eq('id', challengeData.id);
       
       return new Response(JSON.stringify({ error: 'Registration expired, please try again' }), {
         status: 400,
@@ -76,11 +82,11 @@ serve(async (req) => {
       });
     }
 
-    // Delete the challenge
+    // Delete the challenge (one-time use)
     await adminClient
-      .from('passkey_credentials')
+      .from('webauthn_challenges')
       .delete()
-      .eq('credential_id', `challenge_${user.id}`);
+      .eq('id', challengeData.id);
 
     // Store the credential
     const { error: insertError } = await adminClient
@@ -103,11 +109,13 @@ serve(async (req) => {
       });
     }
 
+    console.log('Passkey registered successfully for user:', user.id);
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error in passkey-register-verify:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

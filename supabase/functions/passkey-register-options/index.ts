@@ -46,8 +46,9 @@ serve(async (req) => {
       });
     }
 
-    // Get existing credentials for exclusion
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Get existing credentials for exclusion
     const { data: existingCredentials } = await adminClient
       .from('passkey_credentials')
       .select('credential_id')
@@ -58,18 +59,24 @@ serve(async (req) => {
     crypto.getRandomValues(challenge);
     const challengeBase64 = base64urlEncode(challenge);
 
-    // Store challenge temporarily (expires in 5 minutes)
-    await adminClient
-      .from('passkey_credentials')
-      .upsert({
-        id: crypto.randomUUID(),
+    // Store challenge in dedicated table
+    const { error: insertError } = await adminClient
+      .from('webauthn_challenges')
+      .insert({
+        challenge: challengeBase64,
+        type: 'register',
         user_id: user.id,
-        credential_id: `challenge_${user.id}`,
-        public_key: challengeBase64,
-        counter: Date.now() + 5 * 60 * 1000, // Expiry timestamp
-      }, { onConflict: 'credential_id' });
+        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes
+      });
+
+    if (insertError) {
+      console.error('Failed to store challenge:', insertError);
+      throw new Error('Failed to create registration challenge');
+    }
 
     const rpId = new URL(req.headers.get('origin') || 'https://localhost').hostname;
+
+    console.log('Registration options generated for user:', user.id, 'rpId:', rpId);
 
     const options = {
       challenge: challengeBase64,
@@ -89,7 +96,6 @@ serve(async (req) => {
       timeout: 60000,
       attestation: 'none',
       excludeCredentials: (existingCredentials || [])
-        .filter(c => !c.credential_id.startsWith('challenge_'))
         .map(c => ({
           id: c.credential_id,
           type: 'public-key',
@@ -107,7 +113,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error in passkey-register-options:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
