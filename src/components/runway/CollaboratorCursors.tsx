@@ -54,7 +54,7 @@ const CollaboratorCursors: React.FC<CollaboratorCursorsProps> = ({
             style={{
               left: user.cursor!.x,
               top: user.cursor!.y,
-              transition: 'left 0.12s ease-out, top 0.12s ease-out',
+              // No transition - instant updates for real-time feel
             }}
           >
             {/* Figma-style cursor */}

@@ -18,6 +18,11 @@ interface PresenceState {
   [key: string]: PresenceUser[];
 }
 
+interface CursorBroadcast {
+  userId: string;
+  cursor: { x: number; y: number };
+}
+
 // Generate a consistent color for a user based on their ID
 const getUserColor = (userId: string): string => {
   const colors = [
@@ -55,36 +60,30 @@ export const useRealtimePresence = (
   const [activeUsers, setActiveUsers] = useState<PresenceUser[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const usersRef = useRef<Map<string, PresenceUser>>(new Map());
   const trackingRef = useRef<{
-    cursor: { x: number; y: number } | undefined;
     area: PresenceUser['area'];
     selectedCueId: string | null;
   }>({
-    cursor: undefined,
     area: 'timeline',
     selectedCueId: null,
   });
 
-  // Track cursor position
+  // Broadcast cursor position (fast, no persistence)
   const updateCursor = useCallback((x: number, y: number) => {
-    trackingRef.current.cursor = { x, y };
-    
     if (channelRef.current && currentUser) {
-      channelRef.current.track({
-        id: currentUser.id,
-        name: currentUser.name,
-        email: currentUser.email,
-        avatar_url: currentUser.avatar_url,
-        color: getUserColor(currentUser.id),
-        cursor: { x, y },
-        area: trackingRef.current.area,
-        selectedCueId: trackingRef.current.selectedCueId,
-        lastActive: new Date().toISOString(),
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'cursor',
+        payload: {
+          userId: currentUser.id,
+          cursor: { x, y },
+        },
       });
     }
   }, [currentUser]);
 
-  // Track which area the user is in
+  // Track which area the user is in (slower, uses presence)
   const updateArea = useCallback((area: PresenceUser['area']) => {
     trackingRef.current.area = area;
     
@@ -95,7 +94,6 @@ export const useRealtimePresence = (
         email: currentUser.email,
         avatar_url: currentUser.avatar_url,
         color: getUserColor(currentUser.id),
-        cursor: trackingRef.current.cursor,
         area,
         selectedCueId: trackingRef.current.selectedCueId,
         lastActive: new Date().toISOString(),
@@ -114,7 +112,6 @@ export const useRealtimePresence = (
         email: currentUser.email,
         avatar_url: currentUser.avatar_url,
         color: getUserColor(currentUser.id),
-        cursor: trackingRef.current.cursor,
         area: trackingRef.current.area,
         selectedCueId: cueId,
         lastActive: new Date().toISOString(),
@@ -130,43 +127,65 @@ export const useRealtimePresence = (
     }
 
     const channelName = `presence:show:${showId}`;
-    const channel = supabase.channel(channelName);
+    const channel = supabase.channel(channelName, {
+      config: {
+        presence: { key: currentUser.id },
+      },
+    });
     channelRef.current = channel;
 
     channel
+      // Handle presence sync for user join/leave
       .on('presence', { event: 'sync' }, () => {
         const state: PresenceState = channel.presenceState();
-        const users: PresenceUser[] = [];
         
         Object.values(state).forEach((presences) => {
           presences.forEach((presence) => {
-            // Don't include current user in the list
             if (presence.id !== currentUser.id) {
-              users.push(presence);
+              const existing = usersRef.current.get(presence.id);
+              usersRef.current.set(presence.id, {
+                ...presence,
+                cursor: existing?.cursor, // Preserve cursor from broadcasts
+              });
             }
           });
         });
         
-        setActiveUsers(users);
+        // Remove users not in state
+        const currentIds = new Set(
+          Object.values(state).flatMap(p => p.map(u => u.id))
+        );
+        usersRef.current.forEach((_, id) => {
+          if (!currentIds.has(id) && id !== currentUser.id) {
+            usersRef.current.delete(id);
+          }
+        });
+        
+        setActiveUsers(Array.from(usersRef.current.values()));
       })
-      .on('presence', { event: 'join' }, ({ newPresences }) => {
-        console.log('User joined:', newPresences);
-      })
-      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        console.log('User left:', leftPresences);
+      // Handle fast cursor broadcasts
+      .on('broadcast', { event: 'cursor' }, ({ payload }) => {
+        const { userId, cursor } = payload as CursorBroadcast;
+        
+        if (userId !== currentUser.id) {
+          const existing = usersRef.current.get(userId);
+          if (existing) {
+            usersRef.current.set(userId, { ...existing, cursor });
+            setActiveUsers(Array.from(usersRef.current.values()));
+          }
+        }
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
           
-          // Track initial presence
+          // Track initial presence (without cursor - that's broadcast separately)
           await channel.track({
             id: currentUser.id,
             name: currentUser.name,
             email: currentUser.email,
             avatar_url: currentUser.avatar_url,
             color: getUserColor(currentUser.id),
-            cursor: undefined,
             area: 'timeline',
             selectedCueId: null,
             lastActive: new Date().toISOString(),
@@ -177,6 +196,7 @@ export const useRealtimePresence = (
     return () => {
       channel.unsubscribe();
       channelRef.current = null;
+      usersRef.current.clear();
       setIsConnected(false);
     };
   }, [showId, currentUser]);

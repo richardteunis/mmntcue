@@ -559,30 +559,38 @@ const Dashboard: React.FC = () => {
     };
   }, [selectedCue, copiedCue, cues.length, getNextStartTime]);
   
-  // Track cursor movement for presence
+  // Track cursor movement for presence - high frequency broadcasts
   useEffect(() => {
     if (!activeShowId || !mainContentRef.current) return;
     
-    const throttledUpdate = (() => {
-      let lastUpdate = 0;
-      return (x: number, y: number) => {
-        const now = Date.now();
-        if (now - lastUpdate > 50) { // Throttle to 20fps
-          updateCursor(x, y);
-          lastUpdate = now;
-        }
-      };
-    })();
+    let animationFrameId: number | null = null;
+    let lastX = 0;
+    let lastY = 0;
     
     const handleMouseMove = (e: MouseEvent) => {
-      throttledUpdate(e.clientX, e.clientY);
+      // Only send if position actually changed significantly
+      if (Math.abs(e.clientX - lastX) > 2 || Math.abs(e.clientY - lastY) > 2) {
+        lastX = e.clientX;
+        lastY = e.clientY;
+        
+        // Use requestAnimationFrame for smooth 60fps updates
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+        }
+        animationFrameId = requestAnimationFrame(() => {
+          updateCursor(lastX, lastY);
+        });
+      }
     };
     
     const container = mainContentRef.current;
-    container.addEventListener('mousemove', handleMouseMove);
+    container.addEventListener('mousemove', handleMouseMove, { passive: true });
     
     return () => {
       container.removeEventListener('mousemove', handleMouseMove);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
     };
   }, [activeShowId, updateCursor]);
   
