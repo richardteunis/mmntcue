@@ -31,6 +31,7 @@ export interface TimelineViewProps {
   cues?: TimelineCue[];
   tracks?: TimelineTrack[];
   selectedCueId?: string | null;
+  showCountdown?: { text: string; isLive: boolean } | null;
   onCueSelect?: (cueId: string | null, cue: TimelineCue | null) => void;
   onCueChange?: (updatedCue: TimelineCue) => void;
   onCueDelete?: (cueId: string) => void;
@@ -74,6 +75,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   cues = [],
   tracks = DEFAULT_TRACKS,
   selectedCueId,
+  showCountdown,
   onCueSelect,
   onCueChange,
   onCueDelete,
@@ -241,6 +243,19 @@ const TimelineView: React.FC<TimelineViewProps> = ({
             <div className="text-[10px] uppercase text-muted-foreground tracking-wider">Total</div>
             <div className="font-mono text-lg text-foreground">{secondsToTime(totalDuration)}</div>
           </div>
+          {showCountdown && (
+            <div className="text-center">
+              <div className="text-[10px] uppercase text-muted-foreground tracking-wider">
+                {showCountdown.isLive ? 'Status' : 'Countdown'}
+              </div>
+              <div className={cn(
+                "font-mono text-lg font-semibold",
+                showCountdown.isLive ? "text-runway-error animate-pulse" : "text-runway-teal"
+              )}>
+                {showCountdown.isLive ? 'LIVE' : `T-${showCountdown.text}`}
+              </div>
+            </div>
+          )}
         </div>
         
         <div className="flex items-center gap-4">
