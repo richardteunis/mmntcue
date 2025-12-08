@@ -15,6 +15,7 @@ import ShareModal from './ShareModal';
 import ViewToggle from './ViewToggle';
 import AddTrackModal, { Track } from './AddTrackModal';
 import CollaboratorCursors from './CollaboratorCursors';
+import ViewPresenceIndicator from './ViewPresenceIndicator';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -613,9 +614,13 @@ const Dashboard: React.FC = () => {
         <Sidebar activeShowId={activeShowId} onShowSelect={handleShowSelect} onQuickAddCue={handleQuickAddCue} />
         
         <div ref={mainContentRef} className="flex flex-col flex-1 overflow-hidden relative">
-          {/* Collaborator cursors */}
+          {/* Collaborator cursors - only show users in same view */}
           {activeShowId && activeUsers.length > 0 && (
-            <CollaboratorCursors users={activeUsers} containerRef={mainContentRef} />
+            <CollaboratorCursors 
+              users={activeUsers} 
+              containerRef={mainContentRef} 
+              currentArea={viewMode === 'timeline' ? 'timeline' : 'table'}
+            />
           )}
           
           <TopBar 
@@ -696,6 +701,13 @@ const Dashboard: React.FC = () => {
                           <CheckSquare size={14} className="inline mr-1" />
                           {selectedCueIds.length} selected
                         </span>
+                      )}
+                      {/* Show users in other views */}
+                      {activeUsers.length > 0 && (
+                        <ViewPresenceIndicator 
+                          users={activeUsers} 
+                          currentArea={viewMode === 'timeline' ? 'timeline' : 'table'} 
+                        />
                       )}
                       <ViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />
                     </div>
