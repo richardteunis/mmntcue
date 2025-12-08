@@ -179,12 +179,28 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     }
   };
 
-  const handleTimelineClick = (e: React.MouseEvent) => {
-    if (!timelineRef.current || panMode || isDraggingPlayhead) return;
+  // Calculate time from mouse position relative to timeline
+  const getTimeFromMouseEvent = (e: MouseEvent | React.MouseEvent): number => {
+    if (!timelineRef.current) return 0;
     const rect = timelineRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left + (containerRef.current?.scrollLeft || 0);
+    // e.clientX is screen position, rect.left is the timeline's screen position
+    // No need to add scrollLeft since getBoundingClientRect already gives us the visual position
+    const x = e.clientX - rect.left;
     const time = x / pixelsPerSecond;
-    setCurrentTime(Math.max(0, Math.min(time, totalDuration)));
+    return Math.max(0, Math.min(time, totalDuration));
+  };
+
+  const handleTimelineMouseDown = (e: React.MouseEvent) => {
+    if (panMode) return;
+    // Check if clicking on a cue (don't start scrubbing)
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-cue]')) return;
+    
+    // Immediately move playhead to click position and start dragging
+    const time = getTimeFromMouseEvent(e);
+    setCurrentTime(time);
+    setIsDraggingPlayhead(true);
+    setIsPlaying(false);
   };
 
   const handlePlayheadMouseDown = (e: React.MouseEvent) => {
@@ -197,11 +213,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     if (!isDraggingPlayhead) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!timelineRef.current) return;
-      const rect = timelineRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left + (containerRef.current?.scrollLeft || 0);
-      const time = x / pixelsPerSecond;
-      setCurrentTime(Math.max(0, Math.min(time, totalDuration)));
+      const time = getTimeFromMouseEvent(e);
+      setCurrentTime(time);
     };
 
     const handleMouseUp = () => {
@@ -388,8 +401,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
           <div 
             ref={timelineRef}
             className="relative flex-1"
-            style={{ minWidth: timelineWidth }}
-            onClick={handleTimelineClick}
+            style={{ minWidth: timelineWidth, cursor: isDraggingPlayhead ? 'ew-resize' : 'crosshair' }}
+            onMouseDown={handleTimelineMouseDown}
           >
             {/* Time Ruler */}
             <div className="h-10 border-b border-border bg-muted/30 relative sticky top-0 z-10">
@@ -430,6 +443,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   return (
                     <div
                       key={cue.id}
+                      data-cue={cue.id}
                       className={cn(
                         "absolute top-2 h-12 rounded-md cursor-pointer transition-all",
                         "border-2 shadow-sm hover:shadow-md",
