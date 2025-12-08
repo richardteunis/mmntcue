@@ -88,6 +88,8 @@ const Dashboard: React.FC = () => {
   const [isCreateShowOpen, setIsCreateShowOpen] = useState(false);
   const [isEditShowOpen, setIsEditShowOpen] = useState(false);
   const [editingShow, setEditingShow] = useState<Show | null>(null);
+  const [followingUserId, setFollowingUserId] = useState<string | null>(null);
+  const [permissionUserId, setPermissionUserId] = useState<string | null>(null);
   const sidebarRef = useRef<{ openCreateModal: () => void } | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -600,6 +602,45 @@ const Dashboard: React.FC = () => {
     updateArea(viewMode === 'timeline' ? 'timeline' : 'table');
   }, [viewMode, updateArea]);
   
+  // Follow mode: sync view with followed user
+  useEffect(() => {
+    if (!followingUserId) return;
+    
+    const followedUser = activeUsers.find(u => u.id === followingUserId);
+    if (!followedUser) {
+      // User left, stop following
+      setFollowingUserId(null);
+      toast({
+        title: 'User left',
+        description: 'The user you were following has left the session',
+      });
+      return;
+    }
+    
+    // Sync view mode with followed user
+    if (followedUser.area === 'timeline' && viewMode !== 'timeline') {
+      setViewMode('timeline');
+      toast({
+        title: 'Following to Timeline',
+        description: `Following ${followedUser.name?.split(' ')[0] || 'user'} to Timeline view`,
+      });
+    } else if (followedUser.area === 'table' && viewMode !== 'table') {
+      setViewMode('table');
+      toast({
+        title: 'Following to Table',
+        description: `Following ${followedUser.name?.split(' ')[0] || 'user'} to Table view`,
+      });
+    }
+    
+    // Sync selected cue if they have one selected
+    if (followedUser.selectedCueId && followedUser.selectedCueId !== selectedCueId) {
+      const cue = timelineCues.find(c => c.id === followedUser.selectedCueId);
+      if (cue) {
+        handleCueSelect(cue.id, cue);
+      }
+    }
+  }, [followingUserId, activeUsers, viewMode, selectedCueId, timelineCues, toast]);
+  
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -629,6 +670,12 @@ const Dashboard: React.FC = () => {
             onShare={activeShowId ? () => setIsShareOpen(true) : undefined}
             activeUsers={activeUsers}
             isConnected={isConnected}
+            followingUserId={followingUserId}
+            onFollowUser={setFollowingUserId}
+            onManagePermissions={(userId) => {
+              setPermissionUserId(userId);
+              setIsShareOpen(true);
+            }}
           />
           
           {!activeShowId ? (
@@ -706,7 +753,13 @@ const Dashboard: React.FC = () => {
                       {activeUsers.length > 0 && (
                         <ViewPresenceIndicator 
                           users={activeUsers} 
-                          currentArea={viewMode === 'timeline' ? 'timeline' : 'table'} 
+                          currentArea={viewMode === 'timeline' ? 'timeline' : 'table'}
+                          followingUserId={followingUserId}
+                          onFollowUser={setFollowingUserId}
+                          onManagePermissions={(userId) => {
+                            setPermissionUserId(userId);
+                            setIsShareOpen(true);
+                          }}
                         />
                       )}
                       <ViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />

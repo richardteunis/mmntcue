@@ -2,12 +2,23 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { PresenceUser } from '@/hooks/useRealtimePresence';
-import { LayoutGrid, Table2 } from 'lucide-react';
+import { LayoutGrid, Table2, Eye, EyeOff, UserCog } from 'lucide-react';
 
 interface ViewPresenceIndicatorProps {
   users: PresenceUser[];
   currentArea: 'timeline' | 'table' | 'cue-panel' | 'sidebar';
+  followingUserId?: string | null;
+  onFollowUser?: (userId: string | null) => void;
+  onManagePermissions?: (userId: string) => void;
 }
 
 const getInitials = (name: string): string => {
@@ -39,7 +50,10 @@ const getAreaIcon = (area?: PresenceUser['area']) => {
 
 const ViewPresenceIndicator: React.FC<ViewPresenceIndicatorProps> = ({
   users,
-  currentArea
+  currentArea,
+  followingUserId,
+  onFollowUser,
+  onManagePermissions
 }) => {
   // Get users in other views
   const usersInOtherViews = users.filter(user => user.area !== currentArea);
@@ -54,6 +68,12 @@ const ViewPresenceIndicator: React.FC<ViewPresenceIndicatorProps> = ({
 
   if (usersInOtherViews.length === 0) return null;
 
+  const handleFollowToggle = (userId: string) => {
+    if (onFollowUser) {
+      onFollowUser(followingUserId === userId ? null : userId);
+    }
+  };
+
   return (
     <TooltipProvider>
       <div className="flex items-center gap-1.5">
@@ -61,32 +81,36 @@ const ViewPresenceIndicator: React.FC<ViewPresenceIndicatorProps> = ({
           const Icon = getAreaIcon(area as PresenceUser['area']);
           
           return (
-            <Tooltip key={area}>
-              <TooltipTrigger asChild>
-                <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted/50 border border-border/50">
+            <DropdownMenu key={area}>
+              <DropdownMenuTrigger asChild>
+                <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted/50 border border-border/50 cursor-pointer hover:bg-muted transition-colors">
                   <Icon size={12} className="text-muted-foreground" />
                   <div className="flex -space-x-1.5">
-                    {areaUsers.slice(0, 3).map((user) => (
-                      <Avatar 
-                        key={user.id} 
-                        className={cn(
-                          "h-4 w-4 border border-background",
-                          user.color
-                        )}
-                      >
-                        {user.avatar_url && (
-                          <AvatarImage src={user.avatar_url} alt={user.name} />
-                        )}
-                        <AvatarFallback 
+                    {areaUsers.slice(0, 3).map((user) => {
+                      const isFollowing = followingUserId === user.id;
+                      return (
+                        <Avatar 
+                          key={user.id} 
                           className={cn(
-                            "text-[8px] font-medium text-white",
-                            user.color
+                            "h-4 w-4 border border-background",
+                            user.color,
+                            isFollowing && "ring-2 ring-primary"
                           )}
                         >
-                          {getInitials(user.name || user.email).charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                    ))}
+                          {user.avatar_url && (
+                            <AvatarImage src={user.avatar_url} alt={user.name} />
+                          )}
+                          <AvatarFallback 
+                            className={cn(
+                              "text-[8px] font-medium text-white",
+                              user.color
+                            )}
+                          >
+                            {getInitials(user.name || user.email).charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                      );
+                    })}
                     {areaUsers.length > 3 && (
                       <div className="h-4 w-4 rounded-full bg-muted border border-background flex items-center justify-center">
                         <span className="text-[8px] text-muted-foreground">
@@ -96,16 +120,69 @@ const ViewPresenceIndicator: React.FC<ViewPresenceIndicatorProps> = ({
                     )}
                   </div>
                 </div>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="text-xs">
-                <p className="font-medium">{getAreaLabel(area as PresenceUser['area'])}</p>
-                {areaUsers.map(user => (
-                  <p key={user.id} className="text-muted-foreground">
-                    {user.name || user.email}
-                  </p>
-                ))}
-              </TooltipContent>
-            </Tooltip>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  Users in {getAreaLabel(area as PresenceUser['area'])}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {areaUsers.map(user => {
+                  const isFollowing = followingUserId === user.id;
+                  return (
+                    <div key={user.id}>
+                      <DropdownMenuLabel className="flex items-center gap-2 font-normal py-1">
+                        <Avatar className={cn("h-5 w-5", user.color)}>
+                          {user.avatar_url && (
+                            <AvatarImage src={user.avatar_url} alt={user.name} />
+                          )}
+                          <AvatarFallback className={cn("text-[8px] text-white", user.color)}>
+                            {getInitials(user.name || user.email)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm truncate max-w-[100px]">
+                          {user.name || user.email}
+                        </span>
+                        {isFollowing && (
+                          <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full ml-auto">
+                            Following
+                          </span>
+                        )}
+                      </DropdownMenuLabel>
+                      <div className="flex gap-1 px-2 pb-2">
+                        {onFollowUser && (
+                          <DropdownMenuItem 
+                            className="flex-1 text-xs justify-center"
+                            onClick={() => handleFollowToggle(user.id)}
+                          >
+                            {isFollowing ? (
+                              <>
+                                <EyeOff className="mr-1 h-3 w-3" />
+                                Unfollow
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="mr-1 h-3 w-3" />
+                                Follow
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                        )}
+                        {onManagePermissions && (
+                          <DropdownMenuItem 
+                            className="flex-1 text-xs justify-center"
+                            onClick={() => onManagePermissions(user.id)}
+                          >
+                            <UserCog className="mr-1 h-3 w-3" />
+                            Permissions
+                          </DropdownMenuItem>
+                        )}
+                      </div>
+                      <DropdownMenuSeparator />
+                    </div>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           );
         })}
       </div>
