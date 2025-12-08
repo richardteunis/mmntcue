@@ -26,27 +26,31 @@ serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Clean up expired challenges
+    await adminClient.rpc('cleanup_expired_challenges').catch(() => {});
+
     // Generate challenge
     const challenge = new Uint8Array(32);
     crypto.getRandomValues(challenge);
     const challengeBase64 = base64urlEncode(challenge);
 
-    // Store challenge with a temporary ID (for anonymous login flow)
-    const tempId = crypto.randomUUID();
-    
-    // We'll store this challenge in a way that can be verified later
-    // Using a special prefix to identify login challenges
-    await adminClient
-      .from('passkey_credentials')
-      .upsert({
-        id: tempId,
-        user_id: '00000000-0000-0000-0000-000000000000', // Placeholder for login challenges
-        credential_id: `login_challenge_${challengeBase64}`,
-        public_key: challengeBase64,
-        counter: Date.now() + 5 * 60 * 1000, // Expiry timestamp
-      }, { onConflict: 'credential_id' });
+    // Store challenge in dedicated table
+    const { error: insertError } = await adminClient
+      .from('webauthn_challenges')
+      .insert({
+        challenge: challengeBase64,
+        type: 'login',
+        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes
+      });
+
+    if (insertError) {
+      console.error('Failed to store challenge:', insertError);
+      throw new Error('Failed to create login challenge');
+    }
 
     const rpId = new URL(req.headers.get('origin') || 'https://localhost').hostname;
+
+    console.log('Login options generated for rpId:', rpId);
 
     const options = {
       challenge: challengeBase64,
@@ -61,7 +65,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error in passkey-login-options:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

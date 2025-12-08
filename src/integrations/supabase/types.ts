@@ -446,11 +446,39 @@ export type Database = {
           },
         ]
       }
+      webauthn_challenges: {
+        Row: {
+          challenge: string
+          created_at: string
+          expires_at: string
+          id: string
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          challenge: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          type: string
+          user_id?: string | null
+        }
+        Update: {
+          challenge?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      cleanup_expired_challenges: { Args: never; Returns: undefined }
       is_show_member: {
         Args: { _roles?: string[]; _show_id: string; _user_id: string }
         Returns: boolean
