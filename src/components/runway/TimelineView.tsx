@@ -98,9 +98,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   // Calculate timeline dimensions
   const pixelsPerSecond = 2 * zoom;
   const totalDuration = useMemo(() => {
-    if (cues.length === 0) return 600; // 10 minutes default
+    const defaultDuration = 7200; // 2 hours default
+    if (cues.length === 0) return defaultDuration;
     const maxEnd = Math.max(...cues.map(c => timeToSeconds(c.time) + timeToSeconds(c.duration)));
-    return Math.max(maxEnd + 60, 600); // Add buffer
+    return Math.max(maxEnd + 300, defaultDuration); // Add 5 min buffer, minimum 2 hours
   }, [cues]);
   
   const timelineWidth = totalDuration * pixelsPerSecond;
