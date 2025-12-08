@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useAvatarUpload } from '@/hooks/useAvatarUpload';
 import { usePasskey } from '@/hooks/usePasskey';
+import { useTOTP } from '@/hooks/useTOTP';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, User, Bell, Keyboard, Palette, Loader2, Save, Upload, Fingerprint, Shield, Trash2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { ArrowLeft, User, Bell, Keyboard, Palette, Loader2, Save, Upload, Fingerprint, Shield, Trash2, Smartphone, Copy, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -20,9 +23,13 @@ const SettingsPage: React.FC = () => {
   const { user, profile, updateProfile, loading, refetchProfile } = useAuthContext();
   const { uploadAvatar, uploading } = useAvatarUpload();
   const { passkeys, fetchPasskeys, registerPasskey, deletePasskey, loading: passkeyLoading } = usePasskey();
+  const { factors, enrollmentData, fetchFactors, startEnrollment, verifyEnrollment, cancelEnrollment, unenroll, loading: totpLoading } = useTOTP();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
+  const [totpCode, setTotpCode] = useState('');
+  const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+  const [secretCopied, setSecretCopied] = useState(false);
   const [formData, setFormData] = useState<{
     full_name: string;
     timezone: string;
@@ -46,8 +53,9 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     if (user) {
       fetchPasskeys();
+      fetchFactors();
     }
-  }, [user, fetchPasskeys]);
+  }, [user, fetchPasskeys, fetchFactors]);
 
   const handleSave = async () => {
     if (!formData) return;
@@ -79,6 +87,40 @@ const SettingsPage: React.FC = () => {
     await deletePasskey(id);
   };
 
+  const handleStartTOTPEnrollment = async () => {
+    const result = await startEnrollment();
+    if (result.success) {
+      setShowEnrollDialog(true);
+    }
+  };
+
+  const handleVerifyTOTP = async () => {
+    if (totpCode.length !== 6) return;
+    const result = await verifyEnrollment(totpCode);
+    if (result.success) {
+      setShowEnrollDialog(false);
+      setTotpCode('');
+    }
+  };
+
+  const handleCancelEnrollment = () => {
+    cancelEnrollment();
+    setShowEnrollDialog(false);
+    setTotpCode('');
+  };
+
+  const handleDisableTOTP = async (factorId: string) => {
+    await unenroll(factorId);
+  };
+
+  const copySecret = () => {
+    if (enrollmentData?.secret) {
+      navigator.clipboard.writeText(enrollmentData.secret);
+      setSecretCopied(true);
+      setTimeout(() => setSecretCopied(false), 2000);
+    }
+  };
+
   const timezones = [
     'America/Los_Angeles',
     'America/Denver',
@@ -97,6 +139,8 @@ const SettingsPage: React.FC = () => {
       </div>
     );
   }
+
+  const verifiedFactors = factors.filter(f => f.status === 'verified');
 
   return (
     <div className="min-h-screen bg-background">
@@ -225,22 +269,81 @@ const SettingsPage: React.FC = () => {
           </TabsContent>
 
           <TabsContent value="security">
-            <Card>
-              <CardHeader>
-                <CardTitle>Security</CardTitle>
-                <CardDescription>Manage your authentication methods</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
+            <div className="space-y-6">
+              {/* Two-Factor Authentication */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Smartphone className="h-5 w-5" />
+                    Two-Factor Authentication
+                  </CardTitle>
+                  <CardDescription>
+                    Add an extra layer of security using an authenticator app
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {verifiedFactors.length === 0 ? (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">
+                          Protect your account with TOTP-based two-factor authentication
+                        </p>
+                      </div>
+                      <Button onClick={handleStartTOTPEnrollment} disabled={totpLoading}>
+                        {totpLoading ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Shield className="mr-2 h-4 w-4" />
+                        )}
+                        Enable 2FA
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {verifiedFactors.map((factor) => (
+                        <div 
+                          key={factor.id} 
+                          className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                              <Shield className="h-5 w-5 text-green-500" />
+                            </div>
+                            <div>
+                              <p className="font-medium">{factor.friendly_name || 'Authenticator App'}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Added {format(new Date(factor.created_at), 'MMM d, yyyy')}
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleDisableTOTP(factor.id)}
+                            disabled={totpLoading}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive mr-2" />
+                            Disable
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Passkeys */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-lg font-medium flex items-center gap-2">
+                      <CardTitle className="flex items-center gap-2">
                         <Fingerprint className="h-5 w-5" />
                         Passkeys
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
+                      </CardTitle>
+                      <CardDescription>
                         Sign in securely with biometrics like Face ID, Touch ID, or Windows Hello
-                      </p>
+                      </CardDescription>
                     </div>
                     <Button onClick={handleAddPasskey} disabled={passkeyLoading}>
                       {passkeyLoading ? (
@@ -251,9 +354,8 @@ const SettingsPage: React.FC = () => {
                       Add Passkey
                     </Button>
                   </div>
-
-                  <Separator className="my-4" />
-
+                </CardHeader>
+                <CardContent>
                   {passkeys.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <Fingerprint className="h-12 w-12 mx-auto mb-3 opacity-50" />
@@ -293,9 +395,9 @@ const SettingsPage: React.FC = () => {
                       ))}
                     </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="notifications">
@@ -429,6 +531,76 @@ const SettingsPage: React.FC = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* TOTP Enrollment Dialog */}
+      <Dialog open={showEnrollDialog} onOpenChange={(open) => !open && handleCancelEnrollment()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Set up two-factor authentication</DialogTitle>
+            <DialogDescription>
+              Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+            </DialogDescription>
+          </DialogHeader>
+          
+          {enrollmentData && (
+            <div className="space-y-6">
+              <div className="flex justify-center">
+                <div className="bg-white p-4 rounded-lg">
+                  <img src={enrollmentData.qr} alt="QR Code" className="w-48 h-48" />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-xs">Can't scan? Enter this code manually:</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 p-2 bg-muted rounded text-xs font-mono break-all">
+                    {enrollmentData.secret}
+                  </code>
+                  <Button variant="outline" size="icon" onClick={copySecret}>
+                    {secretCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-4">
+                <Label>Enter the 6-digit code from your app</Label>
+                <div className="flex justify-center">
+                  <InputOTP
+                    maxLength={6}
+                    value={totpCode}
+                    onChange={(value) => setTotpCode(value)}
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={handleCancelEnrollment}>
+                  Cancel
+                </Button>
+                <Button 
+                  className="flex-1" 
+                  onClick={handleVerifyTOTP}
+                  disabled={totpLoading || totpCode.length !== 6}
+                >
+                  {totpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Verify & Enable
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
