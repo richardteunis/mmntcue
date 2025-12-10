@@ -194,7 +194,9 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
 
       // Send email notification
       try {
+        const { data: { session } } = await supabase.auth.getSession();
         await supabase.functions.invoke('send-invite', {
+          headers: session ? { Authorization: `Bearer ${session.access_token}` } : undefined,
           body: {
             email: selectedProfile.email,
             showId,
@@ -270,7 +272,9 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
 
       // Send email invite
       try {
+        const { data: { session } } = await supabase.auth.getSession();
         await supabase.functions.invoke('send-invite', {
+          headers: session ? { Authorization: `Bearer ${session.access_token}` } : undefined,
           body: {
             email: searchQuery.trim().toLowerCase(),
             showId,
