@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useAssets, useShowAssets } from '@/hooks/useAssets';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Asset, formatFileSize, formatDuration } from '@/types/asset';
@@ -22,9 +22,14 @@ import {
   Play,
   Pause,
   SkipForward,
+  SkipBack,
   ChevronUp,
   ChevronDown,
-  Package
+  Package,
+  Volume2,
+  VolumeX,
+  X,
+  Maximize2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -35,6 +40,7 @@ import {
 } from '@/components/ui/context-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Slider } from '@/components/ui/slider';
 
 interface AssetLibraryProps {
   showId?: string | null;
@@ -66,7 +72,7 @@ const getAssetColor = (fileType: Asset['file_type']) => {
 };
 
 // Waveform visualization component
-const WaveformPreview: React.FC<{ className?: string }> = ({ className }) => {
+const WaveformPreview: React.FC<{ className?: string; progress?: number }> = ({ className, progress = 0 }) => {
   // Generate random waveform bars
   const bars = Array.from({ length: 40 }, () => Math.random() * 0.8 + 0.2);
   
@@ -75,10 +81,194 @@ const WaveformPreview: React.FC<{ className?: string }> = ({ className }) => {
       {bars.map((height, i) => (
         <div
           key={i}
-          className="flex-1 bg-runway-teal/60 rounded-t-sm"
+          className={cn(
+            "flex-1 rounded-t-sm transition-colors",
+            i / bars.length <= progress ? "bg-runway-teal" : "bg-runway-teal/40"
+          )}
           style={{ height: `${height * 100}%` }}
         />
       ))}
+    </div>
+  );
+};
+
+// Asset Preview Player Component
+const AssetPreviewPlayer: React.FC<{
+  asset: Asset;
+  onClose: () => void;
+  onNext?: () => void;
+  onPrev?: () => void;
+}> = ({ asset, onClose, onNext, onPrev }) => {
+  const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+
+  useEffect(() => {
+    // Auto-play when asset changes
+    if (mediaRef.current) {
+      mediaRef.current.play().catch(() => {});
+      setIsPlaying(true);
+    }
+  }, [asset.id]);
+
+  const handleTimeUpdate = () => {
+    if (mediaRef.current) {
+      setCurrentTime(mediaRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (mediaRef.current) {
+      setDuration(mediaRef.current.duration);
+    }
+  };
+
+  const handlePlayPause = () => {
+    if (mediaRef.current) {
+      if (isPlaying) {
+        mediaRef.current.pause();
+      } else {
+        mediaRef.current.play().catch(() => {});
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleSeek = (value: number[]) => {
+    if (mediaRef.current) {
+      mediaRef.current.currentTime = value[0];
+      setCurrentTime(value[0]);
+    }
+  };
+
+  const handleVolumeChange = (value: number[]) => {
+    const newVolume = value[0];
+    setVolume(newVolume);
+    if (mediaRef.current) {
+      mediaRef.current.volume = newVolume;
+    }
+    setIsMuted(newVolume === 0);
+  };
+
+  const toggleMute = () => {
+    if (mediaRef.current) {
+      if (isMuted) {
+        mediaRef.current.volume = volume || 0.5;
+        setIsMuted(false);
+      } else {
+        mediaRef.current.volume = 0;
+        setIsMuted(true);
+      }
+    }
+  };
+
+  const progress = duration > 0 ? currentTime / duration : 0;
+
+  return (
+    <div className="border-t border-border bg-muted/50">
+      {/* Video preview */}
+      {asset.file_type === 'video' && (
+        <div className="relative bg-black aspect-video max-h-32">
+          <video
+            ref={mediaRef as React.RefObject<HTMLVideoElement>}
+            src={asset.file_url}
+            className="w-full h-full object-contain"
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            onEnded={() => setIsPlaying(false)}
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-1 right-1 h-6 w-6 bg-black/50 hover:bg-black/70"
+            onClick={onClose}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+
+      {/* Audio preview with waveform */}
+      {asset.file_type === 'audio' && (
+        <div className="px-3 py-2 bg-runway-teal/10">
+          <audio
+            ref={mediaRef as React.RefObject<HTMLAudioElement>}
+            src={asset.file_url}
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            onEnded={() => setIsPlaying(false)}
+          />
+          <div className="flex items-center gap-2 mb-2">
+            <Music className="h-4 w-4 text-runway-teal" />
+            <span className="text-xs font-medium truncate flex-1">{asset.name}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5"
+              onClick={onClose}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+          <WaveformPreview className="h-8 mb-2" progress={progress} />
+        </div>
+      )}
+
+      {/* Playback controls */}
+      <div className="flex items-center gap-2 px-3 py-2">
+        <div className="flex items-center gap-1">
+          {onPrev && (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onPrev}>
+              <SkipBack className="h-3 w-3" />
+            </Button>
+          )}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className={cn("h-7 w-7", isPlaying && "text-runway-success")}
+            onClick={handlePlayPause}
+          >
+            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </Button>
+          {onNext && (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onNext}>
+              <SkipForward className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+
+        <span className="text-[10px] font-mono text-muted-foreground w-10">
+          {formatDuration(currentTime)}
+        </span>
+
+        <Slider
+          value={[currentTime]}
+          max={duration || 100}
+          step={0.1}
+          onValueChange={handleSeek}
+          className="flex-1"
+        />
+
+        <span className="text-[10px] font-mono text-muted-foreground w-10 text-right">
+          {formatDuration(duration)}
+        </span>
+
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={toggleMute}>
+            {isMuted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+          </Button>
+          <Slider
+            value={[isMuted ? 0 : volume]}
+            max={1}
+            step={0.1}
+            onValueChange={handleVolumeChange}
+            className="w-16"
+          />
+        </div>
+      </div>
     </div>
   );
 };
@@ -386,8 +576,36 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({
   const [panelHeight, setPanelHeight] = useState(280);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
+
+  // Get all playable assets for next/prev navigation
+  const allPlayableAssets = useMemo(() => {
+    const allAssets = showId ? [...showAssets.filter(sa => sa.asset).map(sa => sa.asset!), ...assets] : assets;
+    return allAssets.filter(a => a.file_type === 'audio' || a.file_type === 'video');
+  }, [assets, showAssets, showId]);
+
+  const handlePreviewAsset = useCallback((asset: Asset) => {
+    if (asset.file_type === 'audio' || asset.file_type === 'video') {
+      setPreviewAsset(asset);
+    }
+    onAssetSelect?.(asset);
+  }, [onAssetSelect]);
+
+  const handleNextAsset = useCallback(() => {
+    if (!previewAsset) return;
+    const currentIndex = allPlayableAssets.findIndex(a => a.id === previewAsset.id);
+    const nextIndex = (currentIndex + 1) % allPlayableAssets.length;
+    setPreviewAsset(allPlayableAssets[nextIndex]);
+  }, [previewAsset, allPlayableAssets]);
+
+  const handlePrevAsset = useCallback(() => {
+    if (!previewAsset) return;
+    const currentIndex = allPlayableAssets.findIndex(a => a.id === previewAsset.id);
+    const prevIndex = currentIndex <= 0 ? allPlayableAssets.length - 1 : currentIndex - 1;
+    setPreviewAsset(allPlayableAssets[prevIndex]);
+  }, [previewAsset, allPlayableAssets]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -532,7 +750,7 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({
               asset={asset}
               index={index}
               onDragStart={onAssetDragStart}
-              onSelect={onAssetSelect}
+              onSelect={handlePreviewAsset}
               onDelete={onDelete}
               onAddToShow={onAddToShow}
               showAddToShow={showAddToShowOption}
@@ -550,7 +768,7 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({
             asset={asset}
             index={index}
             onDragStart={onAssetDragStart}
-            onSelect={onAssetSelect}
+            onSelect={handlePreviewAsset}
             onDelete={onDelete}
             onAddToShow={onAddToShow}
             showAddToShow={showAddToShowOption}
@@ -652,16 +870,54 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({
         </TabsContent>
       </Tabs>
 
+      {/* Preview Player */}
+      {previewAsset && (
+        <AssetPreviewPlayer
+          asset={previewAsset}
+          onClose={() => setPreviewAsset(null)}
+          onNext={allPlayableAssets.length > 1 ? handleNextAsset : undefined}
+          onPrev={allPlayableAssets.length > 1 ? handlePrevAsset : undefined}
+        />
+      )}
+
       {/* Bottom toolbar */}
       <div className="flex items-center justify-between px-3 py-1.5 border-t border-border bg-muted/30">
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => fileInputRef.current?.click()}>
             <Plus className="h-3 w-3" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6 text-runway-success">
-            <Pause className="h-3 w-3" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6">
+          {previewAsset ? (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-6 w-6 text-runway-error"
+              onClick={() => setPreviewAsset(null)}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6"
+                  disabled={allPlayableAssets.length === 0}
+                  onClick={() => allPlayableAssets.length > 0 && setPreviewAsset(allPlayableAssets[0])}
+                >
+                  <Play className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Play first media</TooltipContent>
+            </Tooltip>
+          )}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-6 w-6"
+            disabled={!previewAsset || allPlayableAssets.length <= 1}
+            onClick={handleNextAsset}
+          >
             <SkipForward className="h-3 w-3" />
           </Button>
         </div>
