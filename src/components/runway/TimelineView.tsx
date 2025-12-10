@@ -320,6 +320,18 @@ const TimelineView: React.FC<TimelineViewProps> = ({
         const minY = Math.min(boxSelectStart.y, boxSelectCurrent.y);
         const maxY = Math.max(boxSelectStart.y, boxSelectCurrent.y);
         
+        // Check if this was just a click (not a drag) - deselect everything
+        const dragDistance = Math.abs(boxSelectCurrent.x - boxSelectStart.x) + Math.abs(boxSelectCurrent.y - boxSelectStart.y);
+        if (dragDistance < 5) {
+          onCueSelect?.(null, null);
+          onCueMultiSelect?.([]);
+          setIsBoxSelecting(false);
+          setBoxSelectStart(null);
+          setBoxSelectCurrent(null);
+          document.body.style.userSelect = '';
+          return;
+        }
+        
         const selectedIds: string[] = [];
         const rulerHeight = 40; // Height of time ruler
         const trackHeight = 64; // Height of each track lane
@@ -348,6 +360,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
           onCueMultiSelect?.(selectedIds);
         } else {
           onCueSelect?.(null, null);
+          onCueMultiSelect?.([]);
         }
       }
       
