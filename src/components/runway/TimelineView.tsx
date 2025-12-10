@@ -4,6 +4,7 @@ import { Play, Pause, SkipForward, RotateCcw, ZoomIn, ZoomOut, Hand } from 'luci
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
+import { useCuePlayback } from '@/hooks/useCuePlayback';
 
 export interface TimelineCue {
   id: string;
@@ -105,7 +106,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
+  const triggeredCuesRef = useRef<Set<string>>(new Set());
   const { toast } = useToast();
+  const { playCue, stopAllCues, clearCache } = useCuePlayback();
   
   // Combine refs if external scrollRef is provided
   const scrollContainerRef = scrollRef || containerRef;
@@ -130,14 +133,36 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     return grouped;
   }, [cues, tracks]);
 
-  // Playback animation
+  // Playback animation with cue triggering
   useEffect(() => {
     if (isPlaying) {
       let lastTime = performance.now();
       const animate = (now: number) => {
         const delta = (now - lastTime) / 1000;
         lastTime = now;
-        setCurrentTime(prev => Math.min(prev + delta, totalDuration));
+        const newTime = Math.min(currentTime + delta, totalDuration);
+        setCurrentTime(newTime);
+        
+        // Check for cues that should be triggered
+        for (const cue of cues) {
+          const cueStartSeconds = timeToSeconds(cue.time);
+          const cueDurationSeconds = timeToSeconds(cue.duration);
+          const cueEndSeconds = cueStartSeconds + cueDurationSeconds;
+          
+          // Trigger cue if playhead just crossed the start time
+          if (newTime >= cueStartSeconds && 
+              newTime < cueEndSeconds &&
+              !triggeredCuesRef.current.has(cue.id)) {
+            triggeredCuesRef.current.add(cue.id);
+            playCue(cue.id);
+          }
+          
+          // Remove from triggered if we've passed the cue
+          if (newTime >= cueEndSeconds) {
+            triggeredCuesRef.current.delete(cue.id);
+          }
+        }
+        
         animationRef.current = requestAnimationFrame(animate);
       };
       animationRef.current = requestAnimationFrame(animate);
@@ -147,7 +172,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
-  }, [isPlaying, totalDuration]);
+  }, [isPlaying, totalDuration, cues, playCue]);
 
   // Auto-scroll to follow playhead
   useEffect(() => {
@@ -183,6 +208,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const handleReset = () => {
     setCurrentTime(0);
     setIsPlaying(false);
+    triggeredCuesRef.current.clear();
+    stopAllCues();
+    clearCache();
     if (containerRef.current) containerRef.current.scrollLeft = 0;
   };
 
