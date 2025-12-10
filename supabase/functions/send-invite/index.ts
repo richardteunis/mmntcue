@@ -322,7 +322,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Send the invite email with branded template
     const emailResponse = await resend.emails.send({
-      from: "mmnt. Cue <onboarding@resend.dev>",
+      from: "mmnt. Cue <noreply@cue.mmnt.dev>",
       to: [email],
       subject: `You've been invited to collaborate on "${safeShowName}"`,
       html: generateInvitationEmail({
