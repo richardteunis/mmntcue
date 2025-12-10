@@ -17,6 +17,7 @@ import AddTrackModal, { Track } from './AddTrackModal';
 import CollaboratorCursors from './CollaboratorCursors';
 import ViewPresenceIndicator from './ViewPresenceIndicator';
 import PlaybackSettingsModal from './PlaybackSettingsModal';
+import AssetLibrary from './AssetLibrary';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -861,41 +862,53 @@ const Dashboard: React.FC = () => {
                     </div>
                   </div>
                   
-                  {viewMode === 'timeline' ? (
-                    <TimelineView 
-                      className="flex-1" 
-                      onCueSelect={handleCueSelect}
-                      selectedCueId={selectedCueId}
-                      onCueChange={handleCueUpdate}
-                      cues={timelineCues}
-                      tracks={tracks}
-                      showCountdown={showCountdown}
-                      animatingCues={animatingCues}
-                      onCueDelete={handleCueDelete}
-                      onCueDuplicate={handleCueDuplicate}
-                      onViewportChange={handleViewportScroll}
-                      scrollRef={timelineScrollRef}
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    {viewMode === 'timeline' ? (
+                      <TimelineView 
+                        className="flex-1" 
+                        onCueSelect={handleCueSelect}
+                        selectedCueId={selectedCueId}
+                        onCueChange={handleCueUpdate}
+                        cues={timelineCues}
+                        tracks={tracks}
+                        showCountdown={showCountdown}
+                        animatingCues={animatingCues}
+                        onCueDelete={handleCueDelete}
+                        onCueDuplicate={handleCueDuplicate}
+                        onViewportChange={handleViewportScroll}
+                        scrollRef={timelineScrollRef}
+                      />
+                    ) : (
+                      <Timeline 
+                        className="flex-1" 
+                        onCueSelect={handleCueSelect}
+                        selectedCueId={selectedCueId}
+                        onCueChange={handleCueUpdate}
+                        selectedCue={selectedCue}
+                        cues={timelineCues}
+                        showCountdown={showCountdown}
+                        animatingCues={animatingCues}
+                        onCueDelete={handleCueDelete}
+                        onCueDuplicate={handleCueDuplicate}
+                        onCueReorder={handleCueReorder}
+                        selectedCueIds={selectedCueIds}
+                        onSelectCue={handleSelectCue}
+                        onBulkUpdate={handleBulkUpdate}
+                        onViewportChange={handleViewportScroll}
+                        scrollRef={timelineScrollRef}
+                      />
+                    )}
+                    
+                    {/* Asset Library Panel */}
+                    <AssetLibrary 
+                      showId={activeShowId}
+                      isPanel={true}
+                      defaultOpen={true}
+                      onAssetDragStart={(asset) => {
+                        // Handle asset drag for dropping on cues
+                      }}
                     />
-                  ) : (
-                    <Timeline 
-                      className="flex-1" 
-                      onCueSelect={handleCueSelect}
-                      selectedCueId={selectedCueId}
-                      onCueChange={handleCueUpdate}
-                      selectedCue={selectedCue}
-                      cues={timelineCues}
-                      showCountdown={showCountdown}
-                      animatingCues={animatingCues}
-                      onCueDelete={handleCueDelete}
-                      onCueDuplicate={handleCueDuplicate}
-                      onCueReorder={handleCueReorder}
-                      selectedCueIds={selectedCueIds}
-                      onSelectCue={handleSelectCue}
-                      onBulkUpdate={handleBulkUpdate}
-                      onViewportChange={handleViewportScroll}
-                      scrollRef={timelineScrollRef}
-                    />
-                  )}
+                  </div>
                 </div>
               </ResizablePanel>
               

@@ -22,7 +22,7 @@ import {
   Clock,
   ListVideo,
   Zap,
-  Package,
+  
   MapPin,
   FolderPlus,
   FolderOpen,
@@ -46,7 +46,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { Show, Folder as FolderType } from '@/types/cue';
 import ShowFormModal from './ShowFormModal';
-import AssetLibrary from './AssetLibrary';
+
 import { useAuthContext } from '@/contexts/AuthContext';
 
 interface SidebarProps {
@@ -896,17 +896,6 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
               )}
             </SidebarSection>
 
-            {/* Assets Section */}
-            <SidebarSection 
-              title="Assets" 
-              icon={<Package size={12} />}
-              defaultOpen={true}
-            >
-              <AssetLibrary 
-                showId={activeShowId} 
-                collapsed={collapsed}
-              />
-            </SidebarSection>
           </div>
         ) : (
           <div className="space-y-1 py-2">
