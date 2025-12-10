@@ -45,7 +45,7 @@ const DEFAULT_CUE: TimelineCue = {
   time: '00:00:00',
   duration: '00:00:30',
   type: 'audio',
-  color: 'bg-runway-teal',
+  color: '#14B8A6',
   autoFollow: false,
   notes: '',
   effects: [],
@@ -388,16 +388,27 @@ const AddEditCuePanel: React.FC<AddEditCuePanelProps> = ({
                       <FormItem>
                         <FormLabel>Color</FormLabel>
                         <div className="grid grid-cols-6 gap-2 mt-2">
-                          {['bg-runway-teal', 'bg-runway-success', 'bg-runway-highlight', 'bg-runway-warning', 
-                            'bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-yellow-500', 'bg-orange-500', 
-                            'bg-red-500', 'bg-gray-500', 'bg-slate-500'].map((color) => (
+                          {[
+                            '#14B8A6', // teal
+                            '#22C55E', // green
+                            '#EAB308', // yellow
+                            '#F97316', // orange
+                            '#3B82F6', // blue
+                            '#8B5CF6', // purple
+                            '#EC4899', // pink
+                            '#FBBF24', // amber
+                            '#EF4444', // red
+                            '#6B7280', // gray
+                            '#64748B', // slate
+                            '#06B6D4', // cyan
+                          ].map((color) => (
                             <div 
                               key={color}
                               className={cn(
-                                "w-8 h-8 rounded-full cursor-pointer border-2", 
-                                color,
-                                field.value === color ? "border-white ring-2 ring-black" : "border-transparent"
+                                "w-8 h-8 rounded-full cursor-pointer border-2 transition-all hover:scale-110", 
+                                field.value === color ? "border-white ring-2 ring-foreground" : "border-transparent"
                               )}
+                              style={{ backgroundColor: color }}
                               onClick={() => form.setValue('color', color)}
                             />
                           ))}

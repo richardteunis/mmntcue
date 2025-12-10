@@ -79,6 +79,7 @@ const Dashboard: React.FC = () => {
   const [showInfo, setShowInfo] = useState<{ client?: string; eventDate?: string; showTime?: string }>({});
   const [tracks, setTracks] = useState<Track[]>(DEFAULT_TRACKS);
   const [isAddTrackOpen, setIsAddTrackOpen] = useState(false);
+  const [editingTrack, setEditingTrack] = useState<Track | null>(null);
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
   const [selectedCue, setSelectedCue] = useState<TimelineCue | null>(null);
   const [selectedCueIds, setSelectedCueIds] = useState<string[]>([]);
@@ -952,6 +953,7 @@ const Dashboard: React.FC = () => {
                         scrollRef={timelineScrollRef}
                         onAssetDropOnCue={handleAssetDropOnCue}
                         onAssetDropToCreate={handleAssetDropToCreate}
+                        onTrackEdit={(track) => { setEditingTrack(track); setIsAddTrackOpen(true); }}
                         playbackState={playback}
                       />
                     ) : (
@@ -1027,9 +1029,12 @@ const Dashboard: React.FC = () => {
         {/* Add Track Modal */}
         <AddTrackModal
           isOpen={isAddTrackOpen}
-          onClose={() => setIsAddTrackOpen(false)}
+          onClose={() => { setIsAddTrackOpen(false); setEditingTrack(null); }}
           onAdd={handleAddTrack}
+          onUpdate={(track) => setTracks(prev => prev.map(t => t.id === track.id ? track : t))}
+          onDelete={(trackId) => setTracks(prev => prev.filter(t => t.id !== trackId))}
           existingTracks={tracks}
+          editingTrack={editingTrack}
         />
 
         {/* AI Suggest Panel */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,10 @@ interface AddTrackModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (track: Track) => void;
+  onUpdate?: (track: Track) => void;
+  onDelete?: (trackId: string) => void;
   existingTracks: Track[];
+  editingTrack?: Track | null;
 }
 
 const PRESET_COLORS = [
@@ -41,11 +44,28 @@ const AddTrackModal: React.FC<AddTrackModalProps> = ({
   isOpen,
   onClose,
   onAdd,
+  onUpdate,
+  onDelete,
   existingTracks,
+  editingTrack,
 }) => {
   const [name, setName] = useState('');
   const [color, setColor] = useState(PRESET_COLORS[0]);
   const [error, setError] = useState('');
+
+  const isEditMode = !!editingTrack;
+
+  // Populate form when editing
+  useEffect(() => {
+    if (editingTrack) {
+      setName(editingTrack.label);
+      setColor(editingTrack.color);
+    } else {
+      setName('');
+      setColor(PRESET_COLORS[0]);
+    }
+    setError('');
+  }, [editingTrack, isOpen]);
 
   const handleSubmit = () => {
     if (!name.trim()) {
@@ -53,18 +73,35 @@ const AddTrackModal: React.FC<AddTrackModalProps> = ({
       return;
     }
 
-    const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    
-    if (existingTracks.some(t => t.id === id)) {
-      setError('A track with this name already exists');
-      return;
-    }
+    if (isEditMode && editingTrack) {
+      // When editing, keep the same ID
+      onUpdate?.({ 
+        id: editingTrack.id, 
+        label: name.trim(), 
+        color 
+      });
+    } else {
+      const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      
+      if (existingTracks.some(t => t.id === id)) {
+        setError('A track with this name already exists');
+        return;
+      }
 
-    onAdd({ id, label: name.trim(), color });
+      onAdd({ id, label: name.trim(), color });
+    }
+    
     setName('');
     setColor(PRESET_COLORS[0]);
     setError('');
     onClose();
+  };
+
+  const handleDelete = () => {
+    if (editingTrack && onDelete) {
+      onDelete(editingTrack.id);
+      onClose();
+    }
   };
 
   const handleClose = () => {
@@ -78,7 +115,7 @@ const AddTrackModal: React.FC<AddTrackModalProps> = ({
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add New Track</DialogTitle>
+          <DialogTitle>{isEditMode ? 'Edit Track' : 'Add New Track'}</DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4 py-4">
@@ -147,13 +184,20 @@ const AddTrackModal: React.FC<AddTrackModalProps> = ({
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit}>
-            Add Track
-          </Button>
+        <DialogFooter className="flex justify-between">
+          {isEditMode && onDelete && (
+            <Button variant="destructive" onClick={handleDelete}>
+              Delete Track
+            </Button>
+          )}
+          <div className="flex gap-2 ml-auto">
+            <Button variant="outline" onClick={handleClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit}>
+              {isEditMode ? 'Update Track' : 'Add Track'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
