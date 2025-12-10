@@ -33,6 +33,7 @@ export interface Show {
   name: string;
   description: string | null;
   folder_id?: string | null;
+  user_id?: string | null;
   created_at: string;
   updated_at: string;
   // Event Details
