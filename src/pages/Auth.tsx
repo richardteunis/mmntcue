@@ -669,7 +669,7 @@ const AuthPage: React.FC = () => {
           <img 
             src="/mmnt_pink_wordmark.svg" 
             alt="mmnt. Cue" 
-            className="h-8"
+            className="h-8 logo-themed"
           />
           <p className="text-xs text-muted-foreground">Professional Show Control</p>
         </div>

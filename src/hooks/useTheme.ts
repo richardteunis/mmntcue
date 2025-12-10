@@ -147,6 +147,7 @@ const themeStyles: Record<string, Record<string, string>> = {
     '--sidebar-accent-foreground': '0 0% 85%',
     '--sidebar-border': '0 0% 12%',
     '--sidebar-ring': '0 0% 70%',
+    '--logo-filter': 'brightness(0) invert(1)',
   },
   rose: {
     '--background': '340 25% 10%',
