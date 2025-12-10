@@ -475,7 +475,15 @@ const SettingsPage: React.FC = () => {
                         <button
                           key={theme.value}
                           type="button"
-                          onClick={() => setFormData(prev => prev ? { ...prev, theme: theme.value } : prev)}
+                          onClick={async () => {
+                            setFormData(prev => prev ? { ...prev, theme: theme.value } : prev);
+                            // Auto-save theme immediately
+                            await updateProfile({ theme: theme.value });
+                            toast({
+                              title: 'Theme updated',
+                              description: `Switched to ${theme.label} theme`,
+                            });
+                          }}
                           className={`relative flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all hover:scale-105 ${
                             formData.theme === theme.value 
                               ? 'border-primary ring-2 ring-primary/20' 
