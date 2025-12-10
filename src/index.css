@@ -34,6 +34,8 @@
     --ring: 262 47% 55%;
 
     --radius: 0.5rem;
+    
+    --logo-filter: none;
 
     --sidebar-background: 263 28% 20%;
     --sidebar-foreground: 240 5.3% 90%;
@@ -74,6 +76,8 @@
     --input: 261 13% 25%;
     --ring: 262 47% 55%;
     
+    --logo-filter: none;
+    
     --sidebar-background: 263 28% 14%;
     --sidebar-foreground: 240 5.3% 90%;
     --sidebar-primary: 262 47% 55%;
@@ -97,6 +101,10 @@
 
 /* Custom Runway Styles */
 @layer components {
+  .logo-themed {
+    filter: var(--logo-filter);
+  }
+
   .runway-timeline-track {
     @apply h-10 border-b border-border relative flex items-center transition-colors;
   }

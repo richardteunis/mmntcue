@@ -162,7 +162,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onCreateShow, recentShows = [], onS
           <img 
             src="/mmnt_pink_wordmark.svg" 
             alt="mmnt. Cue" 
-            className="h-10 mx-auto mb-4"
+            className="h-10 mx-auto mb-4 logo-themed"
           />
           <h1 className="text-3xl font-bold text-foreground">Welcome to mmnt. Cue</h1>
           <p className="text-muted-foreground max-w-md mx-auto">
@@ -214,7 +214,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onCreateShow, recentShows = [], onS
                   onClick={() => onSelectShow?.(show.id, show.name)}
                 >
                   <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-                    <img src="/mmnt_pink_icon.svg" alt="" className="h-5 w-5" />
+                    <img src="/mmnt_pink_icon.svg" alt="" className="h-5 w-5 logo-themed" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{show.name}</p>

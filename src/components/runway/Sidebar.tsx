@@ -923,7 +923,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
           <img 
             src="/mmnt_pink_icon.svg" 
             alt="" 
-            className="h-8 w-8"
+            className="h-8 w-8 logo-themed"
           />
           <div className="flex flex-col">
             <span className="font-bold text-white text-sm">mmnt. Cue</span>
@@ -934,7 +934,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
           <img 
             src="/mmnt_pink_icon.svg" 
             alt="mmnt. Cue" 
-            className="h-8 w-8 mx-auto"
+            className="h-8 w-8 mx-auto logo-themed"
           />
         )}
         <Button 
