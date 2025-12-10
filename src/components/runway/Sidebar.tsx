@@ -228,12 +228,8 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setShows(prev => {
-              if (prev.some(s => s.id === (payload.new as Show).id)) {
-                return prev;
-              }
-              return [payload.new as Show, ...prev];
-            });
+            // Only add if show doesn't exist and user_id matches (other user's shows not relevant)
+            // Skip this - we already handle inserts locally to prevent duplicates
           } else if (payload.eventType === 'UPDATE') {
             setShows(prev => prev.map(s => 
               s.id === (payload.new as Show).id ? payload.new as Show : s
