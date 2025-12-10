@@ -332,11 +332,12 @@ const handler = async (req: Request): Promise<Response> => {
     const displayName = safeInviteeName || email.split("@")[0];
     const year = getCurrentYear();
 
-    // Send the invite email with branded template
+    // Send the invite email with branded template and deliverability optimizations
     const emailResponse = await resend.emails.send({
-      from: "mmnt. Cue <noreply@cue.mmnt.dev>",
+      from: `${safeInviterName} via mmnt. Cue <invites@cue.mmnt.dev>`,
+      reply_to: "support@mmnt.dev",
       to: [email],
-      subject: `You've been invited to collaborate on "${safeShowName}"`,
+      subject: `${safeInviterName} invited you to "${safeShowName}"`,
       html: generateInvitationEmail({
         userName: displayName,
         userTitle: safeInviteeTitle,
@@ -345,6 +346,11 @@ const handler = async (req: Request): Promise<Response> => {
         actionUrl: inviteLink,
         year,
       }),
+      headers: {
+        "X-Priority": "1",
+        "X-MSMail-Priority": "High",
+        "Importance": "High",
+      },
     });
 
     console.log("Email sent successfully:", emailResponse);
