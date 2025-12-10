@@ -5,3 +5,21 @@ verify_jwt = false
 
 [functions.send-invite]
 verify_jwt = false
+
+[functions.send-notification-email]
+verify_jwt = false
+
+[functions.generate-show]
+verify_jwt = false
+
+[functions.passkey-login-options]
+verify_jwt = false
+
+[functions.passkey-login-verify]
+verify_jwt = false
+
+[functions.passkey-register-options]
+verify_jwt = false
+
+[functions.passkey-register-verify]
+verify_jwt = false
