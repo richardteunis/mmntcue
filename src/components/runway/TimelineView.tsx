@@ -1,6 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { Play, Pause, SkipForward, RotateCcw, ZoomIn, ZoomOut, Hand } from 'lucide-react';
+import { Play, Pause, SkipForward, RotateCcw, ZoomIn, ZoomOut, Hand, Volume2, Settings2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
@@ -41,6 +48,7 @@ export interface TimelineViewProps {
   scrollRef?: React.RefObject<HTMLDivElement>;
   onAssetDropOnCue?: (assetData: any, cueId: string) => void;
   onAssetDropToCreate?: (assetData: any, trackId: string, startTime: number) => void;
+  onTrackEdit?: (track: TimelineTrack) => void;
   // Shared playback state
   playbackState?: {
     isPlaying: boolean;
@@ -100,6 +108,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   scrollRef,
   onAssetDropOnCue,
   onAssetDropToCreate,
+  onTrackEdit,
   playbackState,
 }) => {
   const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
@@ -109,6 +118,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const [panMode, setPanMode] = useState(false);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
+  const [cuesWithAudio, setCuesWithAudio] = useState<Set<string>>(new Set());
   
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -143,6 +153,31 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
   // Playback is now handled by the shared usePlaybackState hook in Dashboard
   // This component just reads the state and displays it
+
+  // Fetch which cues have audio assets attached
+  useEffect(() => {
+    const fetchCuesWithAudio = async () => {
+      const cueIds = cues.map(c => c.id);
+      if (cueIds.length === 0) return;
+      
+      const { data } = await supabase
+        .from('cue_assets')
+        .select('cue_id, assets!inner(file_type)')
+        .in('cue_id', cueIds);
+      
+      if (data) {
+        const audioSet = new Set<string>();
+        data.forEach((item: any) => {
+          if (item.assets?.file_type === 'audio' || item.assets?.file_type === 'video') {
+            audioSet.add(item.cue_id);
+          }
+        });
+        setCuesWithAudio(audioSet);
+      }
+    };
+    
+    fetchCuesWithAudio();
+  }, [cues]);
 
   // Auto-scroll to follow playhead
   useEffect(() => {
@@ -226,8 +261,12 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
     const handleMouseUp = () => {
       setIsDraggingPlayhead(false);
+      document.body.style.userSelect = '';
     };
 
+    // Prevent text selection while dragging
+    document.body.style.userSelect = 'none';
+    
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
 
@@ -398,18 +437,36 @@ const TimelineView: React.FC<TimelineViewProps> = ({
               <div 
                 key={track.id}
                 className={cn(
-                  "h-16 flex items-center px-3 border-b border-border",
+                  "h-16 flex items-center px-3 border-b border-border group",
                   "hover:bg-muted/30 transition-colors"
                 )}
               >
                 <div 
-                  className="w-3 h-3 rounded-full mr-2"
+                  className="w-3 h-3 rounded-full mr-2 flex-shrink-0"
                   style={{ backgroundColor: track.color }}
                 />
-                <span className="text-sm font-medium">{track.label}</span>
-                <span className="ml-auto text-xs text-muted-foreground">
+                <span className="text-sm font-medium flex-1 truncate">{track.label}</span>
+                <span className="text-xs text-muted-foreground mr-1">
                   {cuesByTrack[track.id]?.length || 0}
                 </span>
+                {onTrackEdit && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Settings2 size={14} />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onTrackEdit(track)}>
+                        Edit Track
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             ))}
           </div>
@@ -482,6 +539,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   const startX = timeToSeconds(cue.time) * pixelsPerSecond;
                   const width = Math.max(timeToSeconds(cue.duration) * pixelsPerSecond, 40);
                   const animation = animatingCues.find(a => a.id === cue.id);
+                  const hasAudio = cuesWithAudio.has(cue.id);
+                  
+                  // Get cue color - use cue.color if it's a hex color, otherwise use track color
+                  const cueColor = cue.color && cue.color.startsWith('#') ? cue.color : track.color;
                   
                   return (
                     <div
@@ -499,8 +560,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                       style={{ 
                         left: startX, 
                         width,
-                        backgroundColor: track.color,
-                        borderColor: track.color,
+                        backgroundColor: cueColor,
+                        borderColor: cueColor,
                       }}
                       onClick={(e) => handleCueClick(e, cue)}
                       onDragOver={(e) => {
@@ -527,13 +588,18 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                         setDropTargetCueId(null);
                       }}
                     >
-                      <div className="px-2 py-1 h-full flex flex-col justify-center overflow-hidden">
+                      <div className="px-2 py-1 h-full flex flex-col justify-center overflow-hidden relative">
                         <span className="text-xs font-medium text-white truncate drop-shadow-sm">
                           {cue.name}
                         </span>
                         <span className="text-[10px] text-white/80 truncate">
                           {cue.duration}
                         </span>
+                        {hasAudio && (
+                          <div className="absolute top-1 right-1">
+                            <Volume2 size={10} className="text-white/90 drop-shadow-sm" />
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
