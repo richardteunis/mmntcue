@@ -433,10 +433,40 @@ export type Database = {
           },
         ]
       }
+      show_favorites: {
+        Row: {
+          created_at: string
+          id: string
+          show_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          show_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          show_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "show_favorites_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       show_members: {
         Row: {
           accepted_at: string | null
           guest_email: string | null
+          hidden: boolean | null
           id: string
           invited_at: string
           invited_by: string | null
@@ -447,6 +477,7 @@ export type Database = {
         Insert: {
           accepted_at?: string | null
           guest_email?: string | null
+          hidden?: boolean | null
           id?: string
           invited_at?: string
           invited_by?: string | null
@@ -457,6 +488,7 @@ export type Database = {
         Update: {
           accepted_at?: string | null
           guest_email?: string | null
+          hidden?: boolean | null
           id?: string
           invited_at?: string
           invited_by?: string | null

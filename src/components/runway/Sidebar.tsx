@@ -22,14 +22,16 @@ import {
   Clock,
   ListVideo,
   Zap,
-  
   MapPin,
   FolderPlus,
   FolderOpen,
   FolderClosed,
   GripVertical,
   MoreHorizontal,
-  Home
+  Home,
+  Star,
+  Share2,
+  EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -48,6 +50,18 @@ import { Show, Folder as FolderType } from '@/types/cue';
 import ShowFormModal from './ShowFormModal';
 
 import { useAuthContext } from '@/contexts/AuthContext';
+
+interface ShowMember {
+  show_id: string;
+  user_id: string | null;
+  role: string;
+  hidden: boolean;
+}
+
+interface ShowFavorite {
+  show_id: string;
+  user_id: string;
+}
 
 interface SidebarProps {
   className?: string;
@@ -122,11 +136,16 @@ const ShowIcon: React.FC<{ logoUrl?: string | null; size?: number; className?: s
 
 const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect, onQuickAddCue, onGoHome }) => {
   const navigate = useNavigate();
+  const { user } = useAuthContext();
   const [collapsed, setCollapsed] = useState(false);
   const [shows, setShows] = useState<Show[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  
+  // Membership and favorites state
+  const [memberships, setMemberships] = useState<ShowMember[]>([]);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
   
   // Drag and drop state
   const [draggedItem, setDraggedItem] = useState<{ type: 'show' | 'folder'; id: string } | null>(null);
@@ -148,13 +167,17 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
   
   const { toast } = useToast();
 
-  // Fetch shows and folders from database
+  // Fetch shows, folders, memberships, and favorites from database
   const fetchData = async () => {
+    if (!user) return;
+    
     setLoading(true);
     
-    const [showsResult, foldersResult] = await Promise.all([
+    const [showsResult, foldersResult, membershipsResult, favoritesResult] = await Promise.all([
       supabase.from('shows').select('*').order('created_at', { ascending: false }),
-      supabase.from('folders').select('*').order('order_index', { ascending: true })
+      supabase.from('folders').select('*').order('order_index', { ascending: true }),
+      supabase.from('show_members').select('show_id, user_id, role, hidden').eq('user_id', user.id),
+      supabase.from('show_favorites').select('show_id').eq('user_id', user.id)
     ]);
     
     if (showsResult.error) {
@@ -174,16 +197,28 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
       setFolders(foldersResult.data || []);
     }
     
+    if (!membershipsResult.error && membershipsResult.data) {
+      setMemberships(membershipsResult.data as ShowMember[]);
+    }
+    
+    if (!favoritesResult.error && favoritesResult.data) {
+      setFavorites(new Set(favoritesResult.data.map(f => f.show_id)));
+    }
+    
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
 
-  // Real-time subscription for shows
+  // Real-time subscription for shows and favorites
   useEffect(() => {
-    const channel = supabase
+    if (!user) return;
+    
+    const showsChannel = supabase
       .channel('sidebar-shows')
       .on(
         'postgres_changes',
@@ -195,7 +230,6 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setShows(prev => {
-              // Check if already exists to prevent duplicates
               if (prev.some(s => s.id === (payload.new as Show).id)) {
                 return prev;
               }
@@ -211,11 +245,36 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
         }
       )
       .subscribe();
+      
+    const favoritesChannel = supabase
+      .channel('sidebar-favorites')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'show_favorites',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setFavorites(prev => new Set([...prev, (payload.new as ShowFavorite).show_id]));
+          } else if (payload.eventType === 'DELETE') {
+            setFavorites(prev => {
+              const next = new Set(prev);
+              next.delete((payload.old as ShowFavorite).show_id);
+              return next;
+            });
+          }
+        }
+      )
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(showsChannel);
+      supabase.removeChannel(favoritesChannel);
     };
-  }, []);
+  }, [user]);
 
   // Listen for external create show event (from HomeView)
   useEffect(() => {
@@ -432,39 +491,111 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
   };
   
   const handleDeleteShow = async () => {
-    if (!showToDelete) return;
+    if (!showToDelete || !user) return;
     
-    // First delete related records
-    await supabase.from('cues').delete().eq('show_id', showToDelete.id);
-    await supabase.from('show_members').delete().eq('show_id', showToDelete.id);
-    await supabase.from('show_assets').delete().eq('show_id', showToDelete.id);
-    await supabase.from('activity_log').delete().eq('show_id', showToDelete.id);
-    await supabase.from('notifications').delete().eq('show_id', showToDelete.id);
+    // Check if user is the owner
+    const isOwner = showToDelete.user_id === user.id || showToDelete.user_id === null;
     
-    const { error, count } = await supabase
-      .from('shows')
-      .delete()
-      .eq('id', showToDelete.id)
-      .select();
-    
-    if (error) {
-      console.error('Delete error:', error);
-      toast({ title: "Error deleting show", description: error.message, variant: "destructive" });
-      return;
+    if (isOwner) {
+      // Owner can fully delete the show
+      await supabase.from('cues').delete().eq('show_id', showToDelete.id);
+      await supabase.from('show_members').delete().eq('show_id', showToDelete.id);
+      await supabase.from('show_assets').delete().eq('show_id', showToDelete.id);
+      await supabase.from('activity_log').delete().eq('show_id', showToDelete.id);
+      await supabase.from('notifications').delete().eq('show_id', showToDelete.id);
+      await supabase.from('show_favorites').delete().eq('show_id', showToDelete.id);
+      
+      const { error } = await supabase
+        .from('shows')
+        .delete()
+        .eq('id', showToDelete.id);
+      
+      if (error) {
+        console.error('Delete error:', error);
+        toast({ title: "Error deleting show", description: error.message, variant: "destructive" });
+        return;
+      }
+      
+      setShows(prev => prev.filter(s => s.id !== showToDelete.id));
+      toast({ title: "Show deleted" });
+    } else {
+      // Non-owner: hide the show in show_members
+      const { error } = await supabase
+        .from('show_members')
+        .update({ hidden: true })
+        .eq('show_id', showToDelete.id)
+        .eq('user_id', user.id);
+      
+      if (error) {
+        toast({ title: "Error hiding show", description: error.message, variant: "destructive" });
+        return;
+      }
+      
+      // Update local memberships
+      setMemberships(prev => prev.map(m => 
+        m.show_id === showToDelete.id ? { ...m, hidden: true } : m
+      ));
+      
+      toast({ title: "Show hidden", description: "You can find it in 'Shared with me'" });
     }
     
-    // Local state update (realtime will also update)
-    setShows(prev => prev.filter(s => s.id !== showToDelete.id));
-    
-    // Always go to home when deleting the active show
     if (activeShowId === showToDelete.id) {
       onGoHome?.();
     }
     
     setDeleteDialogOpen(false);
     setShowToDelete(null);
+  };
+  
+  // Toggle favorite status
+  const handleToggleFavorite = async (showId: string) => {
+    if (!user) return;
     
-    toast({ title: "Show deleted" });
+    const isFavorite = favorites.has(showId);
+    
+    if (isFavorite) {
+      const { error } = await supabase
+        .from('show_favorites')
+        .delete()
+        .eq('show_id', showId)
+        .eq('user_id', user.id);
+        
+      if (!error) {
+        setFavorites(prev => {
+          const next = new Set(prev);
+          next.delete(showId);
+          return next;
+        });
+        toast({ title: "Removed from favorites" });
+      }
+    } else {
+      const { error } = await supabase
+        .from('show_favorites')
+        .insert({ show_id: showId, user_id: user.id });
+        
+      if (!error) {
+        setFavorites(prev => new Set([...prev, showId]));
+        toast({ title: "Added to favorites" });
+      }
+    }
+  };
+  
+  // Unhide a shared show
+  const handleUnhideShow = async (showId: string) => {
+    if (!user) return;
+    
+    const { error } = await supabase
+      .from('show_members')
+      .update({ hidden: false })
+      .eq('show_id', showId)
+      .eq('user_id', user.id);
+      
+    if (!error) {
+      setMemberships(prev => prev.map(m => 
+        m.show_id === showId ? { ...m, hidden: false } : m
+      ));
+      toast({ title: "Show restored" });
+    }
   };
   
   const handleDeleteFolder = async () => {
@@ -540,11 +671,36 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
     onShowSelect(show.id, show.name);
   };
 
-  // Get shows not in any folder (sample show is now just a regular show in user's list)
-  const rootShows = shows.filter(s => !s.folder_id);
+  // Determine owned vs shared shows
+  const ownedShows = shows.filter(s => s.user_id === user?.id || s.user_id === null);
+  const sharedShows = shows.filter(s => {
+    const membership = memberships.find(m => m.show_id === s.id);
+    return s.user_id !== user?.id && s.user_id !== null && membership && !membership.hidden;
+  });
+  const hiddenSharedShows = shows.filter(s => {
+    const membership = memberships.find(m => m.show_id === s.id);
+    return s.user_id !== user?.id && s.user_id !== null && membership && membership.hidden;
+  });
   
-  // Get shows in a specific folder
-  const getShowsInFolder = (folderId: string) => shows.filter(s => s.folder_id === folderId);
+  // Get shows not in any folder (owned shows only)
+  const rootShows = ownedShows.filter(s => !s.folder_id);
+  
+  // Get shows in a specific folder with favorites first
+  const getShowsInFolder = (folderId: string) => {
+    const folderShows = ownedShows.filter(s => s.folder_id === folderId);
+    return [...folderShows].sort((a, b) => {
+      const aFav = favorites.has(a.id) ? 0 : 1;
+      const bFav = favorites.has(b.id) ? 0 : 1;
+      return aFav - bFav;
+    });
+  };
+  
+  // Sort root shows with favorites first
+  const sortedRootShows = [...rootShows].sort((a, b) => {
+    const aFav = favorites.has(a.id) ? 0 : 1;
+    const bFav = favorites.has(b.id) ? 0 : 1;
+    return aFav - bFav;
+  });
 
   const quickAddItems = [
     { icon: <Video size={16} />, label: 'Video Cue', type: 'video', color: 'text-runway-success' },
@@ -553,78 +709,122 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
     { icon: <Mic size={16} />, label: 'Stage Cue', type: 'stage', color: 'text-runway-warning' },
   ];
   
-  const renderShowItem = (show: Show) => (
-    <div 
-      key={show.id} 
-      className="group relative"
-      draggable
-      onDragStart={(e) => handleDragStart(e, 'show', show.id)}
-    >
-      <Button 
-        variant="ghost" 
-        className={cn(
-          "w-full justify-start gap-2 h-auto py-1.5 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground pr-16 pl-2",
-          activeShowId === show.id && "bg-sidebar-accent text-sidebar-foreground font-medium"
-        )}
-        onClick={() => handleSelectShow(show)}
+  const renderShowItem = (show: Show, isShared = false, isHidden = false) => {
+    const isFavorite = favorites.has(show.id);
+    const isOwner = show.user_id === user?.id || show.user_id === null;
+    
+    return (
+      <div 
+        key={show.id} 
+        className="group relative"
+        draggable={!isShared}
+        onDragStart={(e) => !isShared && handleDragStart(e, 'show', show.id)}
       >
-        <GripVertical size={12} className="shrink-0 opacity-0 group-hover:opacity-50 cursor-grab" />
-        <ShowIcon logoUrl={show.logo_url} size={14} />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="flex flex-col items-start min-w-0">
-              <span className="truncate w-full text-left">{show.name}</span>
-              {show.venue && (
-                <span className="text-[10px] text-sidebar-foreground/50 flex items-center gap-1 truncate w-full">
-                  <MapPin size={8} />
-                  {show.venue}
-                </span>
-              )}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="max-w-[250px]">
-            <div className="space-y-1">
-              <p className="font-medium">{show.name}</p>
-              {show.event_name && <p className="text-xs">{show.event_name}</p>}
-              {show.description && <p className="text-xs text-muted-foreground">{show.description}</p>}
-              {show.venue && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <MapPin size={10} />
-                  {show.venue}{show.room_name && `, ${show.room_name}`}
-                </p>
-              )}
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      </Button>
-      <div className="absolute right-1 top-1/2 -translate-y-1/2 flex opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleOpenEditModal(show);
-          }}
+        <Button 
+          variant="ghost" 
+          className={cn(
+            "w-full justify-start gap-2 h-auto py-1.5 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground pr-20 pl-2",
+            activeShowId === show.id && "bg-sidebar-accent text-sidebar-foreground font-medium"
+          )}
+          onClick={() => handleSelectShow(show)}
         >
-          <Pencil size={12} />
+          {!isShared && (
+            <GripVertical size={12} className="shrink-0 opacity-0 group-hover:opacity-50 cursor-grab" />
+          )}
+          {isShared && <Share2 size={12} className="shrink-0 text-muted-foreground" />}
+          {isFavorite && <Star size={12} className="shrink-0 text-yellow-500 fill-yellow-500" />}
+          <ShowIcon logoUrl={show.logo_url} size={14} />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex flex-col items-start min-w-0">
+                <span className="truncate w-full text-left">{show.name}</span>
+                {show.venue && (
+                  <span className="text-[10px] text-sidebar-foreground/50 flex items-center gap-1 truncate w-full">
+                    <MapPin size={8} />
+                    {show.venue}
+                  </span>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-[250px]">
+              <div className="space-y-1">
+                <p className="font-medium">{show.name}</p>
+                {isShared && <p className="text-xs text-primary">Shared with you</p>}
+                {show.event_name && <p className="text-xs">{show.event_name}</p>}
+                {show.description && <p className="text-xs text-muted-foreground">{show.description}</p>}
+                {show.venue && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <MapPin size={10} />
+                    {show.venue}{show.room_name && `, ${show.room_name}`}
+                  </p>
+                )}
+              </div>
+            </TooltipContent>
+          </Tooltip>
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-sidebar-foreground/50 hover:text-destructive hover:bg-sidebar-accent"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowToDelete(show);
-            setFolderToDelete(null);
-            setDeleteDialogOpen(true);
-          }}
-        >
-          <Trash2 size={12} />
-        </Button>
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Favorite button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-6 w-6 hover:bg-sidebar-accent",
+              isFavorite ? "text-yellow-500" : "text-sidebar-foreground/50 hover:text-yellow-500"
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleFavorite(show.id);
+            }}
+          >
+            <Star size={12} className={isFavorite ? "fill-current" : ""} />
+          </Button>
+          {isHidden ? (
+            // Unhide button for hidden shared shows
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleUnhideShow(show.id);
+              }}
+            >
+              <EyeOff size={12} />
+            </Button>
+          ) : (
+            <>
+              {isOwner && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenEditModal(show);
+                  }}
+                >
+                  <Pencil size={12} />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-sidebar-foreground/50 hover:text-destructive hover:bg-sidebar-accent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowToDelete(show);
+                  setFolderToDelete(null);
+                  setDeleteDialogOpen(true);
+                }}
+              >
+                <Trash2 size={12} />
+              </Button>
+            </>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
   
   const renderFolderItem = (folder: FolderType) => {
     const folderShows = getShowsInFolder(folder.id);
@@ -701,7 +901,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
             {folderShows.length === 0 ? (
               <p className="text-xs text-sidebar-foreground/40 px-3 py-1.5">Drop shows here</p>
             ) : (
-              folderShows.map(renderShowItem)
+              folderShows.map(show => renderShowItem(show))
             )}
           </div>
         )}
@@ -832,11 +1032,17 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete {showToDelete ? 'Show' : 'Folder'}
+              {showToDelete 
+                ? (showToDelete.user_id === user?.id || showToDelete.user_id === null 
+                    ? 'Delete Show' 
+                    : 'Hide Show')
+                : 'Delete Folder'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {showToDelete 
-                ? `Are you sure you want to delete "${showToDelete.name}"? This will also delete all cues in this show. This action cannot be undone.`
+                ? (showToDelete.user_id === user?.id || showToDelete.user_id === null
+                    ? `Are you sure you want to delete "${showToDelete.name}"? This will also delete all cues in this show. This action cannot be undone.`
+                    : `This show was shared with you. Hiding it will move it to the "Hidden" section in "Shared With Me". You can restore it later.`)
                 : `Are you sure you want to delete the folder "${folderToDelete?.name}"? Shows inside will be moved to the root level. This action cannot be undone.`
               }
             </AlertDialogDescription>
@@ -845,9 +1051,15 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={showToDelete ? handleDeleteShow : handleDeleteFolder} 
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className={cn(
+                showToDelete && showToDelete.user_id !== user?.id && showToDelete.user_id !== null
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                  : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              )}
             >
-              Delete
+              {showToDelete && showToDelete.user_id !== user?.id && showToDelete.user_id !== null 
+                ? 'Hide' 
+                : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -880,21 +1092,46 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
                   {folders.map(renderFolderItem)}
                   
                   {/* Root level shows */}
-                  {rootShows.length === 0 && folders.length === 0 ? (
+                  {sortedRootShows.length === 0 && folders.length === 0 ? (
                     <p className="text-xs text-sidebar-foreground/40 px-3 py-2">No shows yet</p>
                   ) : (
-                    rootShows.map(renderShowItem)
+                    sortedRootShows.map(show => renderShowItem(show))
                   )}
                 </div>
               )}
-              <Button 
-                variant="ghost" 
-                className="w-full justify-start gap-2 h-8 text-sm text-sidebar-foreground/50 hover:text-sidebar-foreground"
-              >
-                <Users size={14} />
-                Shared With Me
-              </Button>
             </SidebarSection>
+            
+            {/* Shared With Me Section */}
+            {(sharedShows.length > 0 || hiddenSharedShows.length > 0) && (
+              <SidebarSection 
+                title="Shared With Me" 
+                icon={<Share2 size={12} />}
+                badge={sharedShows.length}
+                defaultOpen={true}
+              >
+                <div className="space-y-0.5">
+                  {sharedShows.map(show => renderShowItem(show, true, false))}
+                </div>
+                
+                {hiddenSharedShows.length > 0 && (
+                  <Collapsible>
+                    <CollapsibleTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-start gap-2 h-7 text-xs text-sidebar-foreground/50 hover:text-sidebar-foreground mt-1"
+                      >
+                        <EyeOff size={10} />
+                        Hidden ({hiddenSharedShows.length})
+                        <ChevronRight size={10} className="ml-auto" />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-0.5 mt-1">
+                      {hiddenSharedShows.map(show => renderShowItem(show, true, true))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+              </SidebarSection>
+            )}
 
             {/* Quick Add Section */}
             <SidebarSection 
