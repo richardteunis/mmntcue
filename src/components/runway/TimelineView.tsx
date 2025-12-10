@@ -39,6 +39,8 @@ export interface TimelineViewProps {
   onCueDuplicate?: (cueId: string) => void;
   onViewportChange?: (scrollX: number, scrollY: number, zoom: number) => void;
   scrollRef?: React.RefObject<HTMLDivElement>;
+  onAssetDropOnCue?: (assetData: any, cueId: string) => void;
+  onAssetDropToCreate?: (assetData: any, trackId: string, startTime: number) => void;
 }
 
 // Default track lanes configuration
@@ -86,7 +88,11 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   onCueDuplicate,
   onViewportChange,
   scrollRef,
+  onAssetDropOnCue,
+  onAssetDropToCreate,
 }) => {
+  const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
+  const [dropTargetTrack, setDropTargetTrack] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1); // pixels per second
   const [scrollLeft, setScrollLeft] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -450,9 +456,34 @@ const TimelineView: React.FC<TimelineViewProps> = ({
             {tracks.map(track => (
               <div 
                 key={track.id}
-                className="h-16 border-b border-border relative"
+                className={cn(
+                  "h-16 border-b border-border relative transition-colors",
+                  dropTargetTrack === track.id && "bg-runway-teal/10 ring-1 ring-runway-teal ring-inset"
+                )}
                 style={{ 
                   backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent ${60 * pixelsPerSecond - 1}px, hsl(var(--border) / 0.3) ${60 * pixelsPerSecond - 1}px, hsl(var(--border) / 0.3) ${60 * pixelsPerSecond}px)` 
+                }}
+                onDragOver={(e) => {
+                  if (e.dataTransfer.types.includes('application/json')) {
+                    e.preventDefault();
+                    setDropTargetTrack(track.id);
+                  }
+                }}
+                onDragLeave={() => setDropTargetTrack(null)}
+                onDrop={(e) => {
+                  const jsonData = e.dataTransfer.getData('application/json');
+                  if (jsonData) {
+                    try {
+                      const assetData = JSON.parse(jsonData);
+                      if (assetData.file_url && onAssetDropToCreate) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const time = getTimeFromMouseEvent(e);
+                        onAssetDropToCreate(assetData, track.id, time);
+                      }
+                    } catch {}
+                  }
+                  setDropTargetTrack(null);
                 }}
               >
                 {/* Cue bars */}
@@ -469,6 +500,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                         "absolute top-2 h-12 rounded-md cursor-pointer transition-all duration-300",
                         "border-2 shadow-sm hover:shadow-md",
                         selectedCueId === cue.id && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                        dropTargetCueId === cue.id && "ring-2 ring-runway-teal ring-offset-1 scale-105",
                         animation?.type === 'add' && "animate-scale-in",
                         animation?.type === 'delete' && "animate-fade-out opacity-0 scale-95",
                         animation?.type === 'update' && "ring-2 ring-runway-teal ring-offset-1"
@@ -480,6 +512,29 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                         borderColor: track.color,
                       }}
                       onClick={(e) => handleCueClick(e, cue)}
+                      onDragOver={(e) => {
+                        if (e.dataTransfer.types.includes('application/json')) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDropTargetCueId(cue.id);
+                          setDropTargetTrack(null);
+                        }
+                      }}
+                      onDragLeave={() => setDropTargetCueId(null)}
+                      onDrop={(e) => {
+                        const jsonData = e.dataTransfer.getData('application/json');
+                        if (jsonData) {
+                          try {
+                            const assetData = JSON.parse(jsonData);
+                            if (assetData.file_url && onAssetDropOnCue) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onAssetDropOnCue(assetData, cue.id);
+                            }
+                          } catch {}
+                        }
+                        setDropTargetCueId(null);
+                      }}
                     >
                       <div className="px-2 py-1 h-full flex flex-col justify-center overflow-hidden">
                         <span className="text-xs font-medium text-white truncate drop-shadow-sm">

@@ -89,6 +89,8 @@ export interface TimelineProps {
   animatingCues?: { id: string; type: 'add' | 'delete' | 'update' }[];
   onViewportChange?: (scrollX: number, scrollY: number) => void;
   scrollRef?: React.RefObject<HTMLDivElement>;
+  onAssetDropOnCue?: (assetData: any, cueId: string) => void;
+  onAssetDropToCreate?: (assetData: any) => void;
 }
 
 // Track columns configuration
@@ -164,8 +166,12 @@ const Timeline: React.FC<TimelineProps> = ({
   showCountdown,
   animatingCues = [],
   onViewportChange,
-  scrollRef
+  scrollRef,
+  onAssetDropOnCue,
+  onAssetDropToCreate
 }) => {
+  const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
+  const [isDropZoneActive, setIsDropZoneActive] = useState(false);
   const [currentTime, setCurrentTime] = useState('00:00:00');
   const [isPlaying, setIsPlaying] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
@@ -521,10 +527,39 @@ const Timeline: React.FC<TimelineProps> = ({
             (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
           }
         }}
-        className="flex-1 overflow-auto border-t border-border"
+        className={cn(
+          "flex-1 overflow-auto border-t border-border transition-colors",
+          isDropZoneActive && "bg-runway-teal/5 ring-2 ring-runway-teal ring-inset"
+        )}
         onScroll={(e) => {
           const target = e.target as HTMLDivElement;
           onViewportChange?.(target.scrollLeft, target.scrollTop);
+        }}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('application/json')) {
+            e.preventDefault();
+            setIsDropZoneActive(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          // Only deactivate if leaving the container entirely
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setIsDropZoneActive(false);
+          }
+        }}
+        onDrop={(e) => {
+          const jsonData = e.dataTransfer.getData('application/json');
+          if (jsonData && !dropTargetCueId) {
+            try {
+              const assetData = JSON.parse(jsonData);
+              if (assetData.file_url && onAssetDropToCreate) {
+                e.preventDefault();
+                onAssetDropToCreate(assetData);
+              }
+            } catch {}
+          }
+          setIsDropZoneActive(false);
+          setDropTargetCueId(null);
         }}
       >
         <Table className="border-collapse">
@@ -588,15 +623,41 @@ const Timeline: React.FC<TimelineProps> = ({
                   key={cue.id}
                   draggable
                   onDragStart={(e) => handleDragStart(e, cue.id)}
-                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragOver={(e) => {
+                    handleDragOver(e, index);
+                    // Check if it's an asset drop
+                    if (e.dataTransfer.types.includes('application/json')) {
+                      e.preventDefault();
+                      setDropTargetCueId(cue.id);
+                    }
+                  }}
+                  onDragLeave={() => setDropTargetCueId(null)}
                   onDragEnd={handleDragEnd}
-                  onDrop={(e) => handleDrop(e, index)}
+                  onDrop={(e) => {
+                    // Check if it's an asset drop
+                    const jsonData = e.dataTransfer.getData('application/json');
+                    if (jsonData) {
+                      try {
+                        const assetData = JSON.parse(jsonData);
+                        if (assetData.file_url && onAssetDropOnCue) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onAssetDropOnCue(assetData, cue.id);
+                          setDropTargetCueId(null);
+                          return;
+                        }
+                      } catch {}
+                    }
+                    handleDrop(e, index);
+                    setDropTargetCueId(null);
+                  }}
                   className={cn(
                     "cursor-pointer transition-all duration-300 group border-b border-border hover:bg-muted/30",
                     (isSelected || isMultiSelected) && "bg-primary/10 border-l-2 border-l-primary",
                     isCurrentCue && "bg-runway-success/20 ring-1 ring-runway-success",
                     isDragging && "opacity-50",
                     isDragOver && "border-t-2 border-t-primary",
+                    dropTargetCueId === cue.id && "ring-2 ring-runway-teal bg-runway-teal/10",
                     animation?.type === 'add' && "animate-fade-in bg-runway-success/10",
                     animation?.type === 'delete' && "animate-fade-out opacity-0",
                     animation?.type === 'update' && "bg-runway-teal/10"
