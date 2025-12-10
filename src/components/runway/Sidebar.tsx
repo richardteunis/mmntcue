@@ -149,37 +149,72 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
   const { toast } = useToast();
 
   // Fetch shows and folders from database
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      
-      const [showsResult, foldersResult] = await Promise.all([
-        supabase.from('shows').select('*').order('created_at', { ascending: false }),
-        supabase.from('folders').select('*').order('order_index', { ascending: true })
-      ]);
-      
-      if (showsResult.error) {
-        console.error('Error fetching shows:', showsResult.error);
-        toast({
-          title: "Error loading shows",
-          description: showsResult.error.message,
-          variant: "destructive",
-        });
-      } else {
-        setShows(showsResult.data || []);
-        // Don't auto-select a show - let user choose or stay on home
-      }
-      
-      if (foldersResult.error) {
-        console.error('Error fetching folders:', foldersResult.error);
-      } else {
-        setFolders(foldersResult.data || []);
-      }
-      
-      setLoading(false);
-    };
+  const fetchData = async () => {
+    setLoading(true);
+    
+    const [showsResult, foldersResult] = await Promise.all([
+      supabase.from('shows').select('*').order('created_at', { ascending: false }),
+      supabase.from('folders').select('*').order('order_index', { ascending: true })
+    ]);
+    
+    if (showsResult.error) {
+      console.error('Error fetching shows:', showsResult.error);
+      toast({
+        title: "Error loading shows",
+        description: showsResult.error.message,
+        variant: "destructive",
+      });
+    } else {
+      setShows(showsResult.data || []);
+    }
+    
+    if (foldersResult.error) {
+      console.error('Error fetching folders:', foldersResult.error);
+    } else {
+      setFolders(foldersResult.data || []);
+    }
+    
+    setLoading(false);
+  };
 
+  useEffect(() => {
     fetchData();
+  }, []);
+
+  // Real-time subscription for shows
+  useEffect(() => {
+    const channel = supabase
+      .channel('sidebar-shows')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shows'
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setShows(prev => {
+              // Check if already exists to prevent duplicates
+              if (prev.some(s => s.id === (payload.new as Show).id)) {
+                return prev;
+              }
+              return [payload.new as Show, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setShows(prev => prev.map(s => 
+              s.id === (payload.new as Show).id ? payload.new as Show : s
+            ));
+          } else if (payload.eventType === 'DELETE') {
+            setShows(prev => prev.filter(s => s.id !== (payload.old as Show).id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Listen for external create show event (from HomeView)
@@ -399,15 +434,27 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
   const handleDeleteShow = async () => {
     if (!showToDelete) return;
     
-    const { error } = await supabase.from('shows').delete().eq('id', showToDelete.id);
+    // First delete related records
+    await supabase.from('cues').delete().eq('show_id', showToDelete.id);
+    await supabase.from('show_members').delete().eq('show_id', showToDelete.id);
+    await supabase.from('show_assets').delete().eq('show_id', showToDelete.id);
+    await supabase.from('activity_log').delete().eq('show_id', showToDelete.id);
+    await supabase.from('notifications').delete().eq('show_id', showToDelete.id);
+    
+    const { error, count } = await supabase
+      .from('shows')
+      .delete()
+      .eq('id', showToDelete.id)
+      .select();
     
     if (error) {
+      console.error('Delete error:', error);
       toast({ title: "Error deleting show", description: error.message, variant: "destructive" });
       return;
     }
     
-    const updatedShows = shows.filter(s => s.id !== showToDelete.id);
-    setShows(updatedShows);
+    // Local state update (realtime will also update)
+    setShows(prev => prev.filter(s => s.id !== showToDelete.id));
     
     // Always go to home when deleting the active show
     if (activeShowId === showToDelete.id) {
