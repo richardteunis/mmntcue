@@ -4,10 +4,14 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import Dashboard from '@/components/runway/Dashboard';
 import { Loader2 } from 'lucide-react';
+import { useInviteAcceptance } from '@/hooks/useInviteAcceptance';
 
 const Index = () => {
   const { user, profile, loading } = useAuthContext();
   const navigate = useNavigate();
+  
+  // Check for and accept any pending guest invitations
+  useInviteAcceptance(user?.id || null, user?.email || null, profile?.full_name || null);
 
   useEffect(() => {
     if (!loading) {
