@@ -467,7 +467,7 @@ const SettingsPage: React.FC = () => {
                         { value: 'midnight', label: 'Midnight', bg: 'bg-[#0f172a]', accent: 'bg-[#3B82F6]', text: 'text-white' },
                         { value: 'forest', label: 'Forest', bg: 'bg-[#14261a]', accent: 'bg-[#22C55E]', text: 'text-white' },
                         { value: 'sunset', label: 'Sunset', bg: 'bg-[#271a1a]', accent: 'bg-[#F97316]', text: 'text-white' },
-                        { value: 'ocean', label: 'Ocean', bg: 'bg-[#0c1929]', accent: 'bg-[#06B6D4]', text: 'text-white' },
+                        { value: 'noir', label: 'Noir', bg: 'bg-[#0a0a0a]', accent: 'bg-[#e5e5e5]', text: 'text-white' },
                         { value: 'rose', label: 'Rose', bg: 'bg-[#271a22]', accent: 'bg-[#EC4899]', text: 'text-white' },
                         { value: 'light', label: 'Light', bg: 'bg-[#f8fafc]', accent: 'bg-[#8B5CF6]', text: 'text-slate-900' },
                         { value: 'system', label: 'System', bg: 'bg-gradient-to-br from-[#1a1625] to-[#f8fafc]', accent: 'bg-[#8B5CF6]', text: 'text-white' },
