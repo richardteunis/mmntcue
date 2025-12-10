@@ -35,12 +35,15 @@ interface InviteRequest {
   inviterName: string;
   role: string;
   userName?: string;
+  inviteeName?: string;
+  inviteeTitle?: string;
 }
 
 const getCurrentYear = () => new Date().getFullYear();
 
 const generateInvitationEmail = (params: {
   userName: string;
+  userTitle?: string;
   inviterName: string;
   eventName: string;
   actionUrl: string;
@@ -65,7 +68,7 @@ const generateInvitationEmail = (params: {
                 mmnt. Cue
               </span>
               <h1 style="margin:12px 0 0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:22px; line-height:1.4; color:#e5e7eb; font-weight:600;">
-                You've been invited to mmnt. Cue
+                You've been invited to collaborate
               </h1>
             </td>
           </tr>
@@ -74,10 +77,10 @@ const generateInvitationEmail = (params: {
           <tr>
             <td style="padding:8px 24px 0 24px; text-align:left;">
               <p style="margin:0 0 12px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:14px; line-height:1.7; color:#9ca3af;">
-                Hi ${params.userName},
+                Hi ${params.userName}${params.userTitle ? `, ${params.userTitle}` : ''},
               </p>
               <p style="margin:0 0 16px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:14px; line-height:1.7; color:#9ca3af;">
-                ${params.inviterName} has invited you to join <strong style="color:#e5e7eb;">mmnt. Cue</strong> for the event <strong style="color:#e5e7eb;">${params.eventName}</strong>.
+                ${params.inviterName} has invited you to join the event <strong style="color:#e5e7eb;">${params.eventName}</strong> on <strong style="color:#e5e7eb;">mmnt. Cue</strong>.
               </p>
               <p style="margin:0 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:14px; line-height:1.7; color:#9ca3af;">
                 Click the button below to create your account and get set up.
@@ -262,7 +265,7 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const requestBody: InviteRequest = await req.json();
-    const { email, showId, showName, inviterName, role, userName } = requestBody;
+    const { email, showId, showName, inviterName, role, userName, inviteeName, inviteeTitle } = requestBody;
     
     // Input validation
     if (!isValidEmail(email)) {
@@ -307,17 +310,18 @@ const handler = async (req: Request): Promise<Response> => {
     // Sanitize string inputs
     const safeShowName = sanitizeString(showName, 200);
     const safeInviterName = sanitizeString(inviterName, 100);
-    const safeUserName = userName ? sanitizeString(userName, 100) : undefined;
+    const safeInviteeName = inviteeName ? sanitizeString(inviteeName, 100) : undefined;
+    const safeInviteeTitle = inviteeTitle ? sanitizeString(inviteeTitle, 100) : undefined;
     const safeRole = sanitizeString(role, 50);
     
     console.log("Sending invite to:", email, "for show:", safeShowName);
 
-    // Construct the invite link
-    const siteUrl = Deno.env.get("SITE_URL") || "https://lovable.dev";
+    // Construct the invite link using SITE_URL from env
+    const siteUrl = Deno.env.get("SITE_URL") || "https://cue.mmnt.dev";
     const inviteLink = `${siteUrl}/show/${showId}`;
 
-    // Determine email type based on whether user exists
-    const displayName = safeUserName || email.split("@")[0];
+    // Use inviteeName if provided, otherwise fall back to email prefix
+    const displayName = safeInviteeName || email.split("@")[0];
     const year = getCurrentYear();
 
     // Send the invite email with branded template
@@ -327,6 +331,7 @@ const handler = async (req: Request): Promise<Response> => {
       subject: `You've been invited to collaborate on "${safeShowName}"`,
       html: generateInvitationEmail({
         userName: displayName,
+        userTitle: safeInviteeTitle,
         inviterName: safeInviterName,
         eventName: safeShowName,
         actionUrl: inviteLink,

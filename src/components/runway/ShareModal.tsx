@@ -54,6 +54,9 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
   const [linkCopied, setLinkCopied] = useState(false);
   const [showCode, setShowCode] = useState<string | null>(null);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [inviteeName, setInviteeName] = useState('');
+  const [inviteeTitle, setInviteeTitle] = useState('');
   const { toast } = useToast();
   const { user, profile } = useAuthContext();
 
@@ -232,6 +235,14 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
   // Invite by email (for new users)
   const handleInviteByEmail = async () => {
     if (!searchQuery.trim() || !user || !isValidEmail(searchQuery)) return;
+    if (!inviteeName.trim()) {
+      toast({
+        title: 'Name required',
+        description: 'Please enter the invitee\'s name.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setInviting(true);
     try {
@@ -245,6 +256,9 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
       if (existingProfile) {
         // User exists, invite them directly
         await handleInviteUser(existingProfile as Profile);
+        setShowInviteForm(false);
+        setInviteeName('');
+        setInviteeTitle('');
         return;
       }
 
@@ -270,7 +284,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
         return;
       }
 
-      // Send email invite
+      // Send email invite with name and title
       try {
         const { data: { session } } = await supabase.auth.getSession();
         await supabase.functions.invoke('send-invite', {
@@ -281,6 +295,8 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
             showName,
             inviterName: profile?.full_name || user.email || 'Someone',
             role: 'guest',
+            inviteeName: inviteeName.trim(),
+            inviteeTitle: inviteeTitle.trim() || undefined,
           },
         });
       } catch (emailError) {
@@ -289,11 +305,14 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
 
       toast({
         title: 'Invitation sent',
-        description: `An invite has been sent to ${searchQuery}`,
+        description: `An invite has been sent to ${inviteeName}`,
       });
 
       setSearchQuery('');
       setSearchResults([]);
+      setShowInviteForm(false);
+      setInviteeName('');
+      setInviteeTitle('');
       fetchMembers();
     } catch (error: any) {
       toast({
@@ -453,20 +472,64 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
                     ))}
                   </div>
                 ) : isValidEmail(searchQuery) ? (
-                  <button
-                    className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors text-left"
-                    onClick={handleInviteByEmail}
-                    disabled={inviting}
-                  >
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Mail className="h-4 w-4 text-primary" />
+                  showInviteForm ? (
+                    <div className="p-3 space-y-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Mail className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-medium">Invite {searchQuery}</span>
+                      </div>
+                      <div className="space-y-2">
+                        <Input
+                          placeholder="Name (e.g., Richard Teunis)"
+                          value={inviteeName}
+                          onChange={(e) => setInviteeName(e.target.value)}
+                          className="text-sm"
+                        />
+                        <Input
+                          placeholder="Title (e.g., Producer) - optional"
+                          value={inviteeTitle}
+                          onChange={(e) => setInviteeTitle(e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setShowInviteForm(false);
+                            setInviteeName('');
+                            setInviteeTitle('');
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={handleInviteByEmail}
+                          disabled={inviting || !inviteeName.trim()}
+                        >
+                          {inviting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                          Send Invite
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Invite {searchQuery}</p>
-                      <p className="text-xs text-muted-foreground">Send invite via email</p>
-                    </div>
-                    <Badge variant="secondary" className="text-xs">Guest</Badge>
-                  </button>
+                  ) : (
+                    <button
+                      className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors text-left"
+                      onClick={() => setShowInviteForm(true)}
+                      disabled={inviting}
+                    >
+                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Mail className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Invite {searchQuery}</p>
+                        <p className="text-xs text-muted-foreground">Send invite via email</p>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">Guest</Badge>
+                    </button>
+                  )
                 ) : (
                   <div className="p-4 text-center text-sm text-muted-foreground">
                     No users found. Enter a valid email to invite as guest.
