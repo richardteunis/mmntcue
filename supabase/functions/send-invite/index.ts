@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "npm:resend@2.0.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -10,6 +11,22 @@ const corsHeaders = {
 
 // mmnt. Cue logo as base64 data URI for email compatibility
 const LOGO_DATA_URI = `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjYiIGhlaWdodD0iMjYiIHZpZXdCb3g9IjAgMCAyNiAyNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iNiIgZmlsbD0iI0U5MUU2MyIgZmlsbC1vcGFjaXR5PSIwLjQ1Ii8+CjxyZWN0IHg9IjE0IiB3aWR0aD0iMTIiIGhlaWdodD0iMTIiIHJ4PSIzIiBmaWxsPSIjRTkxRTYzIi8+CjxyZWN0IHdpZHRoPSIxMiIgaGVpZ2h0PSIxMiIgcng9IjMiIGZpbGw9IiNFOTFFNjMiLz4KPHJlY3QgeT0iMTQiIHdpZHRoPSIxMiIgaGVpZ2h0PSIxMiIgcng9IjMiIGZpbGw9IiNFOTFFNjMiLz4KPC9zdmc+`;
+
+// Input validation helpers
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return typeof email === 'string' && email.length <= 255 && emailRegex.test(email);
+};
+
+const isValidUUID = (id: string): boolean => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return typeof id === 'string' && uuidRegex.test(id);
+};
+
+const sanitizeString = (str: string, maxLength: number = 200): string => {
+  if (typeof str !== 'string') return '';
+  return str.slice(0, maxLength).replace(/[<>]/g, '');
+};
 
 interface InviteRequest {
   email: string;
@@ -217,27 +234,99 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { email, showId, showName, inviterName, role, userName }: InviteRequest = await req.json();
+    // Get auth header and verify user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    // Create Supabase client to verify user has permission
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.error("Auth error:", authError);
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    const requestBody: InviteRequest = await req.json();
+    const { email, showId, showName, inviterName, role, userName } = requestBody;
     
-    console.log("Sending invite to:", email, "for show:", showName);
+    // Input validation
+    if (!isValidEmail(email)) {
+      return new Response(JSON.stringify({ error: "Invalid email format" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    if (!isValidUUID(showId)) {
+      return new Response(JSON.stringify({ error: "Invalid show ID format" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    // Verify user has permission to invite to this show
+    const { data: membership, error: memberError } = await supabase
+      .from('show_members')
+      .select('role')
+      .eq('show_id', showId)
+      .eq('user_id', user.id)
+      .single();
+
+    const { data: show, error: showError } = await supabase
+      .from('shows')
+      .select('user_id')
+      .eq('id', showId)
+      .single();
+
+    const isOwner = show?.user_id === user.id;
+    const isEditorOrOwner = membership?.role === 'owner' || membership?.role === 'editor';
+
+    if (!isOwner && !isEditorOrOwner) {
+      console.error("Permission denied for user:", user.id, "on show:", showId);
+      return new Response(JSON.stringify({ error: "Permission denied" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    // Sanitize string inputs
+    const safeShowName = sanitizeString(showName, 200);
+    const safeInviterName = sanitizeString(inviterName, 100);
+    const safeUserName = userName ? sanitizeString(userName, 100) : undefined;
+    const safeRole = sanitizeString(role, 50);
+    
+    console.log("Sending invite to:", email, "for show:", safeShowName);
 
     // Construct the invite link
     const siteUrl = Deno.env.get("SITE_URL") || "https://lovable.dev";
     const inviteLink = `${siteUrl}/show/${showId}`;
 
     // Determine email type based on whether user exists
-    const displayName = userName || email.split("@")[0];
+    const displayName = safeUserName || email.split("@")[0];
     const year = getCurrentYear();
 
     // Send the invite email with branded template
     const emailResponse = await resend.emails.send({
       from: "mmnt. Cue <onboarding@resend.dev>",
       to: [email],
-      subject: `You've been invited to collaborate on "${showName}"`,
+      subject: `You've been invited to collaborate on "${safeShowName}"`,
       html: generateInvitationEmail({
         userName: displayName,
-        inviterName,
-        eventName: showName,
+        inviterName: safeInviterName,
+        eventName: safeShowName,
         actionUrl: inviteLink,
         year,
       }),
