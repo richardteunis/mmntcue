@@ -415,7 +415,9 @@ export function useAISuggestions() {
   const getSuggestions = async (showName: string, existingCues: Cue[], cueType?: string) => {
     setLoading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const { data, error } = await supabase.functions.invoke('suggest-cue', {
+        headers: session ? { Authorization: `Bearer ${session.access_token}` } : undefined,
         body: { showName, existingCues, cueType }
       });
 

@@ -38,7 +38,9 @@ const HomeView: React.FC<HomeViewProps> = ({ onCreateShow, recentShows = [], onS
     
     setIsGenerating(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const { data: functionData, error: functionError } = await supabase.functions.invoke('generate-show', {
+        headers: session ? { Authorization: `Bearer ${session.access_token}` } : undefined,
         body: { template: selectedTemplate, eventName: eventName || undefined, duration }
       });
 
