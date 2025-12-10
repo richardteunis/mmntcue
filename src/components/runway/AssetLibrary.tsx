@@ -383,7 +383,11 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({
   const [filterText, setFilterText] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isPanelOpen, setIsPanelOpen] = useState(defaultOpen);
+  const [panelHeight, setPanelHeight] = useState(280);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -399,6 +403,82 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({
       fileInputRef.current.value = '';
     }
   };
+
+  // Drag and drop handlers for file upload
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Check if dragging files (not assets)
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDraggingOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    
+    // Filter for acceptable file types
+    const acceptedFiles = Array.from(files).filter(file => {
+      const type = file.type;
+      return type.startsWith('audio/') || 
+             type.startsWith('video/') || 
+             type.startsWith('image/') ||
+             type === 'application/pdf' ||
+             type === 'application/msword' ||
+             type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    });
+    
+    if (acceptedFiles.length === 0) return;
+    
+    setUploading(true);
+    for (const file of acceptedFiles) {
+      await uploadAsset(file);
+    }
+    setUploading(false);
+  }, [uploadAsset]);
+
+  // Resize handlers
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    resizeRef.current = { startY: e.clientY, startHeight: panelHeight };
+  }, [panelHeight]);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizeRef.current) return;
+      const delta = resizeRef.current.startY - e.clientY;
+      const newHeight = Math.max(120, Math.min(500, resizeRef.current.startHeight + delta));
+      setPanelHeight(newHeight);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      resizeRef.current = null;
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   if (collapsed) {
     return (
@@ -517,8 +597,8 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({
         />
 
         {showId && (
-          <TabsContent value="show" className="flex-1 m-0 overflow-hidden">
-            <ScrollArea className={cn(isPanel ? "h-[180px]" : "h-[280px]")}>
+          <TabsContent value="show" className="flex-1 m-0 overflow-hidden relative">
+            <ScrollArea style={{ height: isPanel ? panelHeight - 100 : 280 }}>
               {showAssetsLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -529,7 +609,7 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({
                   <p className="text-xs text-muted-foreground">
                     No assets in this show.
                     <br />
-                    Add from library or drag to cues.
+                    Add from library or drag files here.
                   </p>
                 </div>
               ) : (
@@ -545,8 +625,8 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({
           </TabsContent>
         )}
 
-        <TabsContent value="library" className="flex-1 m-0 overflow-hidden">
-          <ScrollArea className={cn(isPanel ? "h-[180px]" : "h-[280px]")}>
+        <TabsContent value="library" className="flex-1 m-0 overflow-hidden relative">
+          <ScrollArea style={{ height: isPanel ? panelHeight - 100 : 280 }}>
             {assetsLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -557,7 +637,7 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({
                 <p className="text-xs text-muted-foreground">
                   Your library is empty.
                   <br />
-                  Upload media files to get started.
+                  Drop files here or click Add Media.
                 </p>
               </div>
             ) : (
@@ -618,10 +698,38 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({
     </div>
   );
 
-  // Panel mode with collapsible header
+  // Panel mode with collapsible header and drop zone
   if (isPanel) {
     return (
-      <Collapsible open={isPanelOpen} onOpenChange={setIsPanelOpen} className="border-t border-border bg-card">
+      <Collapsible 
+        open={isPanelOpen} 
+        onOpenChange={setIsPanelOpen} 
+        className={cn(
+          "border-t border-border bg-card relative",
+          isDraggingOver && "ring-2 ring-primary ring-inset"
+        )}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {/* Resize handle */}
+        {isPanelOpen && (
+          <div 
+            className="absolute top-0 left-0 right-0 h-1 cursor-ns-resize hover:bg-primary/50 transition-colors z-10"
+            onMouseDown={handleResizeStart}
+          />
+        )}
+        
+        {/* Drop overlay */}
+        {isDraggingOver && (
+          <div className="absolute inset-0 bg-primary/10 z-20 flex items-center justify-center pointer-events-none">
+            <div className="flex flex-col items-center gap-2 text-primary">
+              <Upload className="h-8 w-8" />
+              <span className="text-sm font-medium">Drop files to upload</span>
+            </div>
+          </div>
+        )}
+        
         <CollapsibleTrigger asChild>
           <div className="flex items-center justify-between px-4 py-2 hover:bg-muted/50 cursor-pointer transition-colors">
             <div className="flex items-center gap-2">
@@ -630,6 +738,9 @@ const AssetLibrary: React.FC<AssetLibraryProps> = ({
               <span className="text-xs text-muted-foreground">
                 {assets.length} assets
               </span>
+              {uploading && (
+                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+              )}
             </div>
             <div className="flex items-center gap-2">
               {!isPanelOpen && filterText && (
