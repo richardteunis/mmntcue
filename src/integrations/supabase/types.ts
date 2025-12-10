@@ -58,6 +58,120 @@ export type Database = {
           },
         ]
       }
+      assets: {
+        Row: {
+          created_at: string
+          duration: number | null
+          file_path: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+          metadata: Json | null
+          mime_type: string
+          name: string
+          thumbnail_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration?: number | null
+          file_path: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id?: string
+          metadata?: Json | null
+          mime_type: string
+          name: string
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration?: number | null
+          file_path?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+          metadata?: Json | null
+          mime_type?: string
+          name?: string
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      cue_assets: {
+        Row: {
+          asset_id: string
+          created_at: string
+          cue_id: string
+          fade_in_duration: number
+          fade_out_duration: number
+          id: string
+          loop_enabled: boolean
+          order_index: number
+          playback_speed: number
+          start_offset: number
+          trim_end: number | null
+          trim_start: number
+          updated_at: string
+          volume: number
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          cue_id: string
+          fade_in_duration?: number
+          fade_out_duration?: number
+          id?: string
+          loop_enabled?: boolean
+          order_index?: number
+          playback_speed?: number
+          start_offset?: number
+          trim_end?: number | null
+          trim_start?: number
+          updated_at?: string
+          volume?: number
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          cue_id?: string
+          fade_in_duration?: number
+          fade_out_duration?: number
+          id?: string
+          loop_enabled?: boolean
+          order_index?: number
+          playback_speed?: number
+          start_offset?: number
+          trim_end?: number | null
+          trim_start?: number
+          updated_at?: string
+          volume?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cue_assets_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cue_assets_cue_id_fkey"
+            columns: ["cue_id"]
+            isOneToOne: false
+            referencedRelation: "cues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cues: {
         Row: {
           auto_follow: boolean | null
@@ -279,6 +393,45 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      show_assets: {
+        Row: {
+          added_by: string | null
+          asset_id: string
+          created_at: string
+          id: string
+          show_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          asset_id: string
+          created_at?: string
+          id?: string
+          show_id: string
+        }
+        Update: {
+          added_by?: string | null
+          asset_id?: string
+          created_at?: string
+          id?: string
+          show_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "show_assets_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "show_assets_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       show_members: {
         Row: {

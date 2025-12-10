@@ -16,6 +16,7 @@ import ViewToggle from './ViewToggle';
 import AddTrackModal, { Track } from './AddTrackModal';
 import CollaboratorCursors from './CollaboratorCursors';
 import ViewPresenceIndicator from './ViewPresenceIndicator';
+import PlaybackSettingsModal from './PlaybackSettingsModal';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -23,8 +24,10 @@ import { Button } from '@/components/ui/button';
 import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings, Eye, EyeOff } from 'lucide-react';
 import { useCues, useAISuggestions } from '@/hooks/useCues';
 import { useRealtimePresence } from '@/hooks/useRealtimePresence';
+import { useCueAssets } from '@/hooks/useAssets';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Cue, ViewMode, CueSuggestion, Show } from '@/types/cue';
+import { Asset, PlaybackSettings, DEFAULT_PLAYBACK_SETTINGS } from '@/types/asset';
 import ShowFormModal from './ShowFormModal';
 
 // Default tracks
@@ -90,6 +93,8 @@ const Dashboard: React.FC = () => {
   const [editingShow, setEditingShow] = useState<Show | null>(null);
   const [followingUserId, setFollowingUserId] = useState<string | null>(null);
   const [permissionUserId, setPermissionUserId] = useState<string | null>(null);
+  const [isPlaybackSettingsOpen, setIsPlaybackSettingsOpen] = useState(false);
+  const [pendingAssetForCue, setPendingAssetForCue] = useState<{ asset: Asset; cueId: string } | null>(null);
   const sidebarRef = useRef<{ openCreateModal: () => void } | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -676,6 +681,33 @@ const Dashboard: React.FC = () => {
       updateViewport({ scrollX, scrollY, zoom });
     }
   }, [followingUserId, updateViewport]);
+
+  // Handle asset dropped onto a cue
+  const handleAssetDropOnCue = useCallback((asset: Asset, cueId: string) => {
+    setPendingAssetForCue({ asset, cueId });
+    setIsPlaybackSettingsOpen(true);
+  }, []);
+
+  // Handle saving playback settings after asset drop
+  const handleSaveAssetToCue = useCallback(async (settings: PlaybackSettings) => {
+    if (!pendingAssetForCue) return;
+    
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { error } = await supabase.from('cue_assets').insert({
+      cue_id: pendingAssetForCue.cueId,
+      asset_id: pendingAssetForCue.asset.id,
+      ...settings,
+      order_index: 0,
+    });
+
+    if (error) {
+      toast({ title: 'Error adding asset to cue', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Asset added to cue', description: pendingAssetForCue.asset.name });
+    }
+
+    setPendingAssetForCue(null);
+  }, [pendingAssetForCue, toast]);
   
   if (loading) {
     return (
@@ -966,6 +998,17 @@ const Dashboard: React.FC = () => {
           }}
           onSave={handleSaveShow}
           editingShow={editingShow}
+        />
+
+        {/* Playback Settings Modal */}
+        <PlaybackSettingsModal
+          isOpen={isPlaybackSettingsOpen}
+          onClose={() => {
+            setIsPlaybackSettingsOpen(false);
+            setPendingAssetForCue(null);
+          }}
+          onSave={handleSaveAssetToCue}
+          asset={pendingAssetForCue?.asset || null}
         />
       </div>
     </TooltipProvider>
