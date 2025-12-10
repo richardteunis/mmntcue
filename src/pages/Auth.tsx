@@ -36,18 +36,29 @@ const AuthPage: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Check for password reset token in URL
+  // Check for password reset token or redirect param in URL
   useEffect(() => {
     const type = searchParams.get('type');
     if (type === 'recovery') {
       setView('reset');
+    }
+    // Store redirect path for after auth
+    const redirect = searchParams.get('redirect');
+    if (redirect) {
+      sessionStorage.setItem('auth_redirect', redirect);
     }
   }, [searchParams]);
 
   // Redirect if already logged in
   useEffect(() => {
     if (user && view !== 'reset') {
-      navigate('/');
+      const redirectPath = sessionStorage.getItem('auth_redirect');
+      if (redirectPath) {
+        sessionStorage.removeItem('auth_redirect');
+        navigate(redirectPath);
+      } else {
+        navigate('/');
+      }
     }
   }, [user, navigate, view]);
 
@@ -174,7 +185,13 @@ const AuthPage: React.FC = () => {
         title: 'Password updated',
         description: 'Your password has been reset successfully.',
       });
-      navigate('/');
+      const redirectPath = sessionStorage.getItem('auth_redirect');
+      if (redirectPath) {
+        sessionStorage.removeItem('auth_redirect');
+        navigate(redirectPath);
+      } else {
+        navigate('/');
+      }
     }
   };
 
@@ -210,7 +227,13 @@ const AuthPage: React.FC = () => {
         title: 'Welcome back!',
         description: 'You have signed in successfully.',
       });
-      navigate('/');
+      const redirectPath = sessionStorage.getItem('auth_redirect');
+      if (redirectPath) {
+        sessionStorage.removeItem('auth_redirect');
+        navigate(redirectPath);
+      } else {
+        navigate('/');
+      }
     }
   };
 
@@ -218,7 +241,13 @@ const AuthPage: React.FC = () => {
     setError(null);
     const result = await authenticateWithPasskey();
     if (result.success) {
-      navigate('/');
+      const redirectPath = sessionStorage.getItem('auth_redirect');
+      if (redirectPath) {
+        sessionStorage.removeItem('auth_redirect');
+        navigate(redirectPath);
+      } else {
+        navigate('/');
+      }
     }
   };
 
