@@ -941,7 +941,9 @@ const Dashboard: React.FC = () => {
                       <TimelineView 
                         className="flex-1" 
                         onCueSelect={handleCueSelect}
+                        onCueMultiSelect={setSelectedCueIds}
                         selectedCueId={selectedCueId}
+                        selectedCueIds={selectedCueIds}
                         onCueChange={handleCueUpdate}
                         cues={timelineCues}
                         tracks={tracks}

@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { Play, Pause, SkipForward, RotateCcw, ZoomIn, ZoomOut, Hand, Volume2, Settings2 } from 'lucide-react';
+import { Play, Pause, SkipForward, RotateCcw, ZoomIn, ZoomOut, Hand, Volume2, Settings2, GripVertical } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   DropdownMenu,
@@ -38,9 +38,11 @@ export interface TimelineViewProps {
   cues?: TimelineCue[];
   tracks?: TimelineTrack[];
   selectedCueId?: string | null;
+  selectedCueIds?: string[];
   showCountdown?: { text: string; isLive: boolean } | null;
   animatingCues?: { id: string; type: 'add' | 'delete' | 'update' }[];
   onCueSelect?: (cueId: string | null, cue: TimelineCue | null) => void;
+  onCueMultiSelect?: (cueIds: string[]) => void;
   onCueChange?: (updatedCue: TimelineCue) => void;
   onCueDelete?: (cueId: string) => void;
   onCueDuplicate?: (cueId: string) => void;
@@ -98,9 +100,11 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   cues = [],
   tracks = DEFAULT_TRACKS,
   selectedCueId,
+  selectedCueIds = [],
   showCountdown,
   animatingCues = [],
   onCueSelect,
+  onCueMultiSelect,
   onCueChange,
   onCueDelete,
   onCueDuplicate,
@@ -119,9 +123,17 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const [panMode, setPanMode] = useState(false);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   const [cuesWithAudio, setCuesWithAudio] = useState<Set<string>>(new Set());
+  const [trackLabelWidth, setTrackLabelWidth] = useState(160);
+  const [isResizingTrackWidth, setIsResizingTrackWidth] = useState(false);
+  
+  // Box selection state
+  const [isBoxSelecting, setIsBoxSelecting] = useState(false);
+  const [boxSelectStart, setBoxSelectStart] = useState<{ x: number; y: number } | null>(null);
+  const [boxSelectCurrent, setBoxSelectCurrent] = useState<{ x: number; y: number } | null>(null);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const rulerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   
   // Use external playback state if provided
@@ -150,9 +162,6 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     });
     return grouped;
   }, [cues, tracks]);
-
-  // Playback is now handled by the shared usePlaybackState hook in Dashboard
-  // This component just reads the state and displays it
 
   // Fetch which cues have audio assets attached
   useEffect(() => {
@@ -183,14 +192,14 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   useEffect(() => {
     if (isPlaying && containerRef.current) {
       const playheadX = currentTime * pixelsPerSecond;
-      const containerWidth = containerRef.current.clientWidth - 120; // Account for track labels
+      const containerWidth = containerRef.current.clientWidth - trackLabelWidth;
       const scrollPos = containerRef.current.scrollLeft;
       
       if (playheadX > scrollPos + containerWidth - 100 || playheadX < scrollPos) {
         containerRef.current.scrollLeft = playheadX - 100;
       }
     }
-  }, [currentTime, pixelsPerSecond, isPlaying]);
+  }, [currentTime, pixelsPerSecond, isPlaying, trackLabelWidth]);
 
   // Generate time markers
   const timeMarkers = useMemo(() => {
@@ -227,30 +236,28 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const getTimeFromMouseEvent = (e: MouseEvent | React.MouseEvent): number => {
     if (!timelineRef.current) return 0;
     const rect = timelineRef.current.getBoundingClientRect();
-    // e.clientX is screen position, rect.left is the timeline's screen position
-    // No need to add scrollLeft since getBoundingClientRect already gives us the visual position
     const x = e.clientX - rect.left;
     const time = x / pixelsPerSecond;
     return Math.max(0, Math.min(time, totalDuration));
   };
 
-  const handleTimelineMouseDown = (e: React.MouseEvent) => {
-    if (panMode) return;
-    // Check if clicking on a cue (don't start scrubbing)
-    const target = e.target as HTMLElement;
-    if (target.closest('[data-cue]')) return;
-    
-    // Immediately move playhead to click position and start dragging
+  // Ruler click handler for playhead dragging (only in ruler area)
+  const handleRulerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     const time = getTimeFromMouseEvent(e);
     playbackState?.seekTo(time);
     setIsDraggingPlayhead(true);
+    document.body.style.userSelect = 'none';
   };
 
   const handlePlayheadMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsDraggingPlayhead(true);
+    document.body.style.userSelect = 'none';
   };
 
+  // Playhead dragging effect
   useEffect(() => {
     if (!isDraggingPlayhead) return;
 
@@ -263,9 +270,6 @@ const TimelineView: React.FC<TimelineViewProps> = ({
       setIsDraggingPlayhead(false);
       document.body.style.userSelect = '';
     };
-
-    // Prevent text selection while dragging
-    document.body.style.userSelect = 'none';
     
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
@@ -276,9 +280,137 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     };
   }, [isDraggingPlayhead, pixelsPerSecond, totalDuration]);
 
+  // Box selection handlers
+  const handleTimelineMouseDown = (e: React.MouseEvent) => {
+    if (panMode) return;
+    // Check if clicking on a cue (don't start box selection)
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-cue]')) return;
+    if (target.closest('[data-ruler]')) return;
+    
+    // Start box selection
+    if (!timelineRef.current) return;
+    const rect = timelineRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left + (containerRef.current?.scrollLeft || 0);
+    const y = e.clientY - rect.top + (containerRef.current?.scrollTop || 0);
+    
+    setBoxSelectStart({ x, y });
+    setBoxSelectCurrent({ x, y });
+    setIsBoxSelecting(true);
+    document.body.style.userSelect = 'none';
+  };
+
+  // Box selection effect
+  useEffect(() => {
+    if (!isBoxSelecting) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!timelineRef.current || !containerRef.current) return;
+      const rect = timelineRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left + containerRef.current.scrollLeft;
+      const y = e.clientY - rect.top + containerRef.current.scrollTop;
+      setBoxSelectCurrent({ x, y });
+    };
+
+    const handleMouseUp = () => {
+      // Calculate which cues are in the selection box
+      if (boxSelectStart && boxSelectCurrent && timelineRef.current) {
+        const minX = Math.min(boxSelectStart.x, boxSelectCurrent.x);
+        const maxX = Math.max(boxSelectStart.x, boxSelectCurrent.x);
+        const minY = Math.min(boxSelectStart.y, boxSelectCurrent.y);
+        const maxY = Math.max(boxSelectStart.y, boxSelectCurrent.y);
+        
+        const selectedIds: string[] = [];
+        const rulerHeight = 40; // Height of time ruler
+        const trackHeight = 64; // Height of each track lane
+        
+        tracks.forEach((track, trackIndex) => {
+          const trackY = rulerHeight + trackIndex * trackHeight;
+          const trackBottom = trackY + trackHeight;
+          
+          // Check if selection box overlaps with this track
+          if (maxY >= trackY && minY <= trackBottom) {
+            const trackCues = cuesByTrack[track.id] || [];
+            trackCues.forEach(cue => {
+              const cueStartX = timeToSeconds(cue.time) * pixelsPerSecond;
+              const cueWidth = Math.max(timeToSeconds(cue.duration) * pixelsPerSecond, 40);
+              const cueEndX = cueStartX + cueWidth;
+              
+              // Check if cue overlaps with selection box
+              if (maxX >= cueStartX && minX <= cueEndX) {
+                selectedIds.push(cue.id);
+              }
+            });
+          }
+        });
+        
+        if (selectedIds.length > 0) {
+          onCueMultiSelect?.(selectedIds);
+        } else {
+          onCueSelect?.(null, null);
+        }
+      }
+      
+      setIsBoxSelecting(false);
+      setBoxSelectStart(null);
+      setBoxSelectCurrent(null);
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isBoxSelecting, boxSelectStart, boxSelectCurrent, tracks, cuesByTrack, pixelsPerSecond, onCueMultiSelect, onCueSelect]);
+
+  // Track width resize handlers
+  const handleTrackWidthResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingTrackWidth(true);
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+  };
+
+  useEffect(() => {
+    if (!isResizingTrackWidth) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const newWidth = e.clientX - rect.left;
+      setTrackLabelWidth(Math.max(100, Math.min(300, newWidth)));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingTrackWidth(false);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingTrackWidth]);
+
   const handleCueClick = (e: React.MouseEvent, cue: TimelineCue) => {
     e.stopPropagation();
-    onCueSelect?.(cue.id, cue);
+    
+    // Multi-select with Shift or Cmd/Ctrl
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
+      const currentSelection = selectedCueIds.includes(cue.id)
+        ? selectedCueIds.filter(id => id !== cue.id)
+        : [...selectedCueIds, cue.id];
+      onCueMultiSelect?.(currentSelection);
+    } else {
+      onCueSelect?.(cue.id, cue);
+    }
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -288,6 +420,17 @@ const TimelineView: React.FC<TimelineViewProps> = ({
       else handleZoomOut();
     }
   };
+
+  // Calculate box selection rectangle
+  const boxSelectRect = useMemo(() => {
+    if (!boxSelectStart || !boxSelectCurrent) return null;
+    return {
+      left: Math.min(boxSelectStart.x, boxSelectCurrent.x),
+      top: Math.min(boxSelectStart.y, boxSelectCurrent.y),
+      width: Math.abs(boxSelectCurrent.x - boxSelectStart.x),
+      height: Math.abs(boxSelectCurrent.y - boxSelectStart.y),
+    };
+  }, [boxSelectStart, boxSelectCurrent]);
 
   return (
     <div className={cn("flex flex-col h-full bg-card", className)}>
@@ -403,7 +546,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
         <div className="flex-1" />
 
         <div className="text-xs text-muted-foreground">
-          {cues.length} cues
+          {selectedCueIds.length > 0 ? `${selectedCueIds.length} selected` : `${cues.length} cues`}
         </div>
       </div>
 
@@ -426,7 +569,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({
       >
         <div className="flex min-h-full">
           {/* Track Labels */}
-          <div className="w-[120px] flex-shrink-0 bg-card border-r border-border sticky left-0 z-20">
+          <div 
+            className="flex-shrink-0 bg-card border-r border-border sticky left-0 z-20 relative"
+            style={{ width: trackLabelWidth }}
+          >
             {/* Time ruler header */}
             <div className="h-10 border-b border-border bg-muted/30 flex items-center justify-center">
               <span className="text-xs font-medium text-muted-foreground">Tracks</span>
@@ -469,21 +615,36 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                 )}
               </div>
             ))}
+            
+            {/* Resize handle */}
+            <div 
+              className="absolute top-0 right-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors group"
+              onMouseDown={handleTrackWidthResizeStart}
+            >
+              <div className="absolute top-1/2 -translate-y-1/2 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <GripVertical size={12} className="text-muted-foreground" />
+              </div>
+            </div>
           </div>
 
           {/* Timeline Area */}
           <div 
             ref={timelineRef}
             className="relative flex-1"
-            style={{ minWidth: timelineWidth, cursor: isDraggingPlayhead ? 'ew-resize' : 'crosshair' }}
+            style={{ minWidth: timelineWidth, cursor: isBoxSelecting ? 'crosshair' : 'default' }}
             onMouseDown={handleTimelineMouseDown}
           >
-            {/* Time Ruler */}
-            <div className="h-10 border-b border-border bg-muted/30 relative sticky top-0 z-10">
+            {/* Time Ruler - Clickable for playhead */}
+            <div 
+              ref={rulerRef}
+              data-ruler
+              className="h-10 border-b border-border bg-muted/30 relative sticky top-0 z-10 cursor-ew-resize"
+              onMouseDown={handleRulerMouseDown}
+            >
               {timeMarkers.map(marker => (
                 <div
                   key={marker.time}
-                  className="absolute top-0 h-full flex flex-col justify-end"
+                  className="absolute top-0 h-full flex flex-col justify-end pointer-events-none"
                   style={{ left: marker.time * pixelsPerSecond }}
                 >
                   <span className={cn(
@@ -540,72 +701,100 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   const width = Math.max(timeToSeconds(cue.duration) * pixelsPerSecond, 40);
                   const animation = animatingCues.find(a => a.id === cue.id);
                   const hasAudio = cuesWithAudio.has(cue.id);
+                  const isMultiSelected = selectedCueIds.includes(cue.id);
                   
                   // Get cue color - use cue.color if it's a hex color, otherwise use track color
                   const cueColor = cue.color && cue.color.startsWith('#') ? cue.color : track.color;
                   
                   return (
-                    <div
-                      key={cue.id}
-                      data-cue={cue.id}
-                      className={cn(
-                        "absolute top-2 h-12 rounded-md cursor-pointer transition-all duration-300",
-                        "border-2 shadow-sm hover:shadow-md",
-                        selectedCueId === cue.id && "ring-2 ring-primary ring-offset-2 ring-offset-background",
-                        dropTargetCueId === cue.id && "ring-2 ring-runway-teal ring-offset-1 scale-105",
-                        animation?.type === 'add' && "animate-scale-in",
-                        animation?.type === 'delete' && "animate-fade-out opacity-0 scale-95",
-                        animation?.type === 'update' && "ring-2 ring-runway-teal ring-offset-1"
-                      )}
-                      style={{ 
-                        left: startX, 
-                        width,
-                        backgroundColor: cueColor,
-                        borderColor: cueColor,
-                      }}
-                      onClick={(e) => handleCueClick(e, cue)}
-                      onDragOver={(e) => {
-                        if (e.dataTransfer.types.includes('application/json')) {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setDropTargetCueId(cue.id);
-                          setDropTargetTrack(null);
-                        }
-                      }}
-                      onDragLeave={() => setDropTargetCueId(null)}
-                      onDrop={(e) => {
-                        const jsonData = e.dataTransfer.getData('application/json');
-                        if (jsonData) {
-                          try {
-                            const assetData = JSON.parse(jsonData);
-                            if (assetData.file_url && onAssetDropOnCue) {
+                    <Tooltip key={cue.id}>
+                      <TooltipTrigger asChild>
+                        <div
+                          data-cue={cue.id}
+                          className={cn(
+                            "absolute top-2 h-12 rounded-md cursor-pointer transition-all duration-300",
+                            "border-2 shadow-sm hover:shadow-md",
+                            (selectedCueId === cue.id || isMultiSelected) && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                            dropTargetCueId === cue.id && "ring-2 ring-runway-teal ring-offset-1 scale-105",
+                            animation?.type === 'add' && "animate-scale-in",
+                            animation?.type === 'delete' && "animate-fade-out opacity-0 scale-95",
+                            animation?.type === 'update' && "ring-2 ring-runway-teal ring-offset-1"
+                          )}
+                          style={{ 
+                            left: startX, 
+                            width,
+                            backgroundColor: cueColor,
+                            borderColor: cueColor,
+                          }}
+                          onClick={(e) => handleCueClick(e, cue)}
+                          onDragOver={(e) => {
+                            if (e.dataTransfer.types.includes('application/json')) {
                               e.preventDefault();
                               e.stopPropagation();
-                              onAssetDropOnCue(assetData, cue.id);
+                              setDropTargetCueId(cue.id);
+                              setDropTargetTrack(null);
                             }
-                          } catch {}
-                        }
-                        setDropTargetCueId(null);
-                      }}
-                    >
-                      <div className="px-2 py-1 h-full flex flex-col justify-center overflow-hidden relative">
-                        <span className="text-xs font-medium text-white truncate drop-shadow-sm">
-                          {cue.name}
-                        </span>
-                        <span className="text-[10px] text-white/80 truncate">
-                          {cue.duration}
-                        </span>
-                        {hasAudio && (
-                          <div className="absolute top-1 right-1">
-                            <Volume2 size={10} className="text-white/90 drop-shadow-sm" />
+                          }}
+                          onDragLeave={() => setDropTargetCueId(null)}
+                          onDrop={(e) => {
+                            const jsonData = e.dataTransfer.getData('application/json');
+                            if (jsonData) {
+                              try {
+                                const assetData = JSON.parse(jsonData);
+                                if (assetData.file_url && onAssetDropOnCue) {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  onAssetDropOnCue(assetData, cue.id);
+                                }
+                              } catch {}
+                            }
+                            setDropTargetCueId(null);
+                          }}
+                        >
+                          <div className="px-2 py-1 h-full flex flex-col justify-center overflow-hidden relative">
+                            <span className="text-xs font-medium text-white truncate drop-shadow-sm">
+                              {cue.name}
+                            </span>
+                            <span className="text-[10px] text-white/80 truncate">
+                              {cue.duration}
+                            </span>
+                            {hasAudio && (
+                              <div className="absolute top-1 right-1">
+                                <Volume2 size={10} className="text-white/90 drop-shadow-sm" />
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    </div>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[200px]">
+                        <div className="space-y-1">
+                          <p className="font-medium">{cue.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Start: {cue.time} • Duration: {cue.duration}
+                          </p>
+                          {cue.notes && (
+                            <p className="text-xs text-muted-foreground truncate">{cue.notes}</p>
+                          )}
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
                   );
                 })}
               </div>
             ))}
+
+            {/* Box Selection Rectangle */}
+            {isBoxSelecting && boxSelectRect && (
+              <div 
+                className="absolute border-2 border-primary bg-primary/20 pointer-events-none z-40"
+                style={{
+                  left: boxSelectRect.left,
+                  top: boxSelectRect.top,
+                  width: boxSelectRect.width,
+                  height: boxSelectRect.height,
+                }}
+              />
+            )}
 
             {/* Playhead */}
             <div 
