@@ -53,6 +53,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useCuePlayback } from '@/hooks/useCuePlayback';
 
 export interface TimelineCue {
   id: string;
@@ -185,7 +186,9 @@ const Timeline: React.FC<TimelineProps> = ({
   const timeInSecondsRef = useRef(0);
   const animationFrameRef = useRef<number | null>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const triggeredCuesRef = useRef<Set<string>>(new Set());
   const { toast } = useToast();
+  const { playCue, stopAllCues, clearCache } = useCuePlayback();
   
   // Sort cues by start time
   const sortedCues = useMemo(() => {
@@ -250,7 +253,7 @@ const Timeline: React.FC<TimelineProps> = ({
     }
   };
   
-  // Playback logic
+  // Playback logic with cue triggering
   useEffect(() => {
     if (isPlaying) {
       let lastTimestamp = performance.now();
@@ -260,7 +263,28 @@ const Timeline: React.FC<TimelineProps> = ({
         lastTimestamp = timestamp;
         
         timeInSecondsRef.current += deltaTime / 1000;
-        setCurrentTime(secondsToTime(timeInSecondsRef.current));
+        const currentSeconds = timeInSecondsRef.current;
+        setCurrentTime(secondsToTime(currentSeconds));
+        
+        // Check for cues that should be triggered
+        for (const cue of sortedCues) {
+          const cueStartSeconds = timeToSeconds(cue.time);
+          const cueDurationSeconds = timeToSeconds(cue.duration);
+          const cueEndSeconds = cueStartSeconds + cueDurationSeconds;
+          
+          // Trigger cue if playhead just crossed the start time
+          if (currentSeconds >= cueStartSeconds && 
+              currentSeconds < cueEndSeconds &&
+              !triggeredCuesRef.current.has(cue.id)) {
+            triggeredCuesRef.current.add(cue.id);
+            playCue(cue.id);
+          }
+          
+          // Remove from triggered if we've passed the cue
+          if (currentSeconds >= cueEndSeconds) {
+            triggeredCuesRef.current.delete(cue.id);
+          }
+        }
         
         animationFrameRef.current = requestAnimationFrame(animate);
       };
@@ -276,7 +300,7 @@ const Timeline: React.FC<TimelineProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isPlaying]);
+  }, [isPlaying, sortedCues, playCue]);
   
   const handlePlayPause = () => {
     setIsPlaying(!isPlaying);
@@ -298,6 +322,9 @@ const Timeline: React.FC<TimelineProps> = ({
     timeInSecondsRef.current = 0;
     setCurrentTime('00:00:00');
     setIsPlaying(false);
+    triggeredCuesRef.current.clear();
+    stopAllCues();
+    clearCache();
   };
   
   const handleCueClick = (cue: TimelineCue) => {
