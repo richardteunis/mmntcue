@@ -11,7 +11,28 @@ const corsHeaders = {
 // mmnt. Cue logo as base64 data URI for email compatibility
 const LOGO_DATA_URI = `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjYiIGhlaWdodD0iMjYiIHZpZXdCb3g9IjAgMCAyNiAyNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iNiIgZmlsbD0iI0U5MUU2MyIgZmlsbC1vcGFjaXR5PSIwLjQ1Ii8+CjxyZWN0IHg9IjE0IiB3aWR0aD0iMTIiIGhlaWdodD0iMTIiIHJ4PSIzIiBmaWxsPSIjRTkxRTYzIi8+CjxyZWN0IHdpZHRoPSIxMiIgaGVpZ2h0PSIxMiIgcng9IjMiIGZpbGw9IiNFOTFFNjMiLz4KPHJlY3QgeT0iMTQiIHdpZHRoPSIxMiIgaGVpZ2h0PSIxMiIgcng9IjMiIGZpbGw9IiNFOTFFNjMiLz4KPC9zdmc+`;
 
-type EmailType = 'forgot_password' | 'confirm_email' | 'added_to_show';
+// Input validation helpers
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return typeof email === 'string' && email.length <= 255 && emailRegex.test(email);
+};
+
+const isValidUrl = (url: string): boolean => {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+};
+
+const sanitizeString = (str: string, maxLength: number = 200): string => {
+  if (typeof str !== 'string') return '';
+  return str.slice(0, maxLength).replace(/[<>]/g, '');
+};
+
+const VALID_EMAIL_TYPES = ['forgot_password', 'confirm_email', 'added_to_show'] as const;
+type EmailType = typeof VALID_EMAIL_TYPES[number];
 
 interface NotificationEmailRequest {
   email: string;
@@ -312,6 +333,16 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    // Verify authorization header exists
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    const requestBody: NotificationEmailRequest = await req.json();
     const { 
       email, 
       type, 
@@ -320,11 +351,34 @@ const handler = async (req: Request): Promise<Response> => {
       roleName, 
       eventName, 
       expirationMinutes 
-    }: NotificationEmailRequest = await req.json();
+    } = requestBody;
+
+    // Input validation
+    if (!isValidEmail(email)) {
+      return new Response(JSON.stringify({ error: "Invalid email format" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    if (!VALID_EMAIL_TYPES.includes(type as EmailType)) {
+      return new Response(JSON.stringify({ error: "Invalid email type" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    if (!isValidUrl(actionUrl)) {
+      return new Response(JSON.stringify({ error: "Invalid action URL" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
     
     console.log("Sending notification email type:", type, "to:", email);
 
-    const displayName = userName || email.split("@")[0];
+    // Sanitize string inputs
+    const displayName = sanitizeString(userName || email.split("@")[0], 100);
     const year = getCurrentYear();
 
     let subject: string;
@@ -336,7 +390,7 @@ const handler = async (req: Request): Promise<Response> => {
         html = generateForgotPasswordEmail({
           userName: displayName,
           actionUrl,
-          expirationMinutes: expirationMinutes || 60,
+          expirationMinutes: Math.min(Math.max(expirationMinutes || 60, 5), 1440), // 5 min to 24 hours
           year,
         });
         break;
@@ -351,11 +405,13 @@ const handler = async (req: Request): Promise<Response> => {
         break;
       
       case 'added_to_show':
-        subject = `You've been added as ${roleName} on ${eventName}`;
+        const safeRoleName = sanitizeString(roleName || 'team member', 50);
+        const safeEventName = sanitizeString(eventName || 'an event', 200);
+        subject = `You've been added as ${safeRoleName} on ${safeEventName}`;
         html = generateAddedToShowEmail({
           userName: displayName,
-          roleName: roleName || 'team member',
-          eventName: eventName || 'an event',
+          roleName: safeRoleName,
+          eventName: safeEventName,
           actionUrl,
           year,
         });

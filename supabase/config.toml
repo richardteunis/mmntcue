@@ -1,16 +1,16 @@
 project_id = "qzjewqaxnwwzesiznkgd"
 
 [functions.suggest-cue]
-verify_jwt = false
+verify_jwt = true
 
 [functions.send-invite]
-verify_jwt = false
+verify_jwt = true
 
 [functions.send-notification-email]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-show]
-verify_jwt = false
+verify_jwt = true
 
 [functions.passkey-login-options]
 verify_jwt = false

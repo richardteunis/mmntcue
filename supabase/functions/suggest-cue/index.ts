@@ -5,21 +5,53 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Input validation helpers
+const VALID_CUE_TYPES = ['audio', 'video', 'lighting', 'stage'] as const;
+
+const sanitizeString = (str: unknown, maxLength: number = 200): string => {
+  if (typeof str !== 'string') return '';
+  return str.slice(0, maxLength).replace(/[<>]/g, '');
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { showName, existingCues, cueType } = await req.json();
+    // Verify authorization header exists
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const requestBody = await req.json();
+    const { showName, existingCues, cueType } = requestBody;
+    
+    // Input validation
+    const safeShowName = sanitizeString(showName, 200) || 'Untitled Show';
+    const safeCueType = cueType && VALID_CUE_TYPES.includes(cueType) ? cueType : null;
+    
+    // Validate and sanitize existing cues array
+    const safeExistingCues = Array.isArray(existingCues) 
+      ? existingCues.slice(0, 50).map((c: any) => ({
+          name: sanitizeString(c?.name, 100),
+          type: sanitizeString(c?.type, 20),
+          start_time: sanitizeString(c?.start_time, 20),
+        }))
+      : [];
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const cueContext = existingCues?.length > 0 
-      ? `Existing cues in the show:\n${existingCues.map((c: any) => `- ${c.name} (${c.type}) at ${c.start_time}`).join('\n')}`
+    const cueContext = safeExistingCues.length > 0 
+      ? `Existing cues in the show:\n${safeExistingCues.map((c) => `- ${c.name} (${c.type}) at ${c.start_time}`).join('\n')}`
       : 'No existing cues yet.';
 
     const systemPrompt = `You are an expert stage manager and show producer. You help create run of show cues for live events, productions, and presentations.
@@ -32,11 +64,11 @@ Given the context of a show, suggest relevant cues that would enhance the produc
 
 Be creative but practical. Consider common production needs like transitions, audience engagement, and technical requirements.`;
 
-    const userPrompt = `Show Name: ${showName || 'Untitled Show'}
+    const userPrompt = `Show Name: ${safeShowName}
 
 ${cueContext}
 
-${cueType ? `Please suggest 3 ${cueType} cues that would work well in this show.` : 'Please suggest 3 diverse cues (mix of audio, video, lighting, or stage directions) that would enhance this show.'}
+${safeCueType ? `Please suggest 3 ${safeCueType} cues that would work well in this show.` : 'Please suggest 3 diverse cues (mix of audio, video, lighting, or stage directions) that would enhance this show.'}
 
 Respond in JSON format:
 {

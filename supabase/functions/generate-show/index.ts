@@ -5,6 +5,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Input validation
+const VALID_TEMPLATES = ['concert', 'corporate', 'theater', 'wedding', 'festival', 'awards', 'church', 'broadcast'] as const;
+
+const sanitizeString = (str: unknown, maxLength: number = 200): string => {
+  if (typeof str !== 'string') return '';
+  return str.slice(0, maxLength).replace(/[<>]/g, '');
+};
+
 interface GenerateShowRequest {
   template: string;
   eventName?: string;
@@ -17,7 +25,23 @@ serve(async (req) => {
   }
 
   try {
-    const { template, eventName, duration = 60 } = await req.json() as GenerateShowRequest;
+    // Verify authorization header exists
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const requestBody = await req.json() as GenerateShowRequest;
+    const { template, eventName, duration } = requestBody;
+    
+    // Input validation
+    const safeTemplate = VALID_TEMPLATES.includes(template as any) ? template : 'concert';
+    const safeEventName = sanitizeString(eventName, 200);
+    const safeDuration = Math.min(Math.max(Number(duration) || 60, 5), 480); // 5 min to 8 hours
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
@@ -35,8 +59,8 @@ serve(async (req) => {
       broadcast: "A live broadcast or stream with graphics, audio, and video switching",
     };
 
-    const templateDescription = templateDescriptions[template] || templateDescriptions.concert;
-    const showName = eventName || `${template.charAt(0).toUpperCase() + template.slice(1)} Show`;
+    const templateDescription = templateDescriptions[safeTemplate] || templateDescriptions.concert;
+    const showName = safeEventName || `${safeTemplate.charAt(0).toUpperCase() + safeTemplate.slice(1)} Show`;
 
     const systemPrompt = `You are a professional show caller and technical director who creates detailed cue sheets for live events. Generate realistic, practical cues that would be used in a real production.
 
@@ -60,7 +84,7 @@ Rules:
 - Include a mix of audio, video, lighting, and stage cues
 - Cue names should be professional and concise (e.g., "House Open", "Intro Video", "Applause Light")
 - Notes should include technical details a crew would need
-- Total runtime should be approximately ${duration} minutes`;
+- Total runtime should be approximately ${safeDuration} minutes`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -74,7 +98,7 @@ Rules:
           { role: "system", content: systemPrompt },
           { 
             role: "user", 
-            content: `Generate a professional cue sheet for: ${templateDescription}. Event name: "${showName}". Target duration: ${duration} minutes.` 
+            content: `Generate a professional cue sheet for: ${templateDescription}. Event name: "${showName}". Target duration: ${safeDuration} minutes.` 
           },
         ],
         response_format: { type: "json_object" },
