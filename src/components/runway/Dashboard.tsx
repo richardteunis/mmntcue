@@ -26,6 +26,7 @@ import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layer
 import { useCues, useAISuggestions } from '@/hooks/useCues';
 import { useRealtimePresence } from '@/hooks/useRealtimePresence';
 import { useCueAssets } from '@/hooks/useAssets';
+import { usePlaybackState } from '@/hooks/usePlaybackState';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Cue, ViewMode, CueSuggestion, Show } from '@/types/cue';
 import { Asset, PlaybackSettings, DEFAULT_PLAYBACK_SETTINGS } from '@/types/asset';
@@ -104,6 +105,10 @@ const Dashboard: React.FC = () => {
   // Use database hooks with active show
   const { cues, loading, animatingCues, addCue, updateCue, deleteCue, duplicateCue, reorderCues, bulkUpdateCues, bulkDeleteCues, getNextStartTime } = useCues(activeShowId);
   const { suggestions, loading: aiLoading, getSuggestions, setSuggestions } = useAISuggestions();
+  
+  // Shared playback state for both timeline and table views
+  const playbackCues = useMemo(() => cues.map(c => ({ id: c.id, time: c.start_time, duration: c.duration })), [cues]);
+  const playback = usePlaybackState(playbackCues);
   
   // Realtime presence
   const presenceUser = useMemo(() => {
@@ -947,6 +952,7 @@ const Dashboard: React.FC = () => {
                         scrollRef={timelineScrollRef}
                         onAssetDropOnCue={handleAssetDropOnCue}
                         onAssetDropToCreate={handleAssetDropToCreate}
+                        playbackState={playback}
                       />
                     ) : (
                       <Timeline 
@@ -968,6 +974,7 @@ const Dashboard: React.FC = () => {
                         scrollRef={timelineScrollRef}
                         onAssetDropOnCue={handleAssetDropOnCue}
                         onAssetDropToCreate={(asset) => handleAssetDropToCreate(asset, 'audio', 0)}
+                        playbackState={playback}
                       />
                     )}
                     
