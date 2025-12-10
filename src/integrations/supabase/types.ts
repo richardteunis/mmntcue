@@ -546,6 +546,7 @@ export type Database = {
           user_id: string | null
           venue: string | null
           video_latency_offset: number | null
+          workspace_id: string | null
         }
         Insert: {
           apply_branding?: boolean | null
@@ -586,6 +587,7 @@ export type Database = {
           user_id?: string | null
           venue?: string | null
           video_latency_offset?: number | null
+          workspace_id?: string | null
         }
         Update: {
           apply_branding?: boolean | null
@@ -626,6 +628,7 @@ export type Database = {
           user_id?: string | null
           venue?: string | null
           video_latency_offset?: number | null
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -633,6 +636,13 @@ export type Database = {
             columns: ["folder_id"]
             isOneToOne: false
             referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shows_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -664,6 +674,77 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_members: {
+        Row: {
+          accepted_at: string | null
+          id: string
+          invited_at: string
+          invited_by: string | null
+          role: Database["public"]["Enums"]["workspace_role"]
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          role?: Database["public"]["Enums"]["workspace_role"]
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          role?: Database["public"]["Enums"]["workspace_role"]
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          plan: Database["public"]["Enums"]["workspace_plan"]
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          logo_url?: string | null
+          name: string
+          plan?: Database["public"]["Enums"]["workspace_plan"]
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          plan?: Database["public"]["Enums"]["workspace_plan"]
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -679,13 +760,26 @@ export type Database = {
         Args: { _show_id: string; _user_id: string }
         Returns: boolean
       }
+      is_workspace_member: {
+        Args: {
+          _roles?: Database["public"]["Enums"]["workspace_role"][]
+          _user_id: string
+          _workspace_id: string
+        }
+        Returns: boolean
+      }
+      is_workspace_owner: {
+        Args: { _user_id: string; _workspace_id: string }
+        Returns: boolean
+      }
       join_show_as_guest: {
         Args: { _show_id: string; _user_id: string }
         Returns: boolean
       }
     }
     Enums: {
-      [_ in never]: never
+      workspace_plan: "free" | "starter" | "professional" | "enterprise"
+      workspace_role: "owner" | "admin" | "member"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -812,6 +906,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      workspace_plan: ["free", "starter", "professional", "enterprise"],
+      workspace_role: ["owner", "admin", "member"],
+    },
   },
 } as const

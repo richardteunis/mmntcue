@@ -30,7 +30,8 @@ import {
   Home,
   Star,
   Share2,
-  EyeOff
+  EyeOff,
+  Building2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -47,6 +48,8 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { Show, Folder as FolderType } from '@/types/cue';
 import ShowFormModal from './ShowFormModal';
+import WorkspaceSwitcher from './WorkspaceSwitcher';
+import { useWorkspaces } from '@/hooks/useWorkspaces';
 
 import { useAuthContext } from '@/contexts/AuthContext';
 
@@ -136,6 +139,7 @@ const ShowIcon: React.FC<{ logoUrl?: string | null; size?: number; className?: s
 const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect, onQuickAddCue, onGoHome }) => {
   const navigate = useNavigate();
   const { user } = useAuthContext();
+  const { activeWorkspaceId, activeWorkspace } = useWorkspaces();
   const [collapsed, setCollapsed] = useState(false);
   const [shows, setShows] = useState<Show[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
@@ -393,7 +397,8 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
         .insert({ 
           name: showData.name!, 
           ...cleanedData,
-          user_id: user?.id || null 
+          user_id: user?.id || null,
+          workspace_id: activeWorkspaceId || null
         } as any)
         .select()
         .single();
@@ -666,16 +671,26 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
     onShowSelect(show.id, show.name);
   };
 
-  // Determine owned vs shared shows
-  const ownedShows = shows.filter(s => s.user_id === user?.id || s.user_id === null);
-  const sharedShows = shows.filter(s => {
+  // Determine owned vs shared shows, filtered by active workspace
+  const filterByWorkspace = (showList: Show[]) => {
+    if (activeWorkspaceId) {
+      // Only show workspace shows
+      return showList.filter(s => s.workspace_id === activeWorkspaceId);
+    } else {
+      // Show personal shows (no workspace)
+      return showList.filter(s => !s.workspace_id);
+    }
+  };
+
+  const ownedShows = filterByWorkspace(shows.filter(s => s.user_id === user?.id || s.user_id === null));
+  const sharedShows = filterByWorkspace(shows.filter(s => {
     const membership = memberships.find(m => m.show_id === s.id);
     return s.user_id !== user?.id && s.user_id !== null && membership && !membership.hidden;
-  });
-  const hiddenSharedShows = shows.filter(s => {
+  }));
+  const hiddenSharedShows = filterByWorkspace(shows.filter(s => {
     const membership = memberships.find(m => m.show_id === s.id);
     return s.user_id !== user?.id && s.user_id !== null && membership && membership.hidden;
-  });
+  }));
   
   // Get shows not in any folder (owned shows only)
   const rootShows = ownedShows.filter(s => !s.folder_id);
@@ -944,6 +959,13 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
         >
           {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </Button>
+      </div>
+      
+      <Separator className="bg-sidebar-border/50" />
+      
+      {/* Workspace Switcher */}
+      <div className="px-2 py-2">
+        <WorkspaceSwitcher collapsed={collapsed} />
       </div>
       
       <Separator className="bg-sidebar-border/50" />
