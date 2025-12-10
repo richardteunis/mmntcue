@@ -324,7 +324,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
     // Remove trailing slash if present
     siteUrl = siteUrl.replace(/\/$/, '');
-    const inviteLink = `${siteUrl}/auth?redirect=/show/${showId}`;
+    const inviteLink = `${siteUrl}/join?show=${showId}&inviter=${encodeURIComponent(safeInviterName)}`;
     
     console.log("Constructed invite link:", inviteLink);
 
