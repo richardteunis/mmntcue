@@ -8,10 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Trash2, Scissors, Clock, Copy, ClipboardCopy, Edit, X } from 'lucide-react';
+import { PlusCircle, Trash2, Scissors, Clock, Copy, ClipboardCopy, Edit, X, Music } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TimelineCue } from './Timeline';
 import { useToast } from '@/hooks/use-toast';
+import CueAssetsSection from './CueAssetsSection';
 
 interface CuePanelProps {
   selectedCueId: string | null;
@@ -218,14 +219,22 @@ const CuePanel: React.FC<CuePanelProps> = ({
         </div>
       </div>
       
-      <Tabs defaultValue="notes">
+      <Tabs defaultValue="assets">
         <div className="px-4 border-b border-border">
           <TabsList className="w-full justify-start">
+            <TabsTrigger value="assets" className="gap-1.5">
+              <Music size={14} />
+              Assets
+            </TabsTrigger>
             <TabsTrigger value="notes">Notes</TabsTrigger>
             <TabsTrigger value="effects">Effects</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
         </div>
+        
+        <TabsContent value="assets" className="p-4">
+          <CueAssetsSection cueId={selectedCueId} />
+        </TabsContent>
         
         <TabsContent value="notes" className="p-4">
           <Textarea 
