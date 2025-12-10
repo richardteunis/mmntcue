@@ -494,6 +494,10 @@ export type Database = {
         Args: { _show_id: string; _user_id: string }
         Returns: boolean
       }
+      join_show_as_guest: {
+        Args: { _show_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

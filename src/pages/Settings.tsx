@@ -457,23 +457,46 @@ const SettingsPage: React.FC = () => {
                 <CardDescription>Customize your experience</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label>Theme</Label>
-                    <Select
-                      value={formData.theme}
-                      onValueChange={(value) => setFormData(prev => prev ? { ...prev, theme: value } : prev)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="dark">Dark</SelectItem>
-                        <SelectItem value="light">Light</SelectItem>
-                        <SelectItem value="system">System</SelectItem>
-                      </SelectContent>
-                    </Select>
+                <div className="grid gap-6">
+                  <div className="space-y-4">
+                    <Label>Appearance</Label>
+                    <p className="text-sm text-muted-foreground">Choose a color theme for the platform</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {[
+                        { value: 'dark', label: 'Default Dark', bg: 'bg-[#1a1625]', accent: 'bg-[#8B5CF6]', text: 'text-white' },
+                        { value: 'midnight', label: 'Midnight', bg: 'bg-[#0f172a]', accent: 'bg-[#3B82F6]', text: 'text-white' },
+                        { value: 'forest', label: 'Forest', bg: 'bg-[#14261a]', accent: 'bg-[#22C55E]', text: 'text-white' },
+                        { value: 'sunset', label: 'Sunset', bg: 'bg-[#271a1a]', accent: 'bg-[#F97316]', text: 'text-white' },
+                        { value: 'ocean', label: 'Ocean', bg: 'bg-[#0c1929]', accent: 'bg-[#06B6D4]', text: 'text-white' },
+                        { value: 'rose', label: 'Rose', bg: 'bg-[#271a22]', accent: 'bg-[#EC4899]', text: 'text-white' },
+                        { value: 'light', label: 'Light', bg: 'bg-[#f8fafc]', accent: 'bg-[#8B5CF6]', text: 'text-slate-900' },
+                        { value: 'system', label: 'System', bg: 'bg-gradient-to-br from-[#1a1625] to-[#f8fafc]', accent: 'bg-[#8B5CF6]', text: 'text-white' },
+                      ].map((theme) => (
+                        <button
+                          key={theme.value}
+                          type="button"
+                          onClick={() => setFormData(prev => prev ? { ...prev, theme: theme.value } : prev)}
+                          className={`relative flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all hover:scale-105 ${
+                            formData.theme === theme.value 
+                              ? 'border-primary ring-2 ring-primary/20' 
+                              : 'border-border/50 hover:border-border'
+                          }`}
+                        >
+                          <div className={`w-full h-16 rounded-md ${theme.bg} flex items-center justify-center shadow-inner`}>
+                            <div className={`w-6 h-6 rounded-full ${theme.accent}`} />
+                          </div>
+                          <span className="text-xs font-medium">{theme.label}</span>
+                          {formData.theme === theme.value && (
+                            <div className="absolute top-1 right-1 h-4 w-4 rounded-full bg-primary flex items-center justify-center">
+                              <Check className="h-2.5 w-2.5 text-primary-foreground" />
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+
+                  <Separator />
 
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">

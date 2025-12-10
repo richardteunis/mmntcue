@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import Dashboard from '@/components/runway/Dashboard';
 import { Loader2 } from 'lucide-react';
 
@@ -24,9 +25,16 @@ const Index = () => {
 
       // Check for pending show join from show code
       const pendingShowId = sessionStorage.getItem('pending_show_join');
-      if (pendingShowId) {
+      if (pendingShowId && user) {
         sessionStorage.removeItem('pending_show_join');
-        navigate(`/show/${pendingShowId}`);
+        
+        // Join the show as guest viewer
+        supabase.rpc('join_show_as_guest', {
+          _show_id: pendingShowId,
+          _user_id: user.id
+        }).then(() => {
+          navigate(`/show/${pendingShowId}`);
+        });
         return;
       }
     }
