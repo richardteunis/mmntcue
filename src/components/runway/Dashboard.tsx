@@ -689,6 +689,74 @@ const Dashboard: React.FC = () => {
     setIsPlaybackSettingsOpen(true);
   }, []);
 
+  // Handle asset dropped to create a new cue
+  const handleAssetDropToCreate = useCallback(async (asset: Asset, trackId: string, startTime: number) => {
+    if (!activeShowId) return;
+
+    const trackMap: Record<string, string> = {
+      audio: 'Audio Main',
+      video: 'Video Wall',
+      lighting: 'Stage Lighting',
+      stage: 'Stage Direction'
+    };
+
+    const colorMap: Record<string, string> = {
+      audio: 'bg-runway-teal',
+      video: 'bg-runway-success',
+      lighting: 'bg-runway-highlight',
+      stage: 'bg-runway-warning'
+    };
+
+    // Convert seconds to time string
+    const hours = Math.floor(startTime / 3600);
+    const minutes = Math.floor((startTime % 3600) / 60);
+    const seconds = Math.floor(startTime % 60);
+    const startTimeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+    // Determine duration from asset if available
+    const durationSeconds = asset.duration || 30;
+    const durHours = Math.floor(durationSeconds / 3600);
+    const durMinutes = Math.floor((durationSeconds % 3600) / 60);
+    const durSecs = Math.floor(durationSeconds % 60);
+    const durationStr = `${durHours.toString().padStart(2, '0')}:${durMinutes.toString().padStart(2, '0')}:${durSecs.toString().padStart(2, '0')}`;
+
+    const newCue: Omit<Cue, 'id' | 'show_id' | 'created_at' | 'updated_at'> = {
+      name: asset.name,
+      type: trackId,
+      track: trackMap[trackId] || trackId,
+      start_time: startTimeStr,
+      duration: durationStr,
+      position: cues.length * 100,
+      width: 100,
+      color: colorMap[trackId] || 'bg-muted',
+      notes: null,
+      effects: [],
+      auto_follow: false,
+      order_index: cues.length
+    };
+
+    const createdCue = await addCue(newCue, false);
+    
+    // Also attach the asset to the cue
+    if (createdCue) {
+      const { supabase } = await import('@/integrations/supabase/client');
+      await supabase.from('cue_assets').insert({
+        cue_id: createdCue.id,
+        asset_id: asset.id,
+        volume: 1.0,
+        playback_speed: 1.0,
+        loop_enabled: false,
+        fade_in_duration: 0,
+        fade_out_duration: 0,
+        trim_start: 0,
+        trim_end: null,
+        start_offset: 0,
+        order_index: 0,
+      });
+      toast({ title: 'Cue created from asset', description: asset.name });
+    }
+  }, [activeShowId, cues.length, addCue, toast]);
+
   // Handle saving playback settings after asset drop
   const handleSaveAssetToCue = useCallback(async (settings: PlaybackSettings) => {
     if (!pendingAssetForCue) return;
@@ -877,6 +945,8 @@ const Dashboard: React.FC = () => {
                         onCueDuplicate={handleCueDuplicate}
                         onViewportChange={handleViewportScroll}
                         scrollRef={timelineScrollRef}
+                        onAssetDropOnCue={handleAssetDropOnCue}
+                        onAssetDropToCreate={handleAssetDropToCreate}
                       />
                     ) : (
                       <Timeline 
@@ -896,6 +966,8 @@ const Dashboard: React.FC = () => {
                         onBulkUpdate={handleBulkUpdate}
                         onViewportChange={handleViewportScroll}
                         scrollRef={timelineScrollRef}
+                        onAssetDropOnCue={handleAssetDropOnCue}
+                        onAssetDropToCreate={(asset) => handleAssetDropToCreate(asset, 'audio', 0)}
                       />
                     )}
                     

@@ -52,6 +52,8 @@ interface TableViewProps {
   onCueDuplicate: (id: string) => void;
   onEditCue: (cue: Cue) => void;
   showCountdown?: { text: string; isLive: boolean } | null;
+  onAssetDropOnCue?: (assetData: any, cueId: string) => void;
+  onAssetDropToCreate?: (assetData: any) => void;
 }
 
 type SortField = 'name' | 'type' | 'track' | 'start_time' | 'duration';
@@ -114,7 +116,9 @@ const TableView: React.FC<TableViewProps> = ({
   onCueDelete,
   onCueDuplicate,
   onEditCue,
-  showCountdown
+  showCountdown,
+  onAssetDropOnCue,
+  onAssetDropToCreate
 }) => {
   const [sortField, setSortField] = useState<SortField>('start_time');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -123,6 +127,8 @@ const TableView: React.FC<TableViewProps> = ({
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['audio', 'video', 'lighting', 'stage']);
   const [goMode, setGoMode] = useState(false);
+  const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
+  const [isDropZoneActive, setIsDropZoneActive] = useState(false);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -306,7 +312,37 @@ const TableView: React.FC<TableViewProps> = ({
       </div>
 
       {/* Run of Show Table */}
-      <div className="flex-1 overflow-auto">
+      <div 
+        className={cn(
+          "flex-1 overflow-auto transition-colors",
+          isDropZoneActive && "bg-runway-teal/5 ring-2 ring-runway-teal ring-inset"
+        )}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('application/json')) {
+            e.preventDefault();
+            setIsDropZoneActive(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setIsDropZoneActive(false);
+          }
+        }}
+        onDrop={(e) => {
+          const jsonData = e.dataTransfer.getData('application/json');
+          if (jsonData && !dropTargetCueId) {
+            try {
+              const assetData = JSON.parse(jsonData);
+              if (assetData.file_url && onAssetDropToCreate) {
+                e.preventDefault();
+                onAssetDropToCreate(assetData);
+              }
+            } catch {}
+          }
+          setIsDropZoneActive(false);
+          setDropTargetCueId(null);
+        }}
+      >
         <Table>
           <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow className="hover:bg-transparent border-b-2 border-border">
@@ -369,9 +405,33 @@ const TableView: React.FC<TableViewProps> = ({
                 className={cn(
                   "cursor-pointer transition-colors group",
                   selectedCueId === cue.id && "bg-primary/10 border-l-2 border-l-primary",
+                  dropTargetCueId === cue.id && "ring-2 ring-runway-teal bg-runway-teal/10",
                   goMode && "h-14"
                 )}
                 onClick={() => onCueSelect(cue.id, cue)}
+                onDragOver={(e) => {
+                  if (e.dataTransfer.types.includes('application/json')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDropTargetCueId(cue.id);
+                    setIsDropZoneActive(false);
+                  }
+                }}
+                onDragLeave={() => setDropTargetCueId(null)}
+                onDrop={(e) => {
+                  const jsonData = e.dataTransfer.getData('application/json');
+                  if (jsonData) {
+                    try {
+                      const assetData = JSON.parse(jsonData);
+                      if (assetData.file_url && onAssetDropOnCue) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onAssetDropOnCue(assetData, cue.id);
+                      }
+                    } catch {}
+                  }
+                  setDropTargetCueId(null);
+                }}
               >
                 <TableCell className="text-center font-mono text-xs text-muted-foreground">
                   {index + 1}
