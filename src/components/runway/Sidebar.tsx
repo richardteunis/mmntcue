@@ -493,11 +493,18 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
     onShowSelect(show.id, show.name);
   };
 
-  // Get shows not in any folder
-  const rootShows = shows.filter(s => !s.folder_id);
+  // Demo show ID constant
+  const DEMO_SHOW_ID = '00000000-0000-0000-0000-000000000001';
+  
+  // Separate demo shows from user shows
+  const demoShows = shows.filter(s => s.id === DEMO_SHOW_ID);
+  const userShows = shows.filter(s => s.id !== DEMO_SHOW_ID);
+  
+  // Get user shows not in any folder
+  const rootShows = userShows.filter(s => !s.folder_id);
   
   // Get shows in a specific folder
-  const getShowsInFolder = (folderId: string) => shows.filter(s => s.folder_id === folderId);
+  const getShowsInFolder = (folderId: string) => userShows.filter(s => s.folder_id === folderId);
 
   const quickAddItems = [
     { icon: <Video size={16} />, label: 'Video Cue', type: 'video', color: 'text-runway-success' },
@@ -809,11 +816,38 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
       <ScrollArea className="flex-1 px-2">
         {!collapsed ? (
           <div className="space-y-4 py-2">
+            {/* Demo Shows Section */}
+            {demoShows.length > 0 && (
+              <SidebarSection 
+                title="Demo" 
+                icon={<Zap size={12} />}
+                defaultOpen={true}
+              >
+                {demoShows.map(show => (
+                  <Button 
+                    key={show.id}
+                    variant="ghost" 
+                    className={cn(
+                      "w-full justify-start gap-2 h-auto py-1.5 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground pl-2",
+                      activeShowId === show.id && "bg-sidebar-accent text-sidebar-foreground font-medium"
+                    )}
+                    onClick={() => handleSelectShow(show)}
+                  >
+                    <ShowIcon logoUrl={show.logo_url} size={14} />
+                    <div className="flex flex-col items-start min-w-0">
+                      <span className="truncate w-full text-left">{show.name}</span>
+                      <span className="text-[10px] text-muted-foreground">Read-only sample</span>
+                    </div>
+                  </Button>
+                ))}
+              </SidebarSection>
+            )}
+
             {/* Shows Section */}
             <SidebarSection 
               title="Shows" 
               icon={<ListVideo size={12} />}
-              badge={shows.length}
+              badge={userShows.length}
             >
               {loading ? (
                 <div className="flex items-center justify-center py-4">
