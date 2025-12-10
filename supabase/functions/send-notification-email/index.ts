@@ -31,7 +31,7 @@ const sanitizeString = (str: string, maxLength: number = 200): string => {
   return str.slice(0, maxLength).replace(/[<>]/g, '');
 };
 
-const VALID_EMAIL_TYPES = ['forgot_password', 'confirm_email', 'added_to_show'] as const;
+const VALID_EMAIL_TYPES = ['forgot_password', 'confirm_email', 'added_to_show', 'invite_accepted'] as const;
 type EmailType = typeof VALID_EMAIL_TYPES[number];
 
 interface NotificationEmailRequest {
@@ -44,6 +44,8 @@ interface NotificationEmailRequest {
   eventName?: string;
   // For forgot_password
   expirationMinutes?: number;
+  // For invite_accepted
+  acceptedByName?: string;
 }
 
 const getCurrentYear = () => new Date().getFullYear();
@@ -324,6 +326,96 @@ const generateAddedToShowEmail = (params: {
 </body>
 </html>`;
 
+const generateInviteAcceptedEmail = (params: {
+  userName: string;
+  acceptedByName: string;
+  eventName: string;
+  actionUrl: string;
+  year: number;
+}) => `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Your invitation was accepted</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body style="margin:0; padding:0; background-color:#020617;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#020617;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px; background-color:#020617; border-radius:16px; border:1px solid #1f2937;">
+          <!-- Header -->
+          <tr>
+            <td style="padding:24px 24px 8px 24px;">
+              <img src="${LOGO_DATA_URI}" alt="mmnt. Cue" width="26" height="26" style="display:inline-block; vertical-align:middle; margin-right:8px;" />
+              <span style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:12px; letter-spacing:0.16em; text-transform:uppercase; color:#6b7280; vertical-align:middle;">
+                mmnt. Cue
+              </span>
+              <h1 style="margin:12px 0 0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:22px; line-height:1.4; color:#e5e7eb; font-weight:600;">
+                ${params.acceptedByName} accepted your invitation
+              </h1>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:8px 24px 0 24px;">
+              <p style="margin:0 0 12px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:14px; line-height:1.7; color:#9ca3af;">
+                Hi ${params.userName},
+              </p>
+              <p style="margin:0 0 16px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:14px; line-height:1.7; color:#9ca3af;">
+                Great news! <strong style="color:#e5e7eb;">${params.acceptedByName}</strong> has accepted your invitation to join <strong style="color:#e5e7eb;">${params.eventName}</strong> on mmnt. Cue.
+              </p>
+              <p style="margin:0 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:14px; line-height:1.7; color:#9ca3af;">
+                They now have access to the event and can start collaborating with your team.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Button -->
+          <tr>
+            <td style="padding:0 24px 24px 24px;" align="left">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" bgcolor="#38bdf8" style="border-radius:999px;">
+                    <a href="${params.actionUrl}"
+                       style="display:inline-block; padding:10px 22px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:14px; font-weight:500; text-decoration:none; color:#020617;">
+                      View event
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Secondary -->
+          <tr>
+            <td style="padding:0 24px 24px 24px;">
+              <p style="margin:0 0 8px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:12px; line-height:1.7; color:#6b7280;">
+                Direct link:
+              </p>
+              <p style="margin:0 0 16px; font-family:monospace; font-size:12px; word-break:break-all; color:#9ca3af;">
+                ${params.actionUrl}
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 24px 24px; border-top:1px solid #111827;">
+              <p style="margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:11px; color:#4b5563;">
+                &copy; ${params.year} mmnt. Cue. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
 const handler = async (req: Request): Promise<Response> => {
   console.log("send-notification-email function called");
 
@@ -350,7 +442,8 @@ const handler = async (req: Request): Promise<Response> => {
       actionUrl, 
       roleName, 
       eventName, 
-      expirationMinutes 
+      expirationMinutes,
+      acceptedByName
     } = requestBody;
 
     // Input validation
@@ -416,14 +509,29 @@ const handler = async (req: Request): Promise<Response> => {
           year,
         });
         break;
-      
+
+      case 'invite_accepted':
+        const safeAcceptedByName = sanitizeString(acceptedByName || 'Someone', 100);
+        const safeEventNameAccepted = sanitizeString(eventName || 'an event', 200);
+        subject = `${safeAcceptedByName} accepted your invitation to ${safeEventNameAccepted}`;
+        html = generateInviteAcceptedEmail({
+          userName: displayName,
+          acceptedByName: safeAcceptedByName,
+          eventName: safeEventNameAccepted,
+          actionUrl,
+          year,
+        });
+        break;
+
       default:
-        throw new Error(`Unknown email type: ${type}`);
+        return new Response(JSON.stringify({ error: "Invalid email type" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
     }
 
-    // Send the email
     const emailResponse = await resend.emails.send({
-      from: "mmnt. Cue <onboarding@resend.dev>",
+      from: "mmnt. Cue <cue@mmnt.dev>",
       to: [email],
       subject,
       html,
@@ -431,12 +539,12 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log("Email sent successfully:", emailResponse);
 
-    return new Response(JSON.stringify({ success: true, emailResponse }), {
+    return new Response(JSON.stringify(emailResponse), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (error: any) {
-    console.error("Error sending notification email:", error);
+    console.error("Error in send-notification-email function:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
