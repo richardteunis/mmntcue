@@ -702,8 +702,20 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
       
       <Separator className="bg-sidebar-border/50" />
       
-      {/* New Show & Folder Buttons */}
+      {/* Home & New Show Buttons */}
       <div className="p-2 space-y-1">
+        <Button 
+          variant="ghost" 
+          className={cn(
+            "w-full justify-start gap-2 h-9 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+            !activeShowId && "bg-sidebar-accent text-sidebar-foreground",
+            collapsed && "justify-center p-0"
+          )}
+          onClick={() => onGoHome?.()}
+        >
+          <Home size={collapsed ? 16 : 14} />
+          {!collapsed && <span>Home</span>}
+        </Button>
         <Button 
           variant="outline" 
           className={cn(
@@ -949,57 +961,27 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
       <Separator className="bg-sidebar-border/50" />
       <div className="p-2 space-y-1">
         {!collapsed ? (
-          <>
-            <Button 
-              variant="ghost" 
-              className={cn(
-                "w-full justify-start gap-2 h-9 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                !activeShowId && "bg-sidebar-accent text-sidebar-foreground"
-              )}
-              onClick={() => onGoHome?.()}
-            >
-              <Home size={14} />
-              Home
-            </Button>
-            <Button 
-              variant="ghost" 
-              className="w-full justify-start gap-2 h-9 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              onClick={() => navigate('/settings')}
-            >
-              <Settings size={14} />
-              Settings
-            </Button>
-          </>
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start gap-2 h-9 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            onClick={() => navigate('/settings')}
+          >
+            <Settings size={14} />
+            Settings
+          </Button>
         ) : (
-          <>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  className={cn(
-                    "w-full justify-center h-9 p-0 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                    !activeShowId && "bg-sidebar-accent text-sidebar-foreground"
-                  )}
-                  onClick={() => onGoHome?.()}
-                >
-                  <Home size={16} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">Home</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  className="w-full justify-center h-9 p-0 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                  onClick={() => navigate('/settings')}
-                >
-                  <Settings size={16} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">Settings</TooltipContent>
-            </Tooltip>
-          </>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                className="w-full justify-center h-9 p-0 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                onClick={() => navigate('/settings')}
+              >
+                <Settings size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Settings</TooltipContent>
+          </Tooltip>
         )}
       </div>
     </div>
