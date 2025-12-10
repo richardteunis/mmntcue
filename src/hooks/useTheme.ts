@@ -31,6 +31,7 @@ const themeStyles: Record<string, Record<string, string>> = {
     '--sidebar-accent-foreground': '240 5.9% 90%',
     '--sidebar-border': '263 28% 30%',
     '--sidebar-ring': '252 95% 85%',
+    '--logo-filter': 'none',
   },
   midnight: {
     '--background': '222 47% 11%',
@@ -60,6 +61,7 @@ const themeStyles: Record<string, Record<string, string>> = {
     '--sidebar-accent-foreground': '240 5.9% 90%',
     '--sidebar-border': '222 47% 25%',
     '--sidebar-ring': '217 91% 70%',
+    '--logo-filter': 'none',
   },
   forest: {
     '--background': '150 30% 10%',
@@ -89,6 +91,7 @@ const themeStyles: Record<string, Record<string, string>> = {
     '--sidebar-accent-foreground': '150 10% 90%',
     '--sidebar-border': '150 30% 18%',
     '--sidebar-ring': '142 71% 55%',
+    '--logo-filter': 'none',
   },
   sunset: {
     '--background': '15 25% 10%',
@@ -118,6 +121,7 @@ const themeStyles: Record<string, Record<string, string>> = {
     '--sidebar-accent-foreground': '30 15% 90%',
     '--sidebar-border': '15 25% 20%',
     '--sidebar-ring': '25 80% 60%',
+    '--logo-filter': 'none',
   },
   noir: {
     '--background': '0 0% 4%',
@@ -177,6 +181,7 @@ const themeStyles: Record<string, Record<string, string>> = {
     '--sidebar-accent-foreground': '330 10% 90%',
     '--sidebar-border': '340 25% 20%',
     '--sidebar-ring': '330 65% 70%',
+    '--logo-filter': 'none',
   },
   light: {
     '--background': '0 0% 100%',
@@ -206,6 +211,7 @@ const themeStyles: Record<string, Record<string, string>> = {
     '--sidebar-accent-foreground': '240 5.9% 20%',
     '--sidebar-border': '240 5% 85%',
     '--sidebar-ring': '262 47% 55%',
+    '--logo-filter': 'none',
   },
 };
 
