@@ -234,7 +234,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    // Get auth header and verify user
+    // Get auth header and extract user from JWT
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -243,21 +243,23 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
-    // Create Supabase client to verify user has permission
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      console.error("Auth error:", authError);
+    // Extract and decode JWT to get user ID (JWT is already verified by Supabase when verify_jwt=true)
+    const token = authHeader.replace('Bearer ', '');
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const userId = payload.sub;
+    
+    if (!userId) {
+      console.error("No user ID in token");
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
+
+    // Create Supabase client with service role for database queries
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const requestBody: InviteRequest = await req.json();
     const { email, showId, showName, inviterName, role, userName } = requestBody;
@@ -282,7 +284,7 @@ const handler = async (req: Request): Promise<Response> => {
       .from('show_members')
       .select('role')
       .eq('show_id', showId)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .single();
 
     const { data: show, error: showError } = await supabase
@@ -291,11 +293,11 @@ const handler = async (req: Request): Promise<Response> => {
       .eq('id', showId)
       .single();
 
-    const isOwner = show?.user_id === user.id;
+    const isOwner = show?.user_id === userId;
     const isEditorOrOwner = membership?.role === 'owner' || membership?.role === 'editor';
 
     if (!isOwner && !isEditorOrOwner) {
-      console.error("Permission denied for user:", user.id, "on show:", showId);
+      console.error("Permission denied for user:", userId, "on show:", showId);
       return new Response(JSON.stringify({ error: "Permission denied" }), {
         status: 403,
         headers: { "Content-Type": "application/json", ...corsHeaders },
