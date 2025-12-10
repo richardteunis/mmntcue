@@ -180,7 +180,18 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Handle adding a new track
+  // Handle going to home view
+  const handleGoHome = () => {
+    setActiveShowId(null);
+    setShowName('');
+    setShowInfo({});
+    setTracks(DEFAULT_TRACKS);
+    setSelectedCueId(null);
+    setSelectedCue(null);
+    setSelectedCueIds([]);
+    setFollowingUserId(null);
+  };
+
   const handleAddTrack = async (track: Track) => {
     const newTracks = [...tracks, track];
     setTracks(newTracks);
@@ -677,7 +688,7 @@ const Dashboard: React.FC = () => {
   return (
     <TooltipProvider>
       <div className="flex h-screen overflow-hidden bg-background text-foreground">
-        <Sidebar activeShowId={activeShowId} onShowSelect={handleShowSelect} onQuickAddCue={handleQuickAddCue} />
+        <Sidebar activeShowId={activeShowId} onShowSelect={handleShowSelect} onQuickAddCue={handleQuickAddCue} onGoHome={handleGoHome} />
         
         <div ref={mainContentRef} className="flex flex-col flex-1 overflow-hidden relative">
           {/* Collaborator cursors - only show users in same view */}
