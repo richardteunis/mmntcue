@@ -317,8 +317,16 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Sending invite to:", email, "for show:", safeShowName);
 
     // Construct the invite link using SITE_URL from env
-    const siteUrl = Deno.env.get("SITE_URL") || "https://cue.mmnt.dev";
-    const inviteLink = `${siteUrl}/show/${showId}`;
+    let siteUrl = Deno.env.get("SITE_URL") || "https://cue.mmnt.dev";
+    // Ensure URL has protocol
+    if (!siteUrl.startsWith('http://') && !siteUrl.startsWith('https://')) {
+      siteUrl = `https://${siteUrl}`;
+    }
+    // Remove trailing slash if present
+    siteUrl = siteUrl.replace(/\/$/, '');
+    const inviteLink = `${siteUrl}/auth?redirect=/show/${showId}`;
+    
+    console.log("Constructed invite link:", inviteLink);
 
     // Use inviteeName if provided, otherwise fall back to email prefix
     const displayName = safeInviteeName || email.split("@")[0];
