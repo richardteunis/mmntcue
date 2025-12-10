@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Layers, Mail, Loader2, ArrowRight, Lock, Eye, EyeOff, Fingerprint, ArrowLeft, Ticket } from 'lucide-react';
+import { Mail, Loader2, ArrowRight, Lock, Eye, EyeOff, Fingerprint, ArrowLeft, Ticket } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { usePasskey } from '@/hooks/usePasskey';
 import { supabase } from '@/integrations/supabase/client';
@@ -665,14 +665,13 @@ const AuthPage: React.FC = () => {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <Layers className="h-6 w-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">MMNT.Cue</h1>
-            <p className="text-xs text-muted-foreground">Professional Show Control</p>
-          </div>
+        <div className="flex flex-col items-center gap-3 mb-8">
+          <img 
+            src="/mmnt_pink_wordmark.svg" 
+            alt="mmnt. Cue" 
+            className="h-8"
+          />
+          <p className="text-xs text-muted-foreground">Professional Show Control</p>
         </div>
 
         {view === 'verify-mfa' && renderMFAVerification()}

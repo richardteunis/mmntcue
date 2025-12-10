@@ -10,7 +10,6 @@ import {
   Music, 
   Lightbulb,
   Mic,
-  Layers,
   ChevronRight,
   ChevronLeft,
   ChevronDown,
@@ -921,18 +920,22 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
           "flex items-center gap-2 transition-opacity",
           collapsed && "opacity-0 w-0 overflow-hidden"
         )}>
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <Layers className="h-4 w-4 text-white" />
-          </div>
+          <img 
+            src="/mmnt_pink_icon.svg" 
+            alt="" 
+            className="h-8 w-8"
+          />
           <div className="flex flex-col">
-            <span className="font-bold text-white text-sm">MMNT.Cue</span>
+            <span className="font-bold text-white text-sm">mmnt. Cue</span>
             <span className="text-[10px] text-sidebar-foreground/50">Show Control</span>
           </div>
         </div>
         {collapsed && (
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto">
-            <Layers className="h-4 w-4 text-white" />
-          </div>
+          <img 
+            src="/mmnt_pink_icon.svg" 
+            alt="mmnt. Cue" 
+            className="h-8 w-8 mx-auto"
+          />
         )}
         <Button 
           variant="ghost" 

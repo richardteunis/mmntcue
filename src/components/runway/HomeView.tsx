@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Layers, Plus, Folder, Video, Music, Lightbulb, Sparkles, Clock, Users, Loader2, Mic2, Award, Church, Radio, PartyPopper, Theater, Building2, Heart } from 'lucide-react';
+import { Plus, Folder, Video, Music, Lightbulb, Sparkles, Clock, Users, Loader2, Mic2, Award, Church, Radio, PartyPopper, Theater, Building2, Heart } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -159,10 +159,12 @@ const HomeView: React.FC<HomeViewProps> = ({ onCreateShow, recentShows = [], onS
       <div className="max-w-3xl w-full space-y-8">
         {/* Welcome Header */}
         <div className="text-center space-y-3">
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-4">
-            <Layers className="h-8 w-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-foreground">Welcome to MMNT.Cue</h1>
+          <img 
+            src="/mmnt_pink_wordmark.svg" 
+            alt="mmnt. Cue" 
+            className="h-10 mx-auto mb-4"
+          />
+          <h1 className="text-3xl font-bold text-foreground">Welcome to mmnt. Cue</h1>
           <p className="text-muted-foreground max-w-md mx-auto">
             Professional show control for live events. Create a show to start building your cue sheet.
           </p>
@@ -212,7 +214,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onCreateShow, recentShows = [], onS
                   onClick={() => onSelectShow?.(show.id, show.name)}
                 >
                   <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-                    <Layers className="h-4 w-4 text-primary" />
+                    <img src="/mmnt_pink_icon.svg" alt="" className="h-5 w-5" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{show.name}</p>
