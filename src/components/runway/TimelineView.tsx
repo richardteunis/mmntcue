@@ -4,7 +4,6 @@ import { Play, Pause, SkipForward, RotateCcw, ZoomIn, ZoomOut, Hand } from 'luci
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
-import { useCuePlayback } from '@/hooks/useCuePlayback';
 
 export interface TimelineCue {
   id: string;
@@ -42,6 +41,16 @@ export interface TimelineViewProps {
   scrollRef?: React.RefObject<HTMLDivElement>;
   onAssetDropOnCue?: (assetData: any, cueId: string) => void;
   onAssetDropToCreate?: (assetData: any, trackId: string, startTime: number) => void;
+  // Shared playback state
+  playbackState?: {
+    isPlaying: boolean;
+    currentTimeSeconds: number;
+    currentTime: string;
+    togglePlay: () => void;
+    reset: () => void;
+    seekTo: (seconds: number) => void;
+    jumpToNextCue: () => { id: string; time: string; duration: string } | null;
+  };
 }
 
 // Default track lanes configuration
@@ -91,24 +100,23 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   scrollRef,
   onAssetDropOnCue,
   onAssetDropToCreate,
+  playbackState,
 }) => {
   const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
   const [dropTargetTrack, setDropTargetTrack] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1); // pixels per second
   const [scrollLeft, setScrollLeft] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
   const [isPanning, setIsPanning] = useState(false);
   const [panMode, setPanMode] = useState(false);
-  
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const animationRef = useRef<number | null>(null);
-  const triggeredCuesRef = useRef<Set<string>>(new Set());
   const { toast } = useToast();
-  const { playCue, stopAllCues, clearCache } = useCuePlayback();
+  
+  // Use external playback state if provided
+  const isPlaying = playbackState?.isPlaying ?? false;
+  const currentTime = playbackState?.currentTimeSeconds ?? 0;
   
   // Combine refs if external scrollRef is provided
   const scrollContainerRef = scrollRef || containerRef;
@@ -133,46 +141,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     return grouped;
   }, [cues, tracks]);
 
-  // Playback animation with cue triggering
-  useEffect(() => {
-    if (isPlaying) {
-      let lastTime = performance.now();
-      const animate = (now: number) => {
-        const delta = (now - lastTime) / 1000;
-        lastTime = now;
-        const newTime = Math.min(currentTime + delta, totalDuration);
-        setCurrentTime(newTime);
-        
-        // Check for cues that should be triggered
-        for (const cue of cues) {
-          const cueStartSeconds = timeToSeconds(cue.time);
-          const cueDurationSeconds = timeToSeconds(cue.duration);
-          const cueEndSeconds = cueStartSeconds + cueDurationSeconds;
-          
-          // Trigger cue if playhead just crossed the start time
-          if (newTime >= cueStartSeconds && 
-              newTime < cueEndSeconds &&
-              !triggeredCuesRef.current.has(cue.id)) {
-            triggeredCuesRef.current.add(cue.id);
-            playCue(cue.id);
-          }
-          
-          // Remove from triggered if we've passed the cue
-          if (newTime >= cueEndSeconds) {
-            triggeredCuesRef.current.delete(cue.id);
-          }
-        }
-        
-        animationRef.current = requestAnimationFrame(animate);
-      };
-      animationRef.current = requestAnimationFrame(animate);
-    } else if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
-    return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    };
-  }, [isPlaying, totalDuration, cues, playCue]);
+  // Playback is now handled by the shared usePlaybackState hook in Dashboard
+  // This component just reads the state and displays it
 
   // Auto-scroll to follow playhead
   useEffect(() => {
@@ -206,20 +176,15 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const handleZoomOut = () => setZoom(prev => Math.max(prev / 1.5, 0.25));
   
   const handleReset = () => {
-    setCurrentTime(0);
-    setIsPlaying(false);
-    triggeredCuesRef.current.clear();
-    stopAllCues();
-    clearCache();
+    playbackState?.reset();
     if (containerRef.current) containerRef.current.scrollLeft = 0;
   };
 
   const handleNextCue = () => {
-    const sortedCues = [...cues].sort((a, b) => timeToSeconds(a.time) - timeToSeconds(b.time));
-    const nextCue = sortedCues.find(c => timeToSeconds(c.time) > currentTime);
+    const nextCue = playbackState?.jumpToNextCue();
     if (nextCue) {
-      setCurrentTime(timeToSeconds(nextCue.time));
-      onCueSelect?.(nextCue.id, nextCue);
+      const cue = cues.find(c => c.id === nextCue.id);
+      if (cue) onCueSelect?.(cue.id, cue);
     }
   };
 
@@ -242,15 +207,13 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     
     // Immediately move playhead to click position and start dragging
     const time = getTimeFromMouseEvent(e);
-    setCurrentTime(time);
+    playbackState?.seekTo(time);
     setIsDraggingPlayhead(true);
-    setIsPlaying(false);
   };
 
   const handlePlayheadMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsDraggingPlayhead(true);
-    setIsPlaying(false);
   };
 
   useEffect(() => {
@@ -258,7 +221,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
 
     const handleMouseMove = (e: MouseEvent) => {
       const time = getTimeFromMouseEvent(e);
-      setCurrentTime(time);
+      playbackState?.seekTo(time);
     };
 
     const handleMouseUp = () => {
@@ -336,7 +299,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
             size="sm" 
             variant={isPlaying ? "default" : "secondary"}
             className={cn("gap-1", isPlaying && "bg-runway-success hover:bg-runway-success/90")}
-            onClick={() => setIsPlaying(!isPlaying)}
+            onClick={() => playbackState?.togglePlay()}
           >
             {isPlaying ? <Pause size={14} /> : <Play size={14} />}
             {isPlaying ? 'Pause' : 'Play'}

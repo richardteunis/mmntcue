@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { 
   ChevronDown, 
@@ -53,7 +53,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useCuePlayback } from '@/hooks/useCuePlayback';
 
 export interface TimelineCue {
   id: string;
@@ -92,6 +91,16 @@ export interface TimelineProps {
   scrollRef?: React.RefObject<HTMLDivElement>;
   onAssetDropOnCue?: (assetData: any, cueId: string) => void;
   onAssetDropToCreate?: (assetData: any) => void;
+  // Shared playback state
+  playbackState?: {
+    isPlaying: boolean;
+    currentTimeSeconds: number;
+    currentTime: string;
+    togglePlay: () => void;
+    reset: () => void;
+    seekTo: (seconds: number) => void;
+    jumpToNextCue: () => { id: string; time: string; duration: string } | null;
+  };
 }
 
 // Track columns configuration
@@ -169,12 +178,11 @@ const Timeline: React.FC<TimelineProps> = ({
   onViewportChange,
   scrollRef,
   onAssetDropOnCue,
-  onAssetDropToCreate
+  onAssetDropToCreate,
+  playbackState
 }) => {
   const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
   const [isDropZoneActive, setIsDropZoneActive] = useState(false);
-  const [currentTime, setCurrentTime] = useState('00:00:00');
-  const [isPlaying, setIsPlaying] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['audio', 'video', 'lighting', 'stage']);
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
@@ -183,12 +191,13 @@ const Timeline: React.FC<TimelineProps> = ({
   const [draggedCueId, setDraggedCueId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   
-  const timeInSecondsRef = useRef(0);
-  const animationFrameRef = useRef<number | null>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
-  const triggeredCuesRef = useRef<Set<string>>(new Set());
   const { toast } = useToast();
-  const { playCue, stopAllCues, clearCache } = useCuePlayback();
+  
+  // Use external playback state if provided
+  const isPlaying = playbackState?.isPlaying ?? false;
+  const currentTime = playbackState?.currentTime ?? '00:00:00';
+  const currentTimeSeconds = playbackState?.currentTimeSeconds ?? 0;
   
   // Sort cues by start time
   const sortedCues = useMemo(() => {
@@ -253,84 +262,30 @@ const Timeline: React.FC<TimelineProps> = ({
     }
   };
   
-  // Playback logic with cue triggering
-  useEffect(() => {
-    if (isPlaying) {
-      let lastTimestamp = performance.now();
-      
-      const animate = (timestamp: number) => {
-        const deltaTime = timestamp - lastTimestamp;
-        lastTimestamp = timestamp;
-        
-        timeInSecondsRef.current += deltaTime / 1000;
-        const currentSeconds = timeInSecondsRef.current;
-        setCurrentTime(secondsToTime(currentSeconds));
-        
-        // Check for cues that should be triggered
-        for (const cue of sortedCues) {
-          const cueStartSeconds = timeToSeconds(cue.time);
-          const cueDurationSeconds = timeToSeconds(cue.duration);
-          const cueEndSeconds = cueStartSeconds + cueDurationSeconds;
-          
-          // Trigger cue if playhead just crossed the start time
-          if (currentSeconds >= cueStartSeconds && 
-              currentSeconds < cueEndSeconds &&
-              !triggeredCuesRef.current.has(cue.id)) {
-            triggeredCuesRef.current.add(cue.id);
-            playCue(cue.id);
-          }
-          
-          // Remove from triggered if we've passed the cue
-          if (currentSeconds >= cueEndSeconds) {
-            triggeredCuesRef.current.delete(cue.id);
-          }
-        }
-        
-        animationFrameRef.current = requestAnimationFrame(animate);
-      };
-      
-      animationFrameRef.current = requestAnimationFrame(animate);
-    } else if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [isPlaying, sortedCues, playCue]);
+  // Playback is now handled by the shared usePlaybackState hook in Dashboard
   
   const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
+    playbackState?.togglePlay();
   };
   
   const handleNextCue = () => {
-    const currentSeconds = timeInSecondsRef.current;
-    const nextCue = sortedCues.find(cue => timeToSeconds(cue.time) > currentSeconds);
-    
+    const nextCue = playbackState?.jumpToNextCue();
     if (nextCue) {
-      timeInSecondsRef.current = timeToSeconds(nextCue.time);
-      setCurrentTime(nextCue.time);
-      if (onCueSelect) onCueSelect(nextCue.id, nextCue);
-      toast({ title: "Jumped to next cue", description: nextCue.name });
+      const cue = sortedCues.find(c => c.id === nextCue.id);
+      if (cue && onCueSelect) {
+        onCueSelect(cue.id, cue);
+        toast({ title: "Jumped to next cue", description: cue.name });
+      }
     }
   };
   
   const handleReset = () => {
-    timeInSecondsRef.current = 0;
-    setCurrentTime('00:00:00');
-    setIsPlaying(false);
-    triggeredCuesRef.current.clear();
-    stopAllCues();
-    clearCache();
+    playbackState?.reset();
   };
   
   const handleCueClick = (cue: TimelineCue) => {
     if (onCueSelect) onCueSelect(cue.id, cue);
-    timeInSecondsRef.current = timeToSeconds(cue.time);
-    setCurrentTime(cue.time);
+    playbackState?.seekTo(timeToSeconds(cue.time));
   };
   
   const handleCopyCue = () => {
