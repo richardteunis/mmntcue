@@ -71,6 +71,89 @@ const ROLE_ICONS: Record<WorkspaceRole, React.ReactNode> = {
   member: <User size={12} className="text-muted-foreground" />,
 };
 
+// Member Row Component
+interface MemberRowProps {
+  member: WorkspaceMemberWithProfile;
+  isCurrentUser: boolean;
+  isAdmin: boolean;
+  isOwner: boolean;
+  onUpdateRole: (memberId: string, role: WorkspaceRole) => void;
+  onRemove: (memberId: string, userId: string) => void;
+  isPending?: boolean;
+}
+
+const MemberRow: React.FC<MemberRowProps> = ({
+  member,
+  isCurrentUser,
+  isAdmin,
+  isOwner,
+  onUpdateRole,
+  onRemove,
+  isPending,
+}) => {
+  const isMemberOwner = member.role === 'owner';
+  
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 p-3 rounded-lg transition-colors",
+        isPending ? "bg-amber-500/10 border border-amber-500/20" : "bg-muted/30 hover:bg-muted/50"
+      )}
+    >
+      <Avatar className="h-9 w-9">
+        <AvatarImage src={member.profile?.avatar_url || undefined} />
+        <AvatarFallback className="text-xs">
+          {member.profile?.full_name?.charAt(0) || member.profile?.email?.charAt(0) || '?'}
+        </AvatarFallback>
+      </Avatar>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">
+          {member.profile?.full_name || 'Unknown'}
+          {isCurrentUser && <span className="text-muted-foreground"> (you)</span>}
+        </p>
+        <p className="text-xs text-muted-foreground truncate">
+          {member.profile?.email}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        {isPending && (
+          <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-500">Pending</Badge>
+        )}
+        {isAdmin && !isCurrentUser && !isMemberOwner ? (
+          <Select 
+            value={member.role} 
+            onValueChange={(v) => onUpdateRole(member.id, v as WorkspaceRole)}
+          >
+            <SelectTrigger className="w-24 h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="member">Member</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+              {isOwner && <SelectItem value="owner">Owner</SelectItem>}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-muted text-xs capitalize">
+            {ROLE_ICONS[member.role]}
+            {member.role}
+          </div>
+        )}
+        {isAdmin && !isCurrentUser && !isMemberOwner && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            onClick={() => onRemove(member.id, member.user_id)}
+          >
+            <X size={14} />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
   isOpen,
   onClose,
@@ -460,79 +543,55 @@ const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
             )}
 
             {/* Members List */}
-            <div className="space-y-2">
-              <Label>Members ({members.length})</Label>
-              {loadingMembers ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
+            {loadingMembers ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <>
+                {/* Active Members */}
                 <div className="space-y-2">
-                  {members.map((member) => {
-                    const isCurrentUser = member.user_id === user?.id;
-                    const isMemberOwner = member.role === 'owner';
-                    
-                    return (
-                      <div
+                  <Label>Members ({members.filter(m => m.accepted_at).length})</Label>
+                  <div className="space-y-2">
+                    {members.filter(m => m.accepted_at).map((member) => (
+                      <MemberRow
                         key={member.id}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-                      >
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={member.profile?.avatar_url || undefined} />
-                          <AvatarFallback className="text-xs">
-                            {member.profile?.full_name?.charAt(0) || member.profile?.email?.charAt(0) || '?'}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">
-                            {member.profile?.full_name || 'Unknown'}
-                            {isCurrentUser && <span className="text-muted-foreground"> (you)</span>}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {member.profile?.email}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {!member.accepted_at && (
-                            <Badge variant="outline" className="text-xs">Pending</Badge>
-                          )}
-                          {isAdmin && !isCurrentUser && !isMemberOwner ? (
-                            <Select 
-                              value={member.role} 
-                              onValueChange={(v) => handleUpdateRole(member.id, v as WorkspaceRole)}
-                            >
-                              <SelectTrigger className="w-24 h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="member">Member</SelectItem>
-                                <SelectItem value="admin">Admin</SelectItem>
-                                {isOwner && <SelectItem value="owner">Owner</SelectItem>}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-muted text-xs capitalize">
-                              {ROLE_ICONS[member.role]}
-                              {member.role}
-                            </div>
-                          )}
-                          {isAdmin && !isCurrentUser && !isMemberOwner && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                              onClick={() => handleRemoveMember(member.id, member.user_id)}
-                            >
-                              <X size={14} />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                        member={member}
+                        isCurrentUser={member.user_id === user?.id}
+                        isAdmin={isAdmin}
+                        isOwner={isOwner}
+                        onUpdateRole={handleUpdateRole}
+                        onRemove={handleRemoveMember}
+                      />
+                    ))}
+                    {members.filter(m => m.accepted_at).length === 0 && (
+                      <p className="text-sm text-muted-foreground py-2">No active members</p>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+
+                {/* Pending Invitations */}
+                {members.filter(m => !m.accepted_at).length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-amber-500">Pending Invitations ({members.filter(m => !m.accepted_at).length})</Label>
+                    <div className="space-y-2">
+                      {members.filter(m => !m.accepted_at).map((member) => (
+                        <MemberRow
+                          key={member.id}
+                          member={member}
+                          isCurrentUser={member.user_id === user?.id}
+                          isAdmin={isAdmin}
+                          isOwner={isOwner}
+                          onUpdateRole={handleUpdateRole}
+                          onRemove={handleRemoveMember}
+                          isPending
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </TabsContent>
         </Tabs>
 
