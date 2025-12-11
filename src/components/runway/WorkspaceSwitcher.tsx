@@ -28,8 +28,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { WorkspaceWithRole, WORKSPACE_PLAN_LABELS, WORKSPACE_PLAN_COLORS } from '@/types/workspace';
+import { WorkspaceWithRole, WorkspaceRole, WORKSPACE_PLAN_LABELS, WORKSPACE_PLAN_COLORS } from '@/types/workspace';
 import { useWorkspaces } from '@/hooks/useWorkspaces';
+import WorkspaceSettingsModal from './WorkspaceSettingsModal';
 
 interface WorkspaceSwitcherProps {
   collapsed?: boolean;
@@ -42,10 +43,14 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed }) => {
     activeWorkspaceId,
     setActiveWorkspaceId,
     createWorkspace,
+    updateWorkspace,
+    deleteWorkspace,
+    inviteMember,
     leaveWorkspace,
   } = useWorkspaces();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -69,6 +74,25 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed }) => {
 
   const handleLeaveWorkspace = async (workspaceId: string) => {
     await leaveWorkspace(workspaceId);
+  };
+
+  const handleOpenSettings = () => {
+    setSettingsOpen(true);
+  };
+
+  const handleUpdateWorkspace = async (updates: Partial<WorkspaceWithRole>) => {
+    if (!activeWorkspace) return false;
+    return updateWorkspace(activeWorkspace.id, updates);
+  };
+
+  const handleDeleteWorkspace = async () => {
+    if (!activeWorkspace) return false;
+    return deleteWorkspace(activeWorkspace.id);
+  };
+
+  const handleInviteMember = async (email: string, role: WorkspaceRole) => {
+    if (!activeWorkspace) return false;
+    return inviteMember(activeWorkspace.id, email, role);
   };
 
   if (collapsed) {
@@ -97,9 +121,11 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed }) => {
           <WorkspaceMenuContent 
             workspaces={workspaces}
             activeWorkspaceId={activeWorkspaceId}
+            activeWorkspace={activeWorkspace}
             onSelect={handleSelectWorkspace}
             onLeave={handleLeaveWorkspace}
             onCreateNew={() => setCreateDialogOpen(true)}
+            onOpenSettings={handleOpenSettings}
           />
         </DropdownMenuContent>
       </DropdownMenu>
@@ -112,7 +138,7 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed }) => {
         <DropdownMenuTrigger asChild>
           <Button 
             variant="ghost" 
-            className="w-full justify-between px-3 py-2 h-auto min-h-[48px] hover:bg-sidebar-accent"
+            className="w-full justify-between px-3 py-2 h-auto min-h-[56px] hover:bg-sidebar-accent"
           >
             <div className="flex items-center gap-3 min-w-0">
               {activeWorkspace ? (
@@ -121,19 +147,19 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed }) => {
                     <img 
                       src={activeWorkspace.logo_url} 
                       alt={activeWorkspace.name}
-                      className="w-8 h-8 rounded-lg object-cover shrink-0"
+                      className="w-9 h-9 rounded-lg object-cover shrink-0"
                     />
                   ) : (
-                    <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-sm font-bold text-primary shrink-0">
+                    <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center text-sm font-bold text-primary shrink-0">
                       {activeWorkspace.name.charAt(0).toUpperCase()}
                     </div>
                   )}
-                  <div className="flex flex-col items-start min-w-0">
+                  <div className="flex flex-col items-start min-w-0 gap-1">
                     <span className="font-medium text-sm truncate w-full">{activeWorkspace.name}</span>
                     <Badge 
                       variant="secondary" 
                       className={cn(
-                        "text-[10px] h-4 px-1.5 font-medium",
+                        "text-[10px] h-5 px-2 font-medium",
                         WORKSPACE_PLAN_COLORS[activeWorkspace.plan]
                       )}
                     >
@@ -143,7 +169,7 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed }) => {
                 </>
               ) : (
                 <>
-                  <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
                     <Building2 size={16} className="text-muted-foreground" />
                   </div>
                   <span className="text-sm text-muted-foreground">Personal</span>
@@ -157,9 +183,11 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed }) => {
           <WorkspaceMenuContent 
             workspaces={workspaces}
             activeWorkspaceId={activeWorkspaceId}
+            activeWorkspace={activeWorkspace}
             onSelect={handleSelectWorkspace}
             onLeave={handleLeaveWorkspace}
             onCreateNew={() => setCreateDialogOpen(true)}
+            onOpenSettings={handleOpenSettings}
           />
         </DropdownMenuContent>
       </DropdownMenu>
@@ -191,6 +219,17 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {activeWorkspace && (
+        <WorkspaceSettingsModal
+          isOpen={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          workspace={activeWorkspace}
+          onUpdate={handleUpdateWorkspace}
+          onDelete={handleDeleteWorkspace}
+          onInvite={handleInviteMember}
+        />
+      )}
     </>
   );
 };
@@ -198,17 +237,21 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ collapsed }) => {
 interface WorkspaceMenuContentProps {
   workspaces: WorkspaceWithRole[];
   activeWorkspaceId: string | null;
+  activeWorkspace: WorkspaceWithRole | null;
   onSelect: (id: string | null) => void;
   onLeave: (id: string) => void;
   onCreateNew: () => void;
+  onOpenSettings: () => void;
 }
 
 const WorkspaceMenuContent: React.FC<WorkspaceMenuContentProps> = ({
   workspaces,
   activeWorkspaceId,
+  activeWorkspace,
   onSelect,
   onLeave,
   onCreateNew,
+  onOpenSettings,
 }) => {
   return (
     <>
@@ -257,6 +300,25 @@ const WorkspaceMenuContent: React.FC<WorkspaceMenuContentProps> = ({
           {activeWorkspaceId === workspace.id && <Check size={14} className="text-primary shrink-0" />}
         </DropdownMenuItem>
       ))}
+
+      {activeWorkspace && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onOpenSettings}>
+            <Settings size={14} className="mr-2" />
+            Workspace Settings
+          </DropdownMenuItem>
+          {activeWorkspace.role !== 'owner' && (
+            <DropdownMenuItem 
+              onClick={() => onLeave(activeWorkspace.id)}
+              className="text-destructive focus:text-destructive"
+            >
+              <LogOut size={14} className="mr-2" />
+              Leave Workspace
+            </DropdownMenuItem>
+          )}
+        </>
+      )}
 
       <DropdownMenuSeparator />
       
