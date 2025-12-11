@@ -1093,7 +1093,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
             <SidebarSection 
               title="Shows" 
               icon={<ListVideo size={12} />}
-              badge={shows.length}
+              badge={ownedShows.length}
             >
               {loading ? (
                 <div className="flex items-center justify-center py-4">
