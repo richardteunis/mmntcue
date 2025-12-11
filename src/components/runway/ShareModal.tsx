@@ -186,13 +186,19 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, showId, showNa
         return;
       }
 
-      // Create in-app notification
+      // Create in-app notification with metadata for accept action
       await supabase.from('notifications').insert({
         user_id: selectedProfile.id,
         type: 'invite',
-        title: 'Show invitation',
-        message: `You've been invited to collaborate on "${showName}"`,
+        title: 'Show Invitation',
+        message: `${profile?.full_name || 'Someone'} invited you to collaborate on "${showName}" as ${role}`,
         show_id: showId,
+        metadata: {
+          invite_type: 'show',
+          show_name: showName,
+          inviter_name: profile?.full_name,
+          role: role,
+        },
       });
 
       // Send email notification
