@@ -196,12 +196,51 @@ export function useWorkspaces() {
       .single();
 
     if (!targetProfile) {
-      toast({
-        title: 'User not found',
-        description: 'No user exists with that email address',
-        variant: 'destructive',
-      });
-      return false;
+      // User doesn't exist yet - send invitation email
+      const workspace = workspaces.find(ws => ws.id === workspaceId);
+      const { data: inviterProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single();
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      try {
+        const response = await supabase.functions.invoke('send-workspace-invite', {
+          body: {
+            email,
+            workspaceId,
+            workspaceName: workspace?.name || 'Workspace',
+            inviterName: inviterProfile?.full_name || 'A team member',
+            role,
+          },
+        });
+
+        if (response.error) {
+          console.error('Error sending invite:', response.error);
+          toast({
+            title: 'Invitation email failed',
+            description: 'User not found and email could not be sent',
+            variant: 'destructive',
+          });
+          return false;
+        }
+
+        toast({ 
+          title: 'Invitation sent', 
+          description: `An invitation email has been sent to ${email}` 
+        });
+        return true;
+      } catch (err) {
+        console.error('Error invoking send-workspace-invite:', err);
+        toast({
+          title: 'User not found',
+          description: 'No user exists with that email address',
+          variant: 'destructive',
+        });
+        return false;
+      }
     }
 
     const { error } = await supabase
@@ -211,6 +250,7 @@ export function useWorkspaces() {
         user_id: targetProfile.id,
         role,
         invited_by: user.id,
+        accepted_at: new Date().toISOString(), // Auto-accept for existing users
       });
 
     if (error) {
@@ -230,7 +270,7 @@ export function useWorkspaces() {
       return false;
     }
 
-    toast({ title: 'Invitation sent' });
+    toast({ title: 'Member added', description: `${email} has been added to the workspace` });
     return true;
   };
 
