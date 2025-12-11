@@ -45,7 +45,7 @@ const TopBar: React.FC<TopBarProps> = ({
   const [currentTime, setCurrentTime] = useState(new Date());
   const [saveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const { user } = useAuthContext();
-  const { notifications, unreadCount, loading, markAsRead, markAllAsRead, deleteNotification } = useNotifications(user?.id ?? null);
+  const { notifications, unreadCount, loading, markAsRead, markAllAsRead, deleteNotification, refetch } = useNotifications(user?.id ?? null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -161,6 +161,7 @@ const TopBar: React.FC<TopBarProps> = ({
             onMarkAsRead={markAsRead}
             onMarkAllAsRead={markAllAsRead}
             onDelete={deleteNotification}
+            onRefetch={refetch}
           />
           
           <UserMenu />

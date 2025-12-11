@@ -615,10 +615,31 @@ const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                   </div>
                 </div>
 
-                {/* Pending Invitations (from workspace_invites table) */}
+                {/* Pending Members (existing users who haven't accepted) */}
+                {members.filter(m => !m.accepted_at).length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-amber-500">Pending Acceptance ({members.filter(m => !m.accepted_at).length})</Label>
+                    <div className="space-y-2">
+                      {members.filter(m => !m.accepted_at).map((member) => (
+                        <MemberRow
+                          key={member.id}
+                          member={member}
+                          isCurrentUser={member.user_id === user?.id}
+                          isAdmin={isAdmin}
+                          isOwner={isOwner}
+                          onUpdateRole={handleUpdateRole}
+                          onRemove={handleRemoveMember}
+                          isPending
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pending Invitations (non-existing users from workspace_invites table) */}
                 {pendingInvites.length > 0 && (
                   <div className="space-y-2">
-                    <Label className="text-amber-500">Pending Invitations ({pendingInvites.length})</Label>
+                    <Label className="text-amber-500">Email Invitations ({pendingInvites.length})</Label>
                     <div className="space-y-2">
                       {pendingInvites.map((invite) => (
                         <div

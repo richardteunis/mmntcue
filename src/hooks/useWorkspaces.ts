@@ -264,6 +264,14 @@ export function useWorkspaces() {
       }
     }
 
+    // User exists - add them as pending member with notification
+    const workspace = workspaces.find(ws => ws.id === workspaceId);
+    const { data: inviterProfile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .single();
+
     const { error } = await supabase
       .from('workspace_members')
       .insert({
@@ -271,7 +279,7 @@ export function useWorkspaces() {
         user_id: targetProfile.id,
         role,
         invited_by: user.id,
-        accepted_at: new Date().toISOString(), // Auto-accept for existing users
+        // Don't auto-accept - let user accept via notification
       });
 
     if (error) {
@@ -291,7 +299,22 @@ export function useWorkspaces() {
       return false;
     }
 
-    toast({ title: 'Member added', description: `${email} has been added to the workspace` });
+    // Create notification for the invited user
+    await supabase.from('notifications').insert({
+      user_id: targetProfile.id,
+      type: 'invite',
+      title: 'Workspace Invitation',
+      message: `${inviterProfile?.full_name || 'Someone'} invited you to join "${workspace?.name || 'a workspace'}" as ${role}`,
+      workspace_id: workspaceId,
+      metadata: {
+        invite_type: 'workspace',
+        workspace_name: workspace?.name,
+        inviter_name: inviterProfile?.full_name,
+        role,
+      },
+    });
+
+    toast({ title: 'Invitation sent', description: `${email} has been invited to the workspace` });
     return true;
   };
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Notification } from '@/types/user';
+import { Notification, NotificationMetadata } from '@/types/user';
 import { useToast } from '@/hooks/use-toast';
 
 export function useNotifications(userId: string | null) {
@@ -27,9 +27,10 @@ export function useNotifications(userId: string | null) {
 
       if (error) throw error;
 
-      const typedData = (data || []).map(n => ({
+      const typedData: Notification[] = (data || []).map(n => ({
         ...n,
-        type: n.type as Notification['type']
+        type: n.type as Notification['type'],
+        metadata: n.metadata as NotificationMetadata | null,
       }));
 
       setNotifications(typedData);

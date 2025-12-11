@@ -280,31 +280,37 @@ export type Database = {
           created_at: string
           id: string
           message: string | null
+          metadata: Json | null
           read: boolean | null
           show_id: string | null
           title: string
           type: string
           user_id: string
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           message?: string | null
+          metadata?: Json | null
           read?: boolean | null
           show_id?: string | null
           title: string
           type: string
           user_id: string
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           message?: string | null
+          metadata?: Json | null
           read?: boolean | null
           show_id?: string | null
           title?: string
           type?: string
           user_id?: string
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -312,6 +318,13 @@ export type Database = {
             columns: ["show_id"]
             isOneToOne: false
             referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]

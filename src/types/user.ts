@@ -23,6 +23,14 @@ export interface ShowMember {
   profile?: Profile;
 }
 
+export interface NotificationMetadata {
+  invite_type?: 'show' | 'workspace';
+  workspace_name?: string;
+  show_name?: string;
+  inviter_name?: string;
+  role?: string;
+}
+
 export interface Notification {
   id: string;
   user_id: string;
@@ -30,6 +38,8 @@ export interface Notification {
   title: string;
   message: string | null;
   show_id: string | null;
+  workspace_id: string | null;
+  metadata: NotificationMetadata | null;
   read: boolean;
   created_at: string;
 }
