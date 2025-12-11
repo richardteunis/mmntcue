@@ -169,12 +169,11 @@ const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
 
     const fileExt = file.name.split('.').pop();
     const fileName = `${workspace.id}-${Date.now()}.${fileExt}`;
-    const filePath = `workspace-logos/${fileName}`;
 
-    // Upload to avatars bucket (reusing existing bucket)
+    // Upload to workspace-logos bucket
     const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, file);
+      .from('workspace-logos')
+      .upload(fileName, file, { upsert: true });
 
     if (uploadError) {
       toast({
@@ -187,8 +186,8 @@ const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
     }
 
     const { data } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(filePath);
+      .from('workspace-logos')
+      .getPublicUrl(fileName);
 
     setLogoUrl(data.publicUrl);
     setUploading(false);
