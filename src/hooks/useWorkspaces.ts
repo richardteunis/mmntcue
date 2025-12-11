@@ -196,7 +196,7 @@ export function useWorkspaces() {
       .single();
 
     if (!targetProfile) {
-      // User doesn't exist yet - send invitation email
+      // User doesn't exist yet - create pending invite and send invitation email
       const workspace = workspaces.find(ws => ws.id === workspaceId);
       const { data: inviterProfile } = await supabase
         .from('profiles')
@@ -204,8 +204,34 @@ export function useWorkspaces() {
         .eq('id', user.id)
         .single();
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      
+      // Create the pending invite record first
+      const { error: inviteError } = await supabase
+        .from('workspace_invites')
+        .insert({
+          workspace_id: workspaceId,
+          email: email.toLowerCase(),
+          role,
+          invited_by: user.id,
+        });
+
+      if (inviteError) {
+        if (inviteError.code === '23505') {
+          toast({
+            title: 'Already invited',
+            description: 'This email has already been invited to this workspace',
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Error creating invitation',
+            description: inviteError.message,
+            variant: 'destructive',
+          });
+        }
+        return false;
+      }
+
+      // Send the invitation email
       try {
         const response = await supabase.functions.invoke('send-workspace-invite', {
           body: {
@@ -219,12 +245,7 @@ export function useWorkspaces() {
 
         if (response.error) {
           console.error('Error sending invite:', response.error);
-          toast({
-            title: 'Invitation email failed',
-            description: 'User not found and email could not be sent',
-            variant: 'destructive',
-          });
-          return false;
+          // Don't fail - invite record was created successfully
         }
 
         toast({ 
@@ -234,12 +255,12 @@ export function useWorkspaces() {
         return true;
       } catch (err) {
         console.error('Error invoking send-workspace-invite:', err);
-        toast({
-          title: 'User not found',
-          description: 'No user exists with that email address',
-          variant: 'destructive',
+        // Don't fail - invite record was created successfully
+        toast({ 
+          title: 'Invitation created', 
+          description: `Invitation created for ${email}. Email delivery may be delayed.` 
         });
-        return false;
+        return true;
       }
     }
 

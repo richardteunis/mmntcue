@@ -56,6 +56,13 @@ interface WorkspaceMemberWithProfile {
   };
 }
 
+interface PendingInvite {
+  id: string;
+  email: string;
+  role: WorkspaceRole;
+  invited_at: string;
+}
+
 interface WorkspaceSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -174,6 +181,7 @@ const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
   
   // Members state
   const [members, setMembers] = useState<WorkspaceMemberWithProfile[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   
   // Invite state
@@ -196,6 +204,7 @@ const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
   const fetchMembers = async () => {
     setLoadingMembers(true);
     
+    // Fetch workspace members
     const { data: membersData, error } = await supabase
       .from('workspace_members')
       .select('id, user_id, role, accepted_at')
@@ -221,6 +230,23 @@ const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
     }));
 
     setMembers(membersWithProfiles);
+
+    // Fetch pending invites
+    const { data: invitesData, error: invitesError } = await supabase
+      .from('workspace_invites')
+      .select('id, email, role, invited_at')
+      .eq('workspace_id', workspace.id)
+      .order('invited_at', { ascending: false });
+
+    if (invitesError) {
+      console.error('Error fetching invites:', invitesError);
+    } else {
+      setPendingInvites((invitesData || []).map(inv => ({
+        ...inv,
+        role: inv.role as WorkspaceRole,
+      })));
+    }
+
     setLoadingMembers(false);
   };
 
@@ -370,6 +396,25 @@ const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
       m.id === memberId ? { ...m, role: newRole } : m
     ));
     toast({ title: 'Role updated' });
+  };
+
+  const handleCancelInvite = async (inviteId: string) => {
+    const { error } = await supabase
+      .from('workspace_invites')
+      .delete()
+      .eq('id', inviteId);
+
+    if (error) {
+      toast({
+        title: 'Error canceling invite',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setPendingInvites(prev => prev.filter(inv => inv.id !== inviteId));
+    toast({ title: 'Invitation canceled' });
   };
 
   return (
@@ -570,22 +615,47 @@ const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                   </div>
                 </div>
 
-                {/* Pending Invitations */}
-                {members.filter(m => !m.accepted_at).length > 0 && (
+                {/* Pending Invitations (from workspace_invites table) */}
+                {pendingInvites.length > 0 && (
                   <div className="space-y-2">
-                    <Label className="text-amber-500">Pending Invitations ({members.filter(m => !m.accepted_at).length})</Label>
+                    <Label className="text-amber-500">Pending Invitations ({pendingInvites.length})</Label>
                     <div className="space-y-2">
-                      {members.filter(m => !m.accepted_at).map((member) => (
-                        <MemberRow
-                          key={member.id}
-                          member={member}
-                          isCurrentUser={member.user_id === user?.id}
-                          isAdmin={isAdmin}
-                          isOwner={isOwner}
-                          onUpdateRole={handleUpdateRole}
-                          onRemove={handleRemoveMember}
-                          isPending
-                        />
+                      {pendingInvites.map((invite) => (
+                        <div
+                          key={invite.id}
+                          className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20"
+                        >
+                          <Avatar className="h-9 w-9">
+                            <AvatarFallback className="text-xs bg-amber-500/20 text-amber-500">
+                              {invite.email.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate text-amber-500">
+                              {invite.email}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              Invited {new Date(invite.invited_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-500">Pending</Badge>
+                            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-muted text-xs capitalize">
+                              {ROLE_ICONS[invite.role]}
+                              {invite.role}
+                            </div>
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() => handleCancelInvite(invite.id)}
+                              >
+                                <X size={14} />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
