@@ -57,6 +57,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Show, SHOW_TEMPLATES, TIMECODE_FORMATS, TIMEZONES } from '@/types/cue';
 import { useShowIconUpload } from '@/hooks/useShowIconUpload';
+import { WorkspaceWithRole } from '@/types/workspace';
 
 interface ShowFormModalProps {
   isOpen: boolean;
@@ -65,6 +66,8 @@ interface ShowFormModalProps {
   onDuplicate?: (showId: string) => void;
   editingShow?: Show | null;
   isLoading?: boolean;
+  activeWorkspace?: WorkspaceWithRole | null;
+  workspaces?: WorkspaceWithRole[];
 }
 
 interface FormSectionProps {
@@ -118,7 +121,9 @@ const ShowFormModal: React.FC<ShowFormModalProps> = ({
   onSave,
   onDuplicate,
   editingShow,
-  isLoading = false
+  isLoading = false,
+  activeWorkspace,
+  workspaces = []
 }) => {
   const isEditMode = !!editingShow;
   
@@ -154,6 +159,7 @@ const ShowFormModal: React.FC<ShowFormModalProps> = ({
     team_lighting_lead: '',
     team_audio_lead: '',
     team_video_lead: '',
+    workspace_id: activeWorkspace?.id || null,
   });
   
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -205,9 +211,10 @@ const ShowFormModal: React.FC<ShowFormModalProps> = ({
         team_lighting_lead: '',
         team_audio_lead: '',
         team_video_lead: '',
+        workspace_id: activeWorkspace?.id || null,
       });
     }
-  }, [editingShow, isOpen]);
+  }, [editingShow, isOpen, activeWorkspace]);
 
   const updateField = (field: keyof Show, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -270,6 +277,41 @@ const ShowFormModal: React.FC<ShowFormModalProps> = ({
         <ScrollArea className="flex-1 max-h-[calc(90vh-180px)]">
           <div className="px-6 py-6 space-y-8">
             
+            {/* Ownership Section - only for new shows or when workspaces exist */}
+            {!isEditMode && workspaces.length > 0 && (
+              <>
+                <FormSection title="Ownership" icon={<Building2 className="h-4 w-4 text-primary" />}>
+                  <FormField label="Create in" tooltip="Choose whether this is a personal show or belongs to a workspace">
+                    <Select
+                      value={formData.workspace_id || 'personal'}
+                      onValueChange={(value) => updateField('workspace_id', value === 'personal' ? null : value)}
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="personal">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span>Personal (My Shows)</span>
+                          </div>
+                        </SelectItem>
+                        {workspaces.map(ws => (
+                          <SelectItem key={ws.id} value={ws.id}>
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-muted-foreground" />
+                              <span>{ws.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                </FormSection>
+                <Separator />
+              </>
+            )}
+
             {/* Basic Info Section */}
             <FormSection title="Basic Information" icon={<FileText className="h-4 w-4 text-primary" />}>
               <FormField label="Show Name" required>

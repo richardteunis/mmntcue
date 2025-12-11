@@ -139,7 +139,7 @@ const ShowIcon: React.FC<{ logoUrl?: string | null; size?: number; className?: s
 const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect, onQuickAddCue, onGoHome }) => {
   const navigate = useNavigate();
   const { user } = useAuthContext();
-  const { activeWorkspaceId, activeWorkspace } = useWorkspaces();
+  const { activeWorkspaceId, activeWorkspace, workspaces } = useWorkspaces();
   const [collapsed, setCollapsed] = useState(false);
   const [shows, setShows] = useState<Show[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
@@ -1017,6 +1017,8 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
         onSave={handleSaveShow}
         onDuplicate={handleDuplicateShow}
         editingShow={editingShow}
+        activeWorkspace={activeWorkspace}
+        workspaces={workspaces}
       />
       
       {/* Folder Modal */}
