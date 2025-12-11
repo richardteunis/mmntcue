@@ -672,6 +672,14 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
     onShowSelect(show.id, show.name);
   };
 
+  // Debug logging
+  console.log('Sidebar Debug:', {
+    activeWorkspaceId,
+    totalShows: shows.length,
+    showsWithWorkspace: shows.filter(s => s.workspace_id).map(s => ({ name: s.name, workspace_id: s.workspace_id })),
+    personalShows: shows.filter(s => !s.workspace_id).map(s => s.name)
+  });
+
   // Determine owned vs shared shows based on workspace context
   const ownedShows = shows.filter(s => {
     if (activeWorkspaceId) {
