@@ -398,7 +398,8 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
           name: showData.name!, 
           ...cleanedData,
           user_id: user?.id || null,
-          workspace_id: activeWorkspaceId || null
+          // Use workspace_id from form data, or fall back to active workspace
+          workspace_id: cleanedData.workspace_id !== undefined ? cleanedData.workspace_id : (activeWorkspaceId || null)
         } as any)
         .select()
         .single();
@@ -671,26 +672,28 @@ const Sidebar: React.FC<SidebarProps> = ({ className, activeShowId, onShowSelect
     onShowSelect(show.id, show.name);
   };
 
-  // Determine owned vs shared shows, filtered by active workspace
-  const filterByWorkspace = (showList: Show[]) => {
+  // Determine owned vs shared shows based on workspace context
+  const ownedShows = shows.filter(s => {
     if (activeWorkspaceId) {
-      // Only show workspace shows
-      return showList.filter(s => s.workspace_id === activeWorkspaceId);
-    } else {
-      // Show personal shows (no workspace)
-      return showList.filter(s => !s.workspace_id);
+      // In workspace context: show all shows belonging to this workspace
+      return s.workspace_id === activeWorkspaceId;
     }
-  };
-
-  const ownedShows = filterByWorkspace(shows.filter(s => s.user_id === user?.id || s.user_id === null));
-  const sharedShows = filterByWorkspace(shows.filter(s => {
+    // In personal context: show only user's personal shows (no workspace)
+    return (s.user_id === user?.id || s.user_id === null) && !s.workspace_id;
+  });
+  
+  const sharedShows = shows.filter(s => {
+    // Only show "shared with me" for personal shows in personal context
+    if (activeWorkspaceId || s.workspace_id) return false;
     const membership = memberships.find(m => m.show_id === s.id);
     return s.user_id !== user?.id && s.user_id !== null && membership && !membership.hidden;
-  }));
-  const hiddenSharedShows = filterByWorkspace(shows.filter(s => {
+  });
+  
+  const hiddenSharedShows = shows.filter(s => {
+    if (activeWorkspaceId || s.workspace_id) return false;
     const membership = memberships.find(m => m.show_id === s.id);
     return s.user_id !== user?.id && s.user_id !== null && membership && membership.hidden;
-  }));
+  });
   
   // Get shows not in any folder (owned shows only)
   const rootShows = ownedShows.filter(s => !s.folder_id);
