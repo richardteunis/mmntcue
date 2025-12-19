@@ -136,6 +136,10 @@ const CuePanel: React.FC<CuePanelProps> = ({
         return 'bg-runway-highlight text-white';
       case 'stage':
         return 'bg-runway-warning text-white';
+      case 'vog':
+        return 'bg-purple-600 text-white';
+      case 'ops_note':
+        return 'bg-orange-500 text-white';
       default:
         return 'bg-muted text-foreground';
     }

@@ -275,6 +275,63 @@ export type Database = {
           },
         ]
       }
+      notification_templates: {
+        Row: {
+          created_at: string
+          id: string
+          is_critical: boolean | null
+          message: string
+          name: string
+          show_id: string | null
+          sort_order: number | null
+          target_roles: string[] | null
+          target_type: string | null
+          updated_at: string
+          workspace_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_critical?: boolean | null
+          message: string
+          name: string
+          show_id?: string | null
+          sort_order?: number | null
+          target_roles?: string[] | null
+          target_type?: string | null
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_critical?: boolean | null
+          message?: string
+          name?: string
+          show_id?: string | null
+          sort_order?: number | null
+          target_roles?: string[] | null
+          target_type?: string | null
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_templates_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_templates_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
@@ -325,6 +382,78 @@ export type Database = {
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ops_notes: {
+        Row: {
+          acknowledged_at: string[] | null
+          acknowledged_by: string[] | null
+          auto_send: boolean | null
+          created_at: string
+          created_by: string | null
+          cue_id: string | null
+          id: string
+          is_critical: boolean | null
+          message: string
+          sent_at: string | null
+          sent_by: string | null
+          show_id: string
+          target_roles: string[] | null
+          target_type: string
+          target_user_ids: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          acknowledged_at?: string[] | null
+          acknowledged_by?: string[] | null
+          auto_send?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          cue_id?: string | null
+          id?: string
+          is_critical?: boolean | null
+          message: string
+          sent_at?: string | null
+          sent_by?: string | null
+          show_id: string
+          target_roles?: string[] | null
+          target_type?: string
+          target_user_ids?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          acknowledged_at?: string[] | null
+          acknowledged_by?: string[] | null
+          auto_send?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          cue_id?: string | null
+          id?: string
+          is_critical?: boolean | null
+          message?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          show_id?: string
+          target_roles?: string[] | null
+          target_type?: string
+          target_user_ids?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ops_notes_cue_id_fkey"
+            columns: ["cue_id"]
+            isOneToOne: false
+            referencedRelation: "cues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ops_notes_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
             referencedColumns: ["id"]
           },
         ]
@@ -519,6 +648,44 @@ export type Database = {
           },
         ]
       }
+      show_vog_settings: {
+        Row: {
+          created_at: string
+          default_voice_id: string | null
+          id: string
+          naming_convention: string | null
+          show_id: string
+          updated_at: string
+          voice_locked: boolean | null
+        }
+        Insert: {
+          created_at?: string
+          default_voice_id?: string | null
+          id?: string
+          naming_convention?: string | null
+          show_id: string
+          updated_at?: string
+          voice_locked?: boolean | null
+        }
+        Update: {
+          created_at?: string
+          default_voice_id?: string | null
+          id?: string
+          naming_convention?: string | null
+          show_id?: string
+          updated_at?: string
+          voice_locked?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "show_vog_settings_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: true
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shows: {
         Row: {
           apply_branding: boolean | null
@@ -656,6 +823,72 @@ export type Database = {
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vog_generations: {
+        Row: {
+          audio_duration: number | null
+          audio_url: string | null
+          created_at: string
+          created_by: string | null
+          cue_id: string
+          error_message: string | null
+          file_name: string | null
+          id: string
+          script: string
+          show_id: string
+          status: string
+          updated_at: string
+          voice_id: string
+          voice_style: string | null
+        }
+        Insert: {
+          audio_duration?: number | null
+          audio_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          cue_id: string
+          error_message?: string | null
+          file_name?: string | null
+          id?: string
+          script: string
+          show_id: string
+          status?: string
+          updated_at?: string
+          voice_id?: string
+          voice_style?: string | null
+        }
+        Update: {
+          audio_duration?: number | null
+          audio_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          cue_id?: string
+          error_message?: string | null
+          file_name?: string | null
+          id?: string
+          script?: string
+          show_id?: string
+          status?: string
+          updated_at?: string
+          voice_id?: string
+          voice_style?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vog_generations_cue_id_fkey"
+            columns: ["cue_id"]
+            isOneToOne: false
+            referencedRelation: "cues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vog_generations_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
             referencedColumns: ["id"]
           },
         ]
