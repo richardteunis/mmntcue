@@ -162,6 +162,8 @@ const AddEditCuePanel: React.FC<AddEditCuePanelProps> = ({
                           <option value="video">Video</option>
                           <option value="lighting">Lighting</option>
                           <option value="stage">Stage</option>
+                          <option value="vog">VOG (Voice of God)</option>
+                          <option value="ops_note">Ops Note</option>
                         </select>
                       </FormControl>
                       <FormMessage />
