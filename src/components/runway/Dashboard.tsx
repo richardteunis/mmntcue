@@ -991,6 +991,24 @@ const Dashboard: React.FC = () => {
                       onAssetDragStart={(asset) => {
                         // Handle asset drag for dropping on cues
                       }}
+                      onAddCue={async (type, name) => {
+                        const nextStartTime = getNextStartTime();
+                        const newCue = {
+                          name,
+                          type,
+                          track: 'Stage Direction',
+                          start_time: nextStartTime,
+                          duration: '00:00:30',
+                          position: cues.length * 100,
+                          width: 100,
+                          color: type === 'ops_note' ? 'bg-runway-warning' : 'bg-runway-teal',
+                          notes: null,
+                          effects: [],
+                          auto_follow: false,
+                          order_index: cues.length
+                        };
+                        await addCue(newCue, false);
+                      }}
                     />
                   </div>
                 </div>

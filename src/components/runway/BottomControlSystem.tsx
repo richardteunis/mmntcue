@@ -15,7 +15,7 @@ interface BottomControlSystemProps {
   onAssetDragStart?: (asset: Asset) => void;
   onAssetSelect?: (asset: Asset) => void;
   onAddMedia?: () => void;
-  onSendQuickAction?: (actionId: string, actionLabel: string) => Promise<void>;
+  onAddCue?: (type: string, name: string) => Promise<void>;
 }
 
 const BottomControlSystem: React.FC<BottomControlSystemProps> = ({
@@ -26,11 +26,10 @@ const BottomControlSystem: React.FC<BottomControlSystemProps> = ({
   onAssetDragStart,
   onAssetSelect,
   onAddMedia,
-  onSendQuickAction,
+  onAddCue,
 }) => {
   const [expandedPanel, setExpandedPanel] = useState<ExpandedPanel>('none');
 
-  // Auto-expand VOG panel when VOG cue is selected
   const handleVOGExpand = useCallback(() => {
     setExpandedPanel(prev => prev === 'vog' ? 'none' : 'vog');
   }, []);
@@ -43,47 +42,60 @@ const BottomControlSystem: React.FC<BottomControlSystemProps> = ({
     setExpandedPanel('vog');
   }, []);
 
-  const handleAddBuffer = useCallback(() => {
-    // TODO: Implement add buffer cue
-  }, []);
+  const handleAddBuffer = useCallback(async () => {
+    if (onAddCue) {
+      await onAddCue('ops_note', 'Buffer');
+    }
+  }, [onAddCue]);
 
-  const handleSendOpsAlert = useCallback(() => {
-    // TODO: Open ops alert modal
-  }, []);
+  const handleSendOpsAlert = useCallback(async () => {
+    if (onAddCue) {
+      await onAddCue('ops_note', 'Ops Alert');
+    }
+  }, [onAddCue]);
+
+  const handleQuickAddCue = useCallback(async (actionId: string, actionLabel: string) => {
+    if (onAddCue) {
+      await onAddCue('ops_note', actionLabel);
+    }
+  }, [onAddCue]);
 
   return (
     <div className={cn(
       "flex flex-col w-full",
-      "border-t border-border bg-background"
+      "bg-background"
     )}>
-      {/* Asset Bin Panel (top secondary) */}
-      <AssetBinPanel
-        showId={showId}
-        isExpanded={expandedPanel === 'assets'}
-        onToggleExpand={handleAssetsExpand}
-        onAssetDragStart={onAssetDragStart}
-        onAssetSelect={onAssetSelect}
-        onAddMedia={onAddMedia}
-      />
-
-      {/* VOG Creator Panel (middle secondary) */}
-      <VOGCreatorPanel
-        showId={showId}
-        cueId={selectedCueType === 'vog' ? selectedCueId : null}
-        isExpanded={expandedPanel === 'vog'}
-        onToggleExpand={handleVOGExpand}
-      />
-
-      {/* Quick Action Tray (always visible primary) */}
+      {/* Quick Action Tray - ALWAYS visible at top of bottom control area */}
       <QuickActionTray
         showId={showId}
         mode={mode}
         onAddVOG={handleAddVOG}
         onAddBuffer={handleAddBuffer}
         onSendOpsAlert={handleSendOpsAlert}
-        onSendQuickAction={onSendQuickAction}
+        onAddQuickCue={handleQuickAddCue}
         disabled={!showId}
       />
+
+      {/* Secondary panels stack below the quick action tray */}
+      <div className="relative">
+        {/* VOG Creator Panel */}
+        <VOGCreatorPanel
+          showId={showId}
+          cueId={selectedCueType === 'vog' ? selectedCueId : null}
+          isExpanded={expandedPanel === 'vog'}
+          onToggleExpand={handleVOGExpand}
+        />
+
+        {/* Asset Bin Panel */}
+        <AssetBinPanel
+          showId={showId}
+          isExpanded={expandedPanel === 'assets'}
+          onToggleExpand={handleAssetsExpand}
+          onAssetDragStart={onAssetDragStart}
+          onAssetSelect={onAssetSelect}
+          onAddMedia={onAddMedia}
+        />
+      </div>
     </div>
   );
 };
