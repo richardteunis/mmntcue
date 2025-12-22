@@ -39,7 +39,7 @@ interface QuickActionTrayProps {
   onAddVOG?: () => void;
   onAddBuffer?: () => void;
   onSendOpsAlert?: () => void;
-  onSendQuickAction?: (actionId: string, actionLabel: string) => Promise<void>;
+  onAddQuickCue?: (actionId: string, actionLabel: string) => Promise<void>;
   disabled?: boolean;
 }
 
@@ -49,12 +49,12 @@ const QuickActionTray: React.FC<QuickActionTrayProps> = ({
   onAddVOG,
   onAddBuffer,
   onSendOpsAlert,
-  onSendQuickAction,
+  onAddQuickCue,
   disabled = false,
 }) => {
   const { toast } = useToast();
-  const [sendingAction, setSendingAction] = useState<string | null>(null);
-  const [sentActions, setSentActions] = useState<Set<string>>(new Set());
+  const [addingAction, setAddingAction] = useState<string | null>(null);
+  const [addedActions, setAddedActions] = useState<Set<string>>(new Set());
   const [confirmingAction, setConfirmingAction] = useState<string | null>(null);
 
   const handleActionClick = useCallback(async (action: QuickAction) => {
@@ -67,23 +67,23 @@ const QuickActionTray: React.FC<QuickActionTrayProps> = ({
       return;
     }
 
-    setSendingAction(action.id);
+    setAddingAction(action.id);
     setConfirmingAction(null);
 
     try {
-      if (onSendQuickAction) {
-        await onSendQuickAction(action.id, action.label);
+      if (onAddQuickCue) {
+        await onAddQuickCue(action.id, action.label);
       }
       
-      setSentActions(prev => new Set([...prev, action.id]));
+      setAddedActions(prev => new Set([...prev, action.id]));
       toast({
-        title: 'Sent',
-        description: `"${action.label}" sent to crew`,
+        title: 'Cue Added',
+        description: `"${action.label}" added to rundown`,
       });
 
-      // Clear sent state after 3 seconds
+      // Clear added state after 3 seconds
       setTimeout(() => {
-        setSentActions(prev => {
+        setAddedActions(prev => {
           const next = new Set(prev);
           next.delete(action.id);
           return next;
@@ -91,14 +91,14 @@ const QuickActionTray: React.FC<QuickActionTrayProps> = ({
       }, 3000);
     } catch (error) {
       toast({
-        title: 'Failed to send',
+        title: 'Failed to add cue',
         description: 'Please try again',
         variant: 'destructive',
       });
     } finally {
-      setSendingAction(null);
+      setAddingAction(null);
     }
-  }, [disabled, showId, confirmingAction, onSendQuickAction, toast]);
+  }, [disabled, showId, confirmingAction, onAddQuickCue, toast]);
 
   const isLiveMode = mode === 'live';
   
@@ -111,11 +111,11 @@ const QuickActionTray: React.FC<QuickActionTrayProps> = ({
       )}
     >
       <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
-        {/* Quick Actions */}
+        {/* Quick Actions - add cues to rundown */}
         {QUICK_ACTIONS.map((action) => {
           const Icon = action.icon;
-          const isSending = sendingAction === action.id;
-          const isSent = sentActions.has(action.id);
+          const isAdding = addingAction === action.id;
+          const isAdded = addedActions.has(action.id);
           const isConfirming = confirmingAction === action.id;
           
           return (
@@ -123,24 +123,24 @@ const QuickActionTray: React.FC<QuickActionTrayProps> = ({
               key={action.id}
               variant={action.isCritical ? "destructive" : "outline"}
               size={isLiveMode ? "lg" : "sm"}
-              disabled={disabled || !showId || isSending}
+              disabled={disabled || !showId || isAdding}
               onClick={() => handleActionClick(action)}
               className={cn(
                 "flex-shrink-0 transition-all",
                 isLiveMode && "h-12 px-5 text-base",
-                isSent && "bg-runway-success/20 border-runway-success text-runway-success hover:bg-runway-success/30",
+                isAdded && "bg-runway-success/20 border-runway-success text-runway-success hover:bg-runway-success/30",
                 isConfirming && action.isCritical && "animate-pulse bg-runway-warning hover:bg-runway-warning/90",
                 !isLiveMode && "h-8 px-3 text-xs"
               )}
             >
-              {isSending ? (
+              {isAdding ? (
                 <Loader2 className={cn("animate-spin", isLiveMode ? "h-5 w-5 mr-2" : "h-3.5 w-3.5 mr-1.5")} />
-              ) : isSent ? (
+              ) : isAdded ? (
                 <Check className={cn(isLiveMode ? "h-5 w-5 mr-2" : "h-3.5 w-3.5 mr-1.5")} />
               ) : (
                 <Icon className={cn(isLiveMode ? "h-5 w-5 mr-2" : "h-3.5 w-3.5 mr-1.5")} />
               )}
-              {isConfirming ? 'Confirm' : isSent ? 'Sent ✓' : action.label}
+              {isConfirming ? 'Confirm' : isAdded ? 'Added ✓' : action.label}
             </Button>
           );
         })}
