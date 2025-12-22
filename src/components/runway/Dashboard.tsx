@@ -17,7 +17,7 @@ import AddTrackModal, { Track } from './AddTrackModal';
 import CollaboratorCursors from './CollaboratorCursors';
 import ViewPresenceIndicator from './ViewPresenceIndicator';
 import PlaybackSettingsModal from './PlaybackSettingsModal';
-import AssetLibrary from './AssetLibrary';
+import BottomControlSystem from './BottomControlSystem';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -982,11 +982,12 @@ const Dashboard: React.FC = () => {
                       />
                     )}
                     
-                    {/* Asset Library Panel */}
-                    <AssetLibrary 
+                    {/* Bottom Control System - Quick Actions, VOG, Assets */}
+                    <BottomControlSystem
                       showId={activeShowId}
-                      isPanel={true}
-                      defaultOpen={true}
+                      selectedCueId={selectedCueId}
+                      selectedCueType={selectedCue?.type}
+                      mode="planning"
                       onAssetDragStart={(asset) => {
                         // Handle asset drag for dropping on cues
                       }}
