@@ -81,8 +81,9 @@ const BottomControlSystem: React.FC<BottomControlSystemProps> = ({
 
   return (
     <>
+      {/* Three horizontal bins layout */}
       <div className={cn(
-        "flex w-full min-h-[240px] max-h-[280px] gap-2 p-2 bg-background border-t border-border"
+        "flex w-full h-[220px] flex-shrink-0 gap-3 p-3 bg-card border-t-2 border-primary/20"
       )}>
         {/* Segment Editor Bin */}
         <div className="flex-1 min-w-0">

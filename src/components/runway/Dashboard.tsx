@@ -1186,10 +1186,10 @@ const Dashboard: React.FC = () => {
                     </div>
                   )}
                   
-                  <div className="flex-1 flex flex-col overflow-hidden">
+                  <div className="flex-1 flex flex-col min-h-0">
                     {viewMode === 'timeline' ? (
                       <TimelineView 
-                        className="flex-1" 
+                        className="flex-1 min-h-0 overflow-auto"
                         onCueSelect={handleCueSelect}
                         onCueMultiSelect={setSelectedCueIds}
                         selectedCueId={selectedCueId}
@@ -1215,7 +1215,7 @@ const Dashboard: React.FC = () => {
                       />
                     ) : (
                       <Timeline 
-                        className="flex-1" 
+                        className="flex-1 min-h-0 overflow-auto"
                         onCueSelect={handleCueSelect}
                         selectedCueId={selectedCueId}
                         onCueChange={handleCueUpdate}
