@@ -241,6 +241,49 @@ const Timeline: React.FC<TimelineProps> = ({
     );
   }, [sortedCues, searchFilter]);
 
+  // Calculate segment groupings for vertical bracket display
+  const segmentGroups = useMemo(() => {
+    if (segments.length === 0) return new Map<string, { startIdx: number; endIdx: number; segment: SegmentInfo }>();
+    
+    const groups = new Map<string, { startIdx: number; endIdx: number; segment: SegmentInfo }>();
+    
+    filteredCues.forEach((cue, index) => {
+      const segment = getCueSegment(cue.time);
+      if (segment) {
+        const existing = groups.get(segment.id);
+        if (existing) {
+          existing.endIdx = index;
+        } else {
+          groups.set(segment.id, { startIdx: index, endIdx: index, segment });
+        }
+      }
+    });
+    
+    return groups;
+  }, [filteredCues, segments, getCueSegment]);
+
+  // Get segment info for a specific row
+  const getSegmentRowInfo = (index: number): { 
+    segment: SegmentInfo | null; 
+    isFirst: boolean; 
+    isLast: boolean; 
+    spanCount: number;
+    isMiddle: boolean;
+  } => {
+    for (const [, group] of segmentGroups) {
+      if (index >= group.startIdx && index <= group.endIdx) {
+        return {
+          segment: group.segment,
+          isFirst: index === group.startIdx,
+          isLast: index === group.endIdx,
+          spanCount: group.endIdx - group.startIdx + 1,
+          isMiddle: index > group.startIdx && index < group.endIdx
+        };
+      }
+    }
+    return { segment: null, isFirst: false, isLast: false, spanCount: 0, isMiddle: false };
+  };
+
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, cueId: string) => {
     setDraggedCueId(cueId);
@@ -594,8 +637,8 @@ const Timeline: React.FC<TimelineProps> = ({
               </TableHead>
               <TableHead className="w-[50px] text-center font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">Cue</TableHead>
               {segments.length > 0 && (
-                <TableHead className="w-[100px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50 bg-muted/30">
-                  <div className="flex items-center gap-1">
+                <TableHead className="w-[90px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50 bg-muted/30 p-0">
+                  <div className="flex items-center gap-1 px-2">
                     <Flag className="h-3 w-3" /> Segment
                   </div>
                 </TableHead>
@@ -706,19 +749,64 @@ const Timeline: React.FC<TimelineProps> = ({
                     {index + 1}
                   </TableCell>
                   {segments.length > 0 && (
-                    <TableCell className="py-3 border-r border-border/50 bg-muted/10">
+                    <TableCell className="p-0 border-r border-border/50 relative">
                       {(() => {
-                        const segment = getCueSegment(cue.time);
-                        if (!segment) return <span className="text-xs text-muted-foreground">—</span>;
+                        const segmentInfo = getSegmentRowInfo(index);
+                        if (!segmentInfo.segment) return <span className="text-xs text-muted-foreground px-2">—</span>;
+                        
+                        const { segment, isFirst, isLast, isMiddle } = segmentInfo;
+                        const bracketColor = segment.color || 'hsl(var(--muted-foreground))';
+                        
                         return (
-                          <div 
-                            className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium"
-                            style={{
-                              backgroundColor: segment.color ? `${segment.color}20` : undefined,
-                              borderLeft: segment.color ? `2px solid ${segment.color}` : '2px solid hsl(var(--muted-foreground))',
-                            }}
-                          >
-                            <span className="truncate max-w-[80px]">{segment.name}</span>
+                          <div className="flex items-stretch h-full min-h-[48px]">
+                            {/* Vertical bracket indicator */}
+                            <div 
+                              className="w-6 flex items-center justify-center relative"
+                              style={{ minHeight: '100%' }}
+                            >
+                              {/* Top cap for first row */}
+                              {isFirst && (
+                                <div 
+                                  className="absolute top-0 left-2 w-2 h-0.5 rounded-tl"
+                                  style={{ backgroundColor: bracketColor }}
+                                />
+                              )}
+                              {/* Vertical line */}
+                              <div 
+                                className={cn(
+                                  "absolute left-2 w-0.5",
+                                  isFirst && "top-0",
+                                  isLast && "bottom-0",
+                                  !isFirst && !isLast && "top-0 bottom-0"
+                                )}
+                                style={{ 
+                                  backgroundColor: bracketColor,
+                                  top: isFirst ? '0' : '0',
+                                  bottom: isLast ? '0' : '0',
+                                  height: isFirst || isLast ? '50%' : '100%',
+                                  marginTop: isFirst ? '50%' : '0',
+                                  marginBottom: isLast ? '50%' : '0'
+                                }}
+                              />
+                              {/* Bottom cap for last row */}
+                              {isLast && (
+                                <div 
+                                  className="absolute bottom-0 left-2 w-2 h-0.5 rounded-bl"
+                                  style={{ backgroundColor: bracketColor }}
+                                />
+                              )}
+                            </div>
+                            {/* Segment name - only show on first row */}
+                            <div className="flex-1 flex items-center pr-2">
+                              {isFirst && (
+                                <span 
+                                  className="text-xs font-medium truncate"
+                                  style={{ color: bracketColor }}
+                                >
+                                  {segment.name}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         );
                       })()}
