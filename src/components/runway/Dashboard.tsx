@@ -1260,18 +1260,24 @@ const Dashboard: React.FC = () => {
                       <BottomControlSystem
                         showId={activeShowId}
                         selectedCueId={selectedCueId}
-                        selectedCueType={selectedCue?.type}
-                        mode={showMode}
-                        controlState={showState.controlState}
+                        selectedCueName={selectedCue?.name}
+                        segments={segmentsWithStats}
+                        onSegmentClick={handleSegmentClick}
+                        onSegmentReorder={handleSegmentReorder}
+                        onSegmentCreate={handleSegmentCreate}
+                        onSegmentUpdate={handleSegmentUpdate}
+                        onSegmentColorChange={handleSegmentColorChange}
+                        onSegmentDelete={handleSegmentDelete}
                         onAssetDragStart={(asset) => {
                           // Handle asset drag for dropping on cues
                         }}
+                        onAddMedia={() => {}}
                         onAddCue={async (type, name) => {
                           const nextStartTime = getNextStartTime();
                           const newCue = {
                             name,
                             type,
-                            track: 'Stage Direction',
+                            track: type === 'video' ? 'Video' : type === 'audio' ? 'Audio' : type === 'lighting' ? 'Lights' : 'Stage',
                             start_time: nextStartTime,
                             duration: '00:00:30',
                             position: cues.length * 100,
@@ -1284,8 +1290,41 @@ const Dashboard: React.FC = () => {
                           };
                           await addCue(newCue, false);
                         }}
-                        onStandby={showState.standby}
-                        onHold={showState.hold}
+                        onAddBuffer={async () => {
+                          const nextStartTime = getNextStartTime();
+                          await addCue({
+                            name: 'Buffer',
+                            type: 'ops_note',
+                            track: 'Stage',
+                            start_time: nextStartTime,
+                            duration: '00:01:00',
+                            position: cues.length * 100,
+                            width: 100,
+                            color: 'bg-runway-warning',
+                            notes: null,
+                            effects: [],
+                            auto_follow: false,
+                            order_index: cues.length
+                          }, false);
+                        }}
+                        onSendOpsAlert={async () => {
+                          const nextStartTime = getNextStartTime();
+                          await addCue({
+                            name: 'Ops Alert',
+                            type: 'ops_note',
+                            track: 'Stage',
+                            start_time: nextStartTime,
+                            duration: '00:00:30',
+                            position: cues.length * 100,
+                            width: 100,
+                            color: 'bg-destructive',
+                            notes: null,
+                            effects: [],
+                            auto_follow: false,
+                            order_index: cues.length
+                          }, false);
+                        }}
+                        disabled={!activeShowId}
                       />
                     )}
                   </div>
