@@ -1,18 +1,13 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Cue } from '@/types/cue';
 import { CueStatus, ShowControlState, ShowStatus } from '@/hooks/useShowState';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import {
   ChevronDown,
   ChevronUp,
-  Play,
-  Pause,
-  SkipForward,
   Clock,
-  AlertTriangle,
   Video,
   Music,
   Lightbulb,
@@ -31,11 +26,6 @@ interface NextCuePanelProps {
     status: ShowStatus;
   };
   getCueStatus: (cueId: string) => CueStatus;
-  onGo: () => void;
-  onStandby: () => void;
-  onHold: () => void;
-  onResume: () => void;
-  onSkipCue: (cueId: string) => void;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
   className?: string;
@@ -65,16 +55,27 @@ const formatDuration = (duration: string): string => {
   return duration;
 };
 
-// Format over/under time
-const formatOverUnder = (seconds: number): string => {
-  const abs = Math.abs(seconds);
-  const mins = Math.floor(abs / 60);
-  const secs = Math.floor(abs % 60);
-  const sign = seconds > 0 ? '+' : '-';
-  if (mins > 0) {
-    return `${sign}${mins}:${secs.toString().padStart(2, '0')}`;
+// Parse time string to seconds
+const parseTimeToSeconds = (time: string): number => {
+  const parts = time.split(':').map(Number);
+  if (parts.length === 3) {
+    return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
   }
-  return `${sign}${secs}s`;
+  if (parts.length === 2) {
+    return (parts[0] || 0) * 60 + (parts[1] || 0);
+  }
+  return parts[0] || 0;
+};
+
+// Format seconds to countdown
+const formatCountdown = (seconds: number): string => {
+  if (seconds <= 0) return 'NOW';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  if (m > 0) {
+    return `in ${m}:${s.toString().padStart(2, '0')}`;
+  }
+  return `in ${s} seconds`;
 };
 
 const NextCuePanel: React.FC<NextCuePanelProps> = ({
@@ -84,47 +85,35 @@ const NextCuePanel: React.FC<NextCuePanelProps> = ({
   controlState,
   showTiming,
   getCueStatus,
-  onGo,
-  onStandby,
-  onHold,
-  onResume,
-  onSkipCue,
   isExpanded = true,
   onToggleExpand,
   className
 }) => {
   const TrackIcon = nextCue ? getTrackIcon(nextCue.type) : FileText;
+  const [countdown, setCountdown] = useState<number>(0);
 
-  // Status color classes
-  const statusColors = useMemo(() => {
+  // Calculate countdown to next cue
+  useEffect(() => {
+    if (!nextCue) return;
+    
+    const startSeconds = parseTimeToSeconds(nextCue.start_time);
+    // This would need current playback time - for now showing static
+    setCountdown(startSeconds);
+  }, [nextCue]);
+
+  // Status color and label
+  const statusInfo = useMemo(() => {
     switch (showTiming.status) {
-      case 'on_time': return 'text-muted-foreground';
-      case 'ahead': return 'text-runway-success';
-      case 'behind': return 'text-runway-warning';
-      case 'significantly_behind': return 'text-destructive';
+      case 'on_time': 
+        return { label: 'ON TIME', color: 'text-muted-foreground', bgColor: 'bg-muted/50' };
+      case 'ahead': 
+        return { label: 'AHEAD', color: 'text-runway-success', bgColor: 'bg-runway-success/20' };
+      case 'behind': 
+        return { label: 'BEHIND', color: 'text-runway-warning', bgColor: 'bg-runway-warning/20' };
+      case 'significantly_behind': 
+        return { label: 'LATE', color: 'text-destructive', bgColor: 'bg-destructive/20' };
     }
   }, [showTiming.status]);
-
-  const statusLabel = useMemo(() => {
-    switch (showTiming.status) {
-      case 'on_time': return 'ON TIME';
-      case 'ahead': return 'RUNNING AHEAD';
-      case 'behind': return 'RUNNING BEHIND';
-      case 'significantly_behind': return 'SIGNIFICANTLY BEHIND';
-    }
-  }, [showTiming.status]);
-
-  // Control button styles based on state
-  const goButtonStyles = useMemo(() => {
-    switch (controlState) {
-      case 'standby':
-        return 'bg-runway-success hover:bg-runway-success/90 animate-pulse';
-      case 'hold':
-        return 'bg-destructive hover:bg-destructive/90';
-      default:
-        return 'bg-runway-success hover:bg-runway-success/90';
-    }
-  }, [controlState]);
 
   return (
     <Collapsible open={isExpanded} onOpenChange={onToggleExpand}>
@@ -134,26 +123,11 @@ const NextCuePanel: React.FC<NextCuePanelProps> = ({
       )}>
         {/* Header */}
         <CollapsibleTrigger asChild>
-          <button className="w-full flex items-center justify-between px-4 py-3 bg-muted/50 hover:bg-muted/70 transition-colors">
+          <button className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors">
+            <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              Next Cue
+            </span>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Next Cue
-              </span>
-              {nextCue && (
-                <Badge variant="outline" className="text-xs font-mono">
-                  #{nextCueIndex + 1}
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-              {/* Show timing status */}
-              <div className={cn("flex items-center gap-1.5 text-xs font-medium", statusColors)}>
-                <Clock className="h-3.5 w-3.5" />
-                <span>{statusLabel}</span>
-                {showTiming.overUnder !== 0 && (
-                  <span className="font-mono">{formatOverUnder(showTiming.overUnder)}</span>
-                )}
-              </div>
               {isExpanded ? (
                 <ChevronUp className="h-4 w-4 text-muted-foreground" />
               ) : (
@@ -165,128 +139,96 @@ const NextCuePanel: React.FC<NextCuePanelProps> = ({
 
         <CollapsibleContent>
           <div className="p-4 space-y-4">
-            {/* Next Cue Details */}
+            {/* Next Cue Details - READ ONLY */}
             {nextCue ? (
               <div className="space-y-3">
+                {/* Cue Number and Status */}
                 <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <TrackIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-xs text-muted-foreground capitalize">
-                        {nextCue.track}
-                      </span>
-                      <span className="text-xs text-muted-foreground">•</span>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        ⏱️ {formatDuration(nextCue.duration)}
-                      </span>
-                    </div>
-                    <h3 className="text-lg font-semibold truncate">{nextCue.name}</h3>
-                    {nextCue.notes && (
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        {nextCue.notes}
-                      </p>
+                  <span className="text-3xl font-bold text-foreground">
+                    #{nextCueIndex + 1}
+                  </span>
+                  <Badge 
+                    variant="outline"
+                    className={cn(
+                      "text-xs font-semibold uppercase px-2 py-0.5",
+                      statusInfo.color,
+                      statusInfo.bgColor
                     )}
+                  >
+                    <Clock className="h-3 w-3 mr-1" />
+                    {statusInfo.label}
+                  </Badge>
+                </div>
+
+                {/* Track and Duration */}
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <TrackIcon className="h-4 w-4" />
+                  <span className="capitalize">{nextCue.track}</span>
+                  <span>•</span>
+                  <span className="font-mono">{formatDuration(nextCue.duration)}</span>
+                </div>
+
+                {/* Cue Name */}
+                <h3 className="text-lg font-semibold text-foreground leading-tight">
+                  {nextCue.name}
+                </h3>
+
+                {/* Start Time and Countdown */}
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <div>
+                    <span className="text-xs uppercase tracking-wide">Fires at: </span>
+                    <span className="font-mono">{nextCue.start_time}</span>
+                  </div>
+                  <div className="text-xs">
+                    ({formatCountdown(countdown)})
                   </div>
                 </div>
 
-                {/* GO Button */}
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="lg"
-                    className={cn(
-                      "flex-1 h-14 text-lg font-bold transition-all",
-                      goButtonStyles
-                    )}
-                    onClick={controlState === 'hold' ? onResume : onGo}
-                    disabled={!nextCue}
-                  >
-                    {controlState === 'hold' ? (
-                      <>
-                        <Play className="h-5 w-5 mr-2" />
-                        RESUME
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-5 w-5 mr-2" />
-                        GO
-                      </>
-                    )}
-                    <span className="text-xs ml-2 opacity-70">[Space]</span>
-                  </Button>
-
-                  <Button
-                    variant={controlState === 'standby' ? 'default' : 'outline'}
-                    size="lg"
-                    className={cn(
-                      "h-14",
-                      controlState === 'standby' && "bg-runway-warning text-black hover:bg-runway-warning/90"
-                    )}
-                    onClick={onStandby}
-                    disabled={controlState === 'standby'}
-                  >
-                    <Pause className="h-5 w-5 mr-1" />
-                    Standby
-                    <span className="text-xs ml-1 opacity-70">[S]</span>
-                  </Button>
-
-                  <Button
-                    variant={controlState === 'hold' ? 'default' : 'outline'}
-                    size="lg"
-                    className={cn(
-                      "h-14",
-                      controlState === 'hold' && "bg-destructive hover:bg-destructive/90"
-                    )}
-                    onClick={onHold}
-                    disabled={controlState === 'hold'}
-                  >
-                    <AlertTriangle className="h-5 w-5 mr-1" />
-                    Hold
-                    <span className="text-xs ml-1 opacity-70">[H]</span>
-                  </Button>
-
-                  <Button
-                    variant="ghost"
-                    size="lg"
-                    className="h-14"
-                    onClick={() => onSkipCue(nextCue.id)}
-                  >
-                    <SkipForward className="h-5 w-5" />
-                  </Button>
-                </div>
+                {/* Notes if present */}
+                {nextCue.notes && (
+                  <p className="text-sm text-muted-foreground bg-muted/30 rounded px-3 py-2 italic">
+                    {nextCue.notes}
+                  </p>
+                )}
               </div>
             ) : (
               <div className="text-center py-6 text-muted-foreground">
-                <p>No upcoming cues</p>
+                <p className="text-sm">No upcoming cues</p>
+                <p className="text-xs mt-1">Add cues to the timeline to get started</p>
               </div>
             )}
 
             {/* Coming Up Section */}
             {upcomingCues.length > 1 && (
-              <div className="border-t border-border pt-3">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-                  Coming up:
-                </p>
-                <div className="space-y-1.5">
-                  {upcomingCues.slice(1, 4).map((cue, idx) => {
-                    const Icon = getTrackIcon(cue.type);
-                    return (
-                      <div
-                        key={cue.id}
-                        className="flex items-center gap-2 text-sm text-muted-foreground"
-                      >
-                        <span className="font-mono text-xs w-6">
-                          #{nextCueIndex + idx + 2}
-                        </span>
-                        <Icon className="h-3.5 w-3.5 flex-shrink-0" />
-                        <span className="truncate flex-1">{cue.name}</span>
-                        <span className="text-xs font-mono">
-                          ({formatDuration(cue.duration)})
-                        </span>
-                      </div>
-                    );
-                  })}
+              <>
+                <div className="border-t border-border my-3" />
+                
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-3">
+                    Coming Up
+                  </p>
+                  <div className="space-y-2">
+                    {upcomingCues.slice(1, 5).map((cue, idx) => {
+                      const Icon = getTrackIcon(cue.type);
+                      return (
+                        <div
+                          key={cue.id}
+                          className="flex items-center gap-2 text-sm text-muted-foreground"
+                        >
+                          <span className="font-mono text-xs w-6 text-right">
+                            #{nextCueIndex + idx + 2}
+                          </span>
+                          <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span className="truncate flex-1">{cue.name}</span>
+                          <span className="text-xs font-mono opacity-70">
+                            ({formatDuration(cue.duration)})
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
         </CollapsibleContent>
