@@ -22,11 +22,15 @@ import NextCuePanel from './NextCuePanel';
 import GoButton from './GoButton';
 import ShowTimingBar from './ShowTimingBar';
 import LiveModeControlBar from './LiveModeControlBar';
+import ShowHealthIndicator from './ShowHealthIndicator';
+import IssueBar from './IssueBar';
+import GoFeedback from './GoFeedback';
+import PanicSafetyButton from './PanicSafetyButton';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings, Eye, EyeOff } from 'lucide-react';
+import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCues, useAISuggestions } from '@/hooks/useCues';
 import { useRealtimePresence } from '@/hooks/useRealtimePresence';
 import { useCueAssets } from '@/hooks/useAssets';
@@ -37,6 +41,7 @@ import { Cue, ViewMode, CueSuggestion, Show } from '@/types/cue';
 import { Asset, PlaybackSettings, DEFAULT_PLAYBACK_SETTINGS } from '@/types/asset';
 import ShowFormModal from './ShowFormModal';
 import { ShowMode } from './ShowOperationsBar';
+import { cn } from '@/lib/utils';
 
 // Default tracks
 const DEFAULT_TRACKS: Track[] = [
@@ -122,6 +127,35 @@ const Dashboard: React.FC = () => {
   
   // Show mode state
   const [showMode, setShowMode] = useState<ShowMode>('planning');
+  
+  // Sidebar collapse state - auto-collapse in live mode
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [prevSidebarState, setPrevSidebarState] = useState(false);
+  
+  // GO feedback state
+  const [showGoFeedback, setShowGoFeedback] = useState(false);
+  const [lastFiredCueInfo, setLastFiredCueInfo] = useState<{ number: number; name: string } | null>(null);
+  
+  // Issue logging state
+  const [issues, setIssues] = useState<Array<{
+    id: string;
+    type: 'timing' | 'audio' | 'lighting' | 'video' | 'stage';
+    cueId?: string;
+    cueName?: string;
+    note?: string;
+    timestamp: Date;
+  }>>([]);
+  
+  // Auto-collapse sidebar when entering live mode
+  useEffect(() => {
+    if (showMode === 'live' && !sidebarCollapsed) {
+      setPrevSidebarState(sidebarCollapsed);
+      setSidebarCollapsed(true);
+    } else if (showMode !== 'live' && prevSidebarState !== sidebarCollapsed) {
+      // Restore previous state when leaving live mode
+      setSidebarCollapsed(prevSidebarState);
+    }
+  }, [showMode]);
   
   // Realtime presence
   const presenceUser = useMemo(() => {
@@ -809,7 +843,25 @@ const Dashboard: React.FC = () => {
   return (
     <TooltipProvider>
       <div className="flex h-screen overflow-hidden bg-background text-foreground">
-        <Sidebar activeShowId={activeShowId} onShowSelect={handleShowSelect} onQuickAddCue={handleQuickAddCue} onGoHome={handleGoHome} />
+        {/* Collapsible Sidebar */}
+        <div className={cn(
+          "transition-all duration-300 ease-in-out relative",
+          sidebarCollapsed ? "w-0 overflow-hidden" : "w-auto"
+        )}>
+          <Sidebar activeShowId={activeShowId} onShowSelect={handleShowSelect} onQuickAddCue={handleQuickAddCue} onGoHome={handleGoHome} />
+        </div>
+        
+        {/* Sidebar toggle button - visible when collapsed in live mode */}
+        {sidebarCollapsed && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-50 h-16 w-6 rounded-l-none bg-card border border-l-0 border-border hover:bg-muted"
+            onClick={() => setSidebarCollapsed(false)}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        )}
         
         <div ref={mainContentRef} className="flex flex-col flex-1 overflow-hidden relative">
           {/* Collaborator cursors - only show users in same view */}
@@ -915,6 +967,12 @@ const Dashboard: React.FC = () => {
                 onStandby={showState.standby}
                 onHold={showState.hold}
                 onResume={showState.resume}
+                onRevert={showMode === 'live' ? () => {
+                  // Revert to last fired cue
+                  if (showState.lastFiredCue) {
+                    showState.jumpToCue(showState.lastFiredCue.id);
+                  }
+                } : undefined}
               />
             )}
             
@@ -975,6 +1033,19 @@ const Dashboard: React.FC = () => {
                         </Button>
                       </div>
                       <div className="flex items-center gap-2">
+                        {/* Show Health Indicator - Planning mode only */}
+                        {showMode === 'planning' && (
+                          <ShowHealthIndicator
+                            totalDuration={cues.reduce((total, cue) => {
+                              const parts = cue.start_time.split(':').map(Number);
+                              const durParts = cue.duration.split(':').map(Number);
+                              const endTime = (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0) + 
+                                             (durParts[0] || 0) * 3600 + (durParts[1] || 0) * 60 + (durParts[2] || 0);
+                              return Math.max(total, endTime);
+                            }, 0)}
+                            cueCount={cues.length}
+                          />
+                        )}
                         {selectedCueIds.length > 0 && (
                           <span className="text-xs text-muted-foreground">
                             <CheckSquare size={14} className="inline mr-1" />
