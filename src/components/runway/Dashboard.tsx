@@ -1186,10 +1186,10 @@ const Dashboard: React.FC = () => {
                     </div>
                   )}
                   
-                  <div className="flex-1 flex flex-col min-h-0">
+                  <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     {viewMode === 'timeline' ? (
                       <TimelineView 
-                        className="flex-1 min-h-0 overflow-auto"
+                        className="flex-1 min-h-0 overflow-hidden"
                         onCueSelect={handleCueSelect}
                         onCueMultiSelect={setSelectedCueIds}
                         selectedCueId={selectedCueId}
@@ -1215,7 +1215,7 @@ const Dashboard: React.FC = () => {
                       />
                     ) : (
                       <Timeline 
-                        className="flex-1 min-h-0 overflow-auto"
+                        className="flex-1 min-h-0 overflow-hidden"
                         onCueSelect={handleCueSelect}
                         selectedCueId={selectedCueId}
                         onCueChange={handleCueUpdate}
@@ -1254,9 +1254,21 @@ const Dashboard: React.FC = () => {
                         onSegmentColorChange={handleSegmentColorChange}
                         onSegmentDelete={handleSegmentDelete}
                         onAssetDragStart={(asset) => {
-                          // Handle asset drag for dropping on cues
+                          // Asset drag handled via HTML5 drag API in MediaBin
                         }}
-                        onAddMedia={() => {}}
+                        onAssetSelect={(asset) => {
+                          // When asset is clicked, attach to selected cue if one exists
+                          if (selectedCueId) {
+                            handleAssetDropOnCue(asset, selectedCueId);
+                          }
+                        }}
+                        onAddMedia={() => {
+                          // Toast prompting drag-drop or clicking existing assets
+                          toast({
+                            title: 'Add Media',
+                            description: 'Drag assets from the Media Bin onto cues, or click to attach to selected cue.',
+                          });
+                        }}
                         onAddCue={async (type, name) => {
                           const nextStartTime = getNextStartTime();
                           const newCue = {
@@ -1274,6 +1286,24 @@ const Dashboard: React.FC = () => {
                             order_index: cues.length
                           };
                           await addCue(newCue, false);
+                        }}
+                        onAddMoment={(type, label) => {
+                          // Moments create special marker cues
+                          const nextStartTime = getNextStartTime();
+                          addCue({
+                            name: label,
+                            type: 'moment',
+                            track: 'Stage',
+                            start_time: nextStartTime,
+                            duration: '00:00:10',
+                            position: cues.length * 100,
+                            width: 50,
+                            color: type === 'transition' ? 'bg-runway-purple' : type === 'applause' ? 'bg-runway-highlight' : 'bg-runway-success',
+                            notes: `${type} moment`,
+                            effects: [],
+                            auto_follow: true,
+                            order_index: cues.length
+                          }, false);
                         }}
                         onAddBuffer={async () => {
                           const nextStartTime = getNextStartTime();
