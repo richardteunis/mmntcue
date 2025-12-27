@@ -872,11 +872,11 @@ const Dashboard: React.FC = () => {
               }, 0)}
               showTiming={showState.showTiming}
               controlState={showState.controlState}
-              isRehearsalMode={showMode === 'rehearsal'}
+              mode={showMode}
               isPlaying={playback.isPlaying}
               onPlayPause={playback.togglePlay}
               onReset={playback.reset}
-              onToggleRehearsalMode={() => setShowMode(prev => prev === 'rehearsal' ? 'live' : 'rehearsal')}
+              onModeChange={setShowMode}
             />
           )}
           
@@ -898,11 +898,6 @@ const Dashboard: React.FC = () => {
               controlState={showState.controlState}
               showTiming={{ overUnder: showState.showTiming.overUnder, status: showState.showTiming.status }}
               getCueStatus={showState.getCueStatus}
-              onGo={showState.goToNext}
-              onStandby={showState.standby}
-              onHold={showState.hold}
-              onResume={showState.resume}
-              onSkipCue={showState.skipCue}
               className="w-72 flex-shrink-0 border-r border-border"
             />
             
