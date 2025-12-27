@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import QuickActionTray, { ShowMode } from './QuickActionTray';
+import ShowOperationsBar, { ShowMode } from './ShowOperationsBar';
 import VOGCreatorPanel from './VOGCreatorPanel';
 import AssetBinPanel from './AssetBinPanel';
 import { Asset } from '@/types/asset';
@@ -16,6 +16,8 @@ interface BottomControlSystemProps {
   onAssetSelect?: (asset: Asset) => void;
   onAddMedia?: () => void;
   onAddCue?: (type: string, name: string) => Promise<void>;
+  onExecuteImmediate?: (actionId: string) => void;
+  onAddCustomAction?: () => void;
 }
 
 const BottomControlSystem: React.FC<BottomControlSystemProps> = ({
@@ -27,6 +29,8 @@ const BottomControlSystem: React.FC<BottomControlSystemProps> = ({
   onAssetSelect,
   onAddMedia,
   onAddCue,
+  onExecuteImmediate,
+  onAddCustomAction,
 }) => {
   const [expandedPanel, setExpandedPanel] = useState<ExpandedPanel>('none');
 
@@ -65,20 +69,22 @@ const BottomControlSystem: React.FC<BottomControlSystemProps> = ({
       "flex flex-col w-full",
       "bg-background"
     )}>
-      {/* Quick Action Tray - ALWAYS visible at top of bottom control area */}
-      <QuickActionTray
+      {/* ZONE 1: Show Operations Bar - Always Visible */}
+      <ShowOperationsBar
         showId={showId}
         mode={mode}
         onAddVOG={handleAddVOG}
         onAddBuffer={handleAddBuffer}
         onSendOpsAlert={handleSendOpsAlert}
-        onAddQuickCue={handleQuickAddCue}
+        onAddCue={handleQuickAddCue}
+        onExecuteImmediate={onExecuteImmediate}
+        onAddCustomAction={onAddCustomAction}
         disabled={!showId}
       />
 
-      {/* Secondary panels stack below the quick action tray */}
+      {/* ZONE 2 & 3: Collapsible Panels */}
       <div className="relative">
-        {/* VOG Creator Panel */}
+        {/* ZONE 2: VOG Studio Panel */}
         <VOGCreatorPanel
           showId={showId}
           cueId={selectedCueType === 'vog' ? selectedCueId : null}
@@ -86,7 +92,7 @@ const BottomControlSystem: React.FC<BottomControlSystemProps> = ({
           onToggleExpand={handleVOGExpand}
         />
 
-        {/* Asset Bin Panel */}
+        {/* ZONE 3: Asset Library Panel */}
         <AssetBinPanel
           showId={showId}
           isExpanded={expandedPanel === 'assets'}
