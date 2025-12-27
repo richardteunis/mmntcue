@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { Play, Pause, SkipForward, RotateCcw, ZoomIn, ZoomOut, Hand, Volume2, Settings2, GripVertical, Magnet, Scissors, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { CueStatus } from '@/hooks/useShowState';
+import SegmentRail, { Segment } from './SegmentRail';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,6 +66,9 @@ export interface TimelineViewProps {
     seekTo: (seconds: number) => void;
     jumpToNextCue: () => { id: string; time: string; duration: string } | null;
   };
+  // Segments for the segment rail
+  segments?: Segment[];
+  onSegmentClick?: (segmentId: string) => void;
 }
 
 const DEFAULT_TRACKS: TimelineTrack[] = [
@@ -135,6 +139,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   getCueStatus,
   nextCueId,
   playbackState,
+  segments = [],
+  onSegmentClick,
 }) => {
   const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
   const [dropTargetTrack, setDropTargetTrack] = useState<string | null>(null);
@@ -186,6 +192,16 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     });
     return grouped;
   }, [cues, tracks]);
+
+  // Convert cues to segment rail format
+  const segmentRailCues = useMemo(() => {
+    return cues.map(cue => ({
+      id: cue.id,
+      startTime: timeToSeconds(cue.time),
+      duration: timeToSeconds(cue.duration),
+      type: cue.type,
+    }));
+  }, [cues]);
 
   // Get all snap points (cue edges and playhead)
   const snapPoints = useMemo(() => {
@@ -863,6 +879,17 @@ const TimelineView: React.FC<TimelineViewProps> = ({
           {dragState && <span className="ml-2 text-primary">• Editing</span>}
         </div>
       </div>
+
+      {/* Segment Rail - Shows macro-level show structure */}
+      {segments.length > 0 && (
+        <SegmentRail
+          segments={segments}
+          cues={segmentRailCues}
+          pixelsPerSecond={pixelsPerSecond}
+          trackLabelWidth={trackLabelWidth}
+          onSegmentClick={onSegmentClick}
+        />
+      )}
 
       {/* Timeline Grid */}
       <div 
