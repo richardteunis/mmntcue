@@ -383,8 +383,14 @@ const Dashboard: React.FC = () => {
     await createSegment(name, targetDuration);
   }, [createSegment]);
 
-  const handleSegmentUpdate = useCallback(async (segmentId: string, name: string, targetDuration: number) => {
-    await updateDbSegment(segmentId, { name, target_duration: targetDuration });
+  const handleSegmentUpdate = useCallback(async (segmentId: string, name: string, targetDuration: number, color?: string) => {
+    const updates: { name: string; target_duration: number; color?: string } = { name, target_duration: targetDuration };
+    if (color) updates.color = color;
+    await updateDbSegment(segmentId, updates);
+  }, [updateDbSegment]);
+
+  const handleSegmentColorChange = useCallback(async (segmentId: string, color: string) => {
+    await updateDbSegment(segmentId, { color });
   }, [updateDbSegment]);
 
   const handleSegmentDelete = useCallback(async (segmentId: string) => {
@@ -1242,6 +1248,7 @@ const Dashboard: React.FC = () => {
                         onSegmentClick={handleSegmentClick}
                         onSegmentCreate={handleSegmentCreate}
                         onSegmentUpdate={handleSegmentUpdate}
+                        onSegmentColorChange={handleSegmentColorChange}
                         onSegmentDelete={handleSegmentDelete}
                         onSegmentReorder={handleSegmentReorder}
                         isExpanded={true}
