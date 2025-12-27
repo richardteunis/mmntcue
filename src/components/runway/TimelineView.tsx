@@ -69,6 +69,7 @@ export interface TimelineViewProps {
   // Segments for the segment rail
   segments?: Segment[];
   onSegmentClick?: (segmentId: string) => void;
+  onSegmentUpdate?: (segmentId: string, newDuration: number) => void;
 }
 
 const DEFAULT_TRACKS: TimelineTrack[] = [
@@ -141,6 +142,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   playbackState,
   segments = [],
   onSegmentClick,
+  onSegmentUpdate,
 }) => {
   const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
   const [dropTargetTrack, setDropTargetTrack] = useState<string | null>(null);
@@ -888,6 +890,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
           pixelsPerSecond={pixelsPerSecond}
           trackLabelWidth={trackLabelWidth}
           onSegmentClick={onSegmentClick}
+          onSegmentUpdate={onSegmentUpdate}
         />
       )}
 
