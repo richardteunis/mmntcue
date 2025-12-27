@@ -648,6 +648,47 @@ export type Database = {
           },
         ]
       }
+      show_segments: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          order_index: number
+          show_id: string
+          target_duration: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          order_index?: number
+          show_id: string
+          target_duration?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          order_index?: number
+          show_id?: string
+          target_duration?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "show_segments_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       show_vog_settings: {
         Row: {
           created_at: string

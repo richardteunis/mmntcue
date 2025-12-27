@@ -71,6 +71,15 @@ export interface TimelineCue {
   track?: string;
 }
 
+// Segment info for table display
+export interface SegmentInfo {
+  id: string;
+  name: string;
+  startTime: number;
+  endTime: number;
+  color?: string;
+}
+
 export interface TimelineProps {
   className?: string;
   onCueSelect?: (cueId: string | null, cue: TimelineCue | null) => void;
@@ -106,6 +115,8 @@ export interface TimelineProps {
     seekTo: (seconds: number) => void;
     jumpToNextCue: () => { id: string; time: string; duration: string } | null;
   };
+  // Segments for showing cue context
+  segments?: SegmentInfo[];
 }
 
 // Track columns configuration
@@ -186,7 +197,8 @@ const Timeline: React.FC<TimelineProps> = ({
   onAssetDropToCreate,
   getCueStatus,
   nextCueId,
-  playbackState
+  playbackState,
+  segments = []
 }) => {
   const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
   const [isDropZoneActive, setIsDropZoneActive] = useState(false);
@@ -197,6 +209,15 @@ const Timeline: React.FC<TimelineProps> = ({
   const [deletedCues, setDeletedCues] = useState<TimelineCue[]>([]);
   const [draggedCueId, setDraggedCueId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Helper to find which segment a cue belongs to
+  const getCueSegment = useMemo(() => {
+    return (cueTime: string): SegmentInfo | null => {
+      if (segments.length === 0) return null;
+      const cueSeconds = timeToSeconds(cueTime);
+      return segments.find(s => cueSeconds >= s.startTime && cueSeconds < s.endTime) || null;
+    };
+  }, [segments]);
   
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -572,6 +593,13 @@ const Timeline: React.FC<TimelineProps> = ({
                 />
               </TableHead>
               <TableHead className="w-[50px] text-center font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">Cue</TableHead>
+              {segments.length > 0 && (
+                <TableHead className="w-[100px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50 bg-muted/30">
+                  <div className="flex items-center gap-1">
+                    <Flag className="h-3 w-3" /> Segment
+                  </div>
+                </TableHead>
+              )}
               <TableHead className="min-w-[250px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">Items</TableHead>
               <TableHead className="w-[100px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">
                 <div className="flex items-center gap-1">
@@ -677,6 +705,25 @@ const Timeline: React.FC<TimelineProps> = ({
                   <TableCell className="text-center font-mono text-xs text-muted-foreground py-3 border-r border-border/50">
                     {index + 1}
                   </TableCell>
+                  {segments.length > 0 && (
+                    <TableCell className="py-3 border-r border-border/50 bg-muted/10">
+                      {(() => {
+                        const segment = getCueSegment(cue.time);
+                        if (!segment) return <span className="text-xs text-muted-foreground">—</span>;
+                        return (
+                          <div 
+                            className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium"
+                            style={{
+                              backgroundColor: segment.color ? `${segment.color}20` : undefined,
+                              borderLeft: segment.color ? `2px solid ${segment.color}` : '2px solid hsl(var(--muted-foreground))',
+                            }}
+                          >
+                            <span className="truncate max-w-[80px]">{segment.name}</span>
+                          </div>
+                        );
+                      })()}
+                    </TableCell>
+                  )}
                   <TableCell className="py-3 border-r border-border/50">
                     <div className="flex items-center gap-2">
                       <GripVertical 
