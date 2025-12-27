@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { 
   Zap,
@@ -157,7 +156,7 @@ const QuickActionBin: React.FC<QuickActionBinProps> = ({
       </div>
 
       {/* Content */}
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <div className="p-2 space-y-3">
           {/* Cue Types */}
           <div className="space-y-1.5">
@@ -189,7 +188,7 @@ const QuickActionBin: React.FC<QuickActionBinProps> = ({
             </div>
           </div>
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 };
