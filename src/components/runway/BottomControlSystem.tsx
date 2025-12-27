@@ -1,170 +1,139 @@
 import React, { useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import ShowOperationsBar, { ShowMode } from './ShowOperationsBar';
-import VOGCreatorPanel from './VOGCreatorPanel';
-import AssetBinPanel from './AssetBinPanel';
+import SegmentEditorBin, { Segment } from './SegmentEditorBin';
+import MediaBin from './MediaBin';
+import QuickActionBin from './QuickActionBin';
+import VOGEditorLightbox from './VOGEditorLightbox';
 import { Asset } from '@/types/asset';
-import { ShowControlState } from '@/hooks/useShowState';
-import { ChevronDown, ChevronRight, Mic2, Image } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-
-type ExpandedPanel = 'none' | 'vog' | 'assets';
 
 interface BottomControlSystemProps {
   showId?: string | null;
   selectedCueId?: string | null;
-  selectedCueType?: string | null;
-  mode?: ShowMode;
-  controlState?: ShowControlState;
-  assetCount?: number;
+  selectedCueName?: string | null;
+  // Segment props
+  segments?: Segment[];
+  onSegmentClick?: (segmentId: string) => void;
+  onSegmentReorder?: (segmentId: string, newIndex: number) => void;
+  onSegmentCreate?: (name: string, targetDuration: number, color?: string) => void;
+  onSegmentUpdate?: (segmentId: string, name: string, targetDuration: number, color?: string) => void;
+  onSegmentColorChange?: (segmentId: string, color: string) => void;
+  onSegmentDelete?: (segmentId: string) => void;
+  // Asset props
   onAssetDragStart?: (asset: Asset) => void;
   onAssetSelect?: (asset: Asset) => void;
   onAddMedia?: () => void;
+  // Quick action props
   onAddCue?: (type: string, name: string) => Promise<void>;
-  onExecuteImmediate?: (actionId: string) => void;
-  onAddCustomAction?: () => void;
-  onStandby?: () => void;
-  onHold?: () => void;
+  onAddMoment?: (type: string, label: string) => void;
+  onAddBuffer?: () => Promise<void>;
+  onSendOpsAlert?: () => Promise<void>;
+  // VOG props
+  onVOGGenerated?: (audioUrl: string, fileName: string) => void;
+  onVOGSave?: (script: string, voiceId: string, style: string) => void;
+  // General
+  disabled?: boolean;
 }
 
 const BottomControlSystem: React.FC<BottomControlSystemProps> = ({
   showId,
   selectedCueId,
-  selectedCueType,
-  mode = 'planning',
-  controlState = 'idle',
-  assetCount = 0,
+  selectedCueName,
+  // Segment props
+  segments = [],
+  onSegmentClick,
+  onSegmentReorder,
+  onSegmentCreate,
+  onSegmentUpdate,
+  onSegmentColorChange,
+  onSegmentDelete,
+  // Asset props
   onAssetDragStart,
   onAssetSelect,
   onAddMedia,
+  // Quick action props
   onAddCue,
-  onExecuteImmediate,
-  onAddCustomAction,
-  onStandby,
-  onHold,
+  onAddMoment,
+  onAddBuffer,
+  onSendOpsAlert,
+  // VOG props
+  onVOGGenerated,
+  onVOGSave,
+  // General
+  disabled = false,
 }) => {
-  const [expandedPanel, setExpandedPanel] = useState<ExpandedPanel>('none');
+  const [isVOGEditorOpen, setIsVOGEditorOpen] = useState(false);
 
-  const handleVOGExpand = useCallback(() => {
-    setExpandedPanel(prev => prev === 'vog' ? 'none' : 'vog');
-  }, []);
-
-  const handleAssetsExpand = useCallback(() => {
-    setExpandedPanel(prev => prev === 'assets' ? 'none' : 'assets');
-  }, []);
-
-  const handleAddVOG = useCallback(() => {
-    setExpandedPanel('vog');
+  const handleOpenVOGEditor = useCallback(() => {
+    setIsVOGEditorOpen(true);
   }, []);
 
   const handleAddBuffer = useCallback(async () => {
-    if (onAddCue) {
-      await onAddCue('ops_note', 'Buffer');
+    if (onAddBuffer) {
+      await onAddBuffer();
     }
-  }, [onAddCue]);
+  }, [onAddBuffer]);
 
   const handleSendOpsAlert = useCallback(async () => {
-    if (onAddCue) {
-      await onAddCue('ops_note', 'Ops Alert');
+    if (onSendOpsAlert) {
+      await onSendOpsAlert();
     }
-  }, [onAddCue]);
-
-  const handleQuickAddCue = useCallback(async (actionId: string, actionLabel: string) => {
-    if (onAddCue) {
-      await onAddCue('ops_note', actionLabel);
-    }
-  }, [onAddCue]);
+  }, [onSendOpsAlert]);
 
   return (
-    <div className={cn(
-      "flex flex-col w-full",
-      "bg-background"
-    )}>
-      {/* ZONE 1: Show Operations & Control - Always Visible, Two Rows */}
-      <ShowOperationsBar
-        showId={showId}
-        mode={mode}
-        controlState={controlState}
-        onAddVOG={handleAddVOG}
-        onAddBuffer={handleAddBuffer}
-        onSendOpsAlert={handleSendOpsAlert}
-        onAddCue={handleQuickAddCue}
-        onExecuteImmediate={onExecuteImmediate}
-        onAddCustomAction={onAddCustomAction}
-        onStandby={onStandby}
-        onHold={onHold}
-        disabled={!showId}
-      />
-
-      {/* Visual Divider */}
-      <div className="h-px bg-border" />
-
-      {/* ZONE 2 & 3: Collapsible Panel Headers */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-muted/30">
-        {/* VOG Creator Toggle */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleVOGExpand}
-          className={cn(
-            "h-8 px-3 text-xs font-medium",
-            expandedPanel === 'vog' && "bg-primary/10 text-primary"
-          )}
-        >
-          {expandedPanel === 'vog' ? (
-            <ChevronDown className="h-3.5 w-3.5 mr-1.5" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 mr-1.5" />
-          )}
-          <Mic2 className="h-3.5 w-3.5 mr-1.5" />
-          VOG Creator
-        </Button>
-
-        {/* Assets Toggle */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleAssetsExpand}
-          className={cn(
-            "h-8 px-3 text-xs font-medium",
-            expandedPanel === 'assets' && "bg-primary/10 text-primary"
-          )}
-        >
-          {expandedPanel === 'assets' ? (
-            <ChevronDown className="h-3.5 w-3.5 mr-1.5" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 mr-1.5" />
-          )}
-          <Image className="h-3.5 w-3.5 mr-1.5" />
-          Assets {assetCount > 0 && `(${assetCount})`}
-        </Button>
-      </div>
-
-      {/* Expanded Panels */}
-      {expandedPanel === 'vog' && (
-        <div className="border-t border-border">
-          <VOGCreatorPanel
-            showId={showId}
-            cueId={selectedCueType === 'vog' ? selectedCueId : null}
-            isExpanded={true}
-            onToggleExpand={handleVOGExpand}
+    <>
+      <div className={cn(
+        "flex w-full h-[240px] gap-2 p-2 bg-background border-t border-border"
+      )}>
+        {/* Segment Editor Bin */}
+        <div className="flex-1 min-w-0">
+          <SegmentEditorBin
+            segments={segments}
+            onSegmentClick={onSegmentClick}
+            onSegmentReorder={onSegmentReorder}
+            onSegmentCreate={onSegmentCreate}
+            onSegmentUpdate={onSegmentUpdate}
+            onSegmentColorChange={onSegmentColorChange}
+            onSegmentDelete={onSegmentDelete}
+            disabled={disabled || !showId}
           />
         </div>
-      )}
 
-      {expandedPanel === 'assets' && (
-        <div className="border-t border-border">
-          <AssetBinPanel
+        {/* Media Bin */}
+        <div className="flex-1 min-w-0">
+          <MediaBin
             showId={showId}
-            isExpanded={true}
-            onToggleExpand={handleAssetsExpand}
             onAssetDragStart={onAssetDragStart}
             onAssetSelect={onAssetSelect}
             onAddMedia={onAddMedia}
+            disabled={disabled || !showId}
           />
         </div>
-      )}
-    </div>
+
+        {/* Quick Action Bin */}
+        <div className="flex-1 min-w-0">
+          <QuickActionBin
+            showId={showId}
+            onAddCue={onAddCue}
+            onAddMoment={onAddMoment}
+            onOpenVOGEditor={handleOpenVOGEditor}
+            onAddBuffer={handleAddBuffer}
+            onSendOpsAlert={handleSendOpsAlert}
+            disabled={disabled || !showId}
+          />
+        </div>
+      </div>
+
+      {/* VOG Editor Lightbox */}
+      <VOGEditorLightbox
+        open={isVOGEditorOpen}
+        onOpenChange={setIsVOGEditorOpen}
+        showId={showId}
+        cueId={selectedCueId}
+        cueName={selectedCueName || undefined}
+        onGenerated={onVOGGenerated}
+        onSave={onVOGSave}
+      />
+    </>
   );
 };
 
