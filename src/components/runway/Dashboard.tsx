@@ -302,6 +302,34 @@ const Dashboard: React.FC = () => {
 
   // Convert database cues to timeline cues (already sorted by start_time from hook)
   const timelineCues = cues.map(cueToTimelineCue);
+
+  // Generate demo segments based on show duration (in planning mode)
+  const showSegments = useMemo(() => {
+    if (showMode !== 'planning' || cues.length === 0) return [];
+    
+    // Calculate total show duration
+    const totalDuration = cues.reduce((total, cue) => {
+      const parts = cue.start_time.split(':').map(Number);
+      const durParts = cue.duration.split(':').map(Number);
+      const endTime = (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0) + 
+                     (durParts[0] || 0) * 3600 + (durParts[1] || 0) * 60 + (durParts[2] || 0);
+      return Math.max(total, endTime);
+    }, 0);
+
+    // Create segments roughly every 15-30 minutes
+    const segmentDuration = totalDuration > 3600 ? 1800 : 900; // 30 min or 15 min segments
+    const numSegments = Math.max(1, Math.ceil(totalDuration / segmentDuration));
+    
+    const segmentNames = ['Pre-Show', 'Opening', 'Session 1', 'Break', 'Session 2', 'Keynote', 'Closing', 'Post-Show'];
+    
+    return Array.from({ length: Math.min(numSegments, 8) }, (_, i) => ({
+      id: `segment-${i}`,
+      name: segmentNames[i] || `Segment ${i + 1}`,
+      startTime: i * segmentDuration,
+      endTime: Math.min((i + 1) * segmentDuration, totalDuration + 300),
+      color: i % 2 === 0 ? undefined : undefined, // Alternate colors can be added
+    }));
+  }, [showMode, cues]);
   
   // Handle cue selection - also updates the show state to track current position
   const handleCueSelect = useCallback((cueId: string | null, cue: TimelineCue | null) => {
@@ -1101,6 +1129,7 @@ const Dashboard: React.FC = () => {
                         getCueStatus={showState.getCueStatus}
                         nextCueId={showState.nextCue?.id}
                         playbackState={playback}
+                        segments={showSegments}
                       />
                     ) : (
                       <Timeline 
