@@ -268,15 +268,17 @@ const Dashboard: React.FC = () => {
   // Convert database cues to timeline cues (already sorted by start_time from hook)
   const timelineCues = cues.map(cueToTimelineCue);
   
-  // Handle cue selection
+  // Handle cue selection - also updates the show state to track current position
   const handleCueSelect = useCallback((cueId: string | null, cue: TimelineCue | null) => {
     setSelectedCueId(cueId);
     setSelectedCue(cue);
     updateSelectedCue(cueId);
     if (cueId) {
       updateArea('cue-panel');
+      // Update show state to track this as the current cue position
+      showState.jumpToCue(cueId);
     }
-  }, [updateSelectedCue, updateArea]);
+  }, [updateSelectedCue, updateArea, showState.jumpToCue]);
   
   // Handle cue update
   const handleCueUpdate = async (updatedCue: TimelineCue) => {
@@ -901,6 +903,8 @@ const Dashboard: React.FC = () => {
                 showTiming={{ overUnder: showState.showTiming.overUnder, status: showState.showTiming.status }}
                 getCueStatus={showState.getCueStatus}
                 mode={showMode}
+                lastFiredCue={showState.lastFiredCue}
+                lastFiredAt={showState.lastFiredAt}
                 className={
                   showMode === 'live' 
                     ? "w-96 flex-shrink-0" 
