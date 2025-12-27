@@ -16,10 +16,12 @@ import {
   FileText,
   CheckCircle2,
   Play,
-  Pause
+  Pause,
+  RotateCcw
 } from 'lucide-react';
 import { ShowMode } from './ShowOperationsBar';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NextCuePanelProps {
   nextCue: Cue | null;
@@ -41,6 +43,7 @@ interface NextCuePanelProps {
   onStandby?: () => void;
   onHold?: () => void;
   onResume?: () => void;
+  onRevert?: () => void;
 }
 
 // Helper to get track icon
@@ -125,7 +128,8 @@ const NextCuePanel: React.FC<NextCuePanelProps> = ({
   onGo,
   onStandby,
   onHold,
-  onResume
+  onResume,
+  onRevert
 }) => {
   const TrackIcon = nextCue ? getTrackIcon(nextCue.type) : FileText;
   const [countdown, setCountdown] = useState<number>(0);
@@ -368,7 +372,27 @@ const NextCuePanel: React.FC<NextCuePanelProps> = ({
         
         {/* Integrated GO Button */}
         {onGo && (
-          <div className="p-4 border-t border-border bg-card">
+          <div className="p-4 border-t border-border bg-card space-y-3">
+            {/* Revert button for Live mode - panic safety */}
+            {isLiveMode && lastFiredCue && onRevert && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onRevert}
+                    className="w-full h-8 border-destructive/30 text-destructive hover:bg-destructive/10"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                    Revert to: {lastFiredCue.name}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Roll back to last completed cue for recovery</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            
             <Button
               onClick={controlState === 'hold' ? onResume : onGo}
               disabled={!nextCue}
