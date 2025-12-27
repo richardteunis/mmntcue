@@ -147,6 +147,14 @@ const Dashboard: React.FC = () => {
     timestamp: Date;
   }>>([]);
   
+  // Custom segments state for planning mode
+  const [customSegments, setCustomSegments] = useState<Array<{
+    id: string;
+    name: string;
+    targetDuration: number;
+    order: number;
+  }>>([]);
+  
   // Auto-collapse sidebar when entering live mode
   useEffect(() => {
     if (showMode === 'live' && !sidebarCollapsed) {
@@ -303,33 +311,115 @@ const Dashboard: React.FC = () => {
   // Convert database cues to timeline cues (already sorted by start_time from hook)
   const timelineCues = cues.map(cueToTimelineCue);
 
-  // Generate demo segments based on show duration (in planning mode)
-  const showSegments = useMemo(() => {
-    if (showMode !== 'planning' || cues.length === 0) return [];
+  // Calculate segment stats based on custom segments and cues
+  const segmentsWithStats = useMemo(() => {
+    if (customSegments.length === 0) return [];
     
-    // Calculate total show duration
-    const totalDuration = cues.reduce((total, cue) => {
-      const parts = cue.start_time.split(':').map(Number);
-      const durParts = cue.duration.split(':').map(Number);
-      const endTime = (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0) + 
-                     (durParts[0] || 0) * 3600 + (durParts[1] || 0) * 60 + (durParts[2] || 0);
-      return Math.max(total, endTime);
-    }, 0);
+    // Sort by order
+    const sorted = [...customSegments].sort((a, b) => a.order - b.order);
+    
+    // Calculate cumulative start times
+    let currentStart = 0;
+    return sorted.map(segment => {
+      const startTime = currentStart;
+      const endTime = startTime + segment.targetDuration;
+      currentStart = endTime;
+      
+      // Find cues in this time range
+      const segmentCues = cues.filter(cue => {
+        const parts = cue.start_time.split(':').map(Number);
+        const cueStart = (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+        const durParts = cue.duration.split(':').map(Number);
+        const cueDuration = (durParts[0] || 0) * 3600 + (durParts[1] || 0) * 60 + (durParts[2] || 0);
+        const cueEnd = cueStart + cueDuration;
+        return cueStart < endTime && cueEnd > startTime;
+      });
+      
+      const cueCount = segmentCues.length;
+      const actualDuration = segment.targetDuration;
+      
+      // Calculate total cue time in segment
+      const totalCueTime = segmentCues.reduce((sum, cue) => {
+        const durParts = cue.duration.split(':').map(Number);
+        return sum + (durParts[0] || 0) * 3600 + (durParts[1] || 0) * 60 + (durParts[2] || 0);
+      }, 0);
+      
+      let status: 'empty' | 'balanced' | 'overloaded' = 'balanced';
+      if (cueCount === 0) {
+        status = 'empty';
+      } else if (totalCueTime > segment.targetDuration * 0.9) {
+        status = 'overloaded';
+      }
+      
+      return {
+        id: segment.id,
+        name: segment.name,
+        startTime,
+        endTime,
+        targetDuration: segment.targetDuration,
+        actualDuration,
+        cueCount,
+        status,
+      };
+    });
+  }, [customSegments, cues]);
 
-    // Create segments roughly every 15-30 minutes
-    const segmentDuration = totalDuration > 3600 ? 1800 : 900; // 30 min or 15 min segments
-    const numSegments = Math.max(1, Math.ceil(totalDuration / segmentDuration));
-    
-    const segmentNames = ['Pre-Show', 'Opening', 'Session 1', 'Break', 'Session 2', 'Keynote', 'Closing', 'Post-Show'];
-    
-    return Array.from({ length: Math.min(numSegments, 8) }, (_, i) => ({
-      id: `segment-${i}`,
-      name: segmentNames[i] || `Segment ${i + 1}`,
-      startTime: i * segmentDuration,
-      endTime: Math.min((i + 1) * segmentDuration, totalDuration + 300),
-      color: i % 2 === 0 ? undefined : undefined, // Alternate colors can be added
+  // Generate segments for SegmentRail (different format)
+  const showSegments = useMemo(() => {
+    return segmentsWithStats.map(s => ({
+      id: s.id,
+      name: s.name,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      targetDuration: s.targetDuration,
     }));
-  }, [showMode, cues]);
+  }, [segmentsWithStats]);
+
+  // Segment management handlers
+  const handleSegmentCreate = useCallback((name: string, targetDuration: number) => {
+    const newSegment = {
+      id: `segment-${Date.now()}`,
+      name,
+      targetDuration,
+      order: customSegments.length,
+    };
+    setCustomSegments(prev => [...prev, newSegment]);
+  }, [customSegments.length]);
+
+  const handleSegmentUpdate = useCallback((segmentId: string, name: string, targetDuration: number) => {
+    setCustomSegments(prev => prev.map(s => 
+      s.id === segmentId ? { ...s, name, targetDuration } : s
+    ));
+  }, []);
+
+  const handleSegmentDelete = useCallback((segmentId: string) => {
+    setCustomSegments(prev => {
+      const filtered = prev.filter(s => s.id !== segmentId);
+      // Re-order remaining segments
+      return filtered.map((s, i) => ({ ...s, order: i }));
+    });
+  }, []);
+
+  const handleSegmentReorder = useCallback((segmentId: string, newIndex: number) => {
+    setCustomSegments(prev => {
+      const segment = prev.find(s => s.id === segmentId);
+      if (!segment) return prev;
+      
+      const filtered = prev.filter(s => s.id !== segmentId);
+      const reordered = [
+        ...filtered.slice(0, newIndex),
+        segment,
+        ...filtered.slice(newIndex)
+      ];
+      
+      return reordered.map((s, i) => ({ ...s, order: i }));
+    });
+  }, []);
+
+  const handleSegmentClick = useCallback((segmentId: string) => {
+    // Could scroll timeline to segment start, for now just log
+    console.log('Clicked segment:', segmentId);
+  }, []);
   
   // Handle cue selection - also updates the show state to track current position
   const handleCueSelect = useCallback((cueId: string | null, cue: TimelineCue | null) => {
@@ -1130,6 +1220,7 @@ const Dashboard: React.FC = () => {
                         nextCueId={showState.nextCue?.id}
                         playbackState={playback}
                         segments={showSegments}
+                        onSegmentClick={handleSegmentClick}
                       />
                     ) : (
                       <Timeline 
@@ -1161,6 +1252,12 @@ const Dashboard: React.FC = () => {
                     {showMode === 'planning' && (
                       <PlanningDrawer
                         showId={activeShowId}
+                        segments={segmentsWithStats}
+                        onSegmentClick={handleSegmentClick}
+                        onSegmentCreate={handleSegmentCreate}
+                        onSegmentUpdate={handleSegmentUpdate}
+                        onSegmentDelete={handleSegmentDelete}
+                        onSegmentReorder={handleSegmentReorder}
                         isExpanded={true}
                       />
                     )}

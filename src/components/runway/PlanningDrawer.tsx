@@ -19,10 +19,15 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
+  Pencil,
+  X,
+  Check,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 
 // Segment types
-interface Segment {
+export interface Segment {
   id: string;
   name: string;
   targetDuration: number; // in seconds
@@ -61,6 +66,9 @@ interface PlanningDrawerProps {
   notes?: PlanningNote[];
   onSegmentClick?: (segmentId: string) => void;
   onSegmentReorder?: (segmentId: string, newIndex: number) => void;
+  onSegmentCreate?: (name: string, targetDuration: number) => void;
+  onSegmentUpdate?: (segmentId: string, name: string, targetDuration: number) => void;
+  onSegmentDelete?: (segmentId: string) => void;
   onAddMoment?: (type: MomentType, label: string, notes?: string) => void;
   onRemoveMoment?: (momentId: string) => void;
   onAddNote?: (scope: NoteScope, scopeId: string | undefined, content: string) => void;
@@ -86,6 +94,15 @@ const formatDuration = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+// Parse duration string (MM:SS or M:SS) to seconds
+const parseDuration = (durationStr: string): number => {
+  const parts = durationStr.split(':').map(Number);
+  if (parts.length === 2) {
+    return (parts[0] || 0) * 60 + (parts[1] || 0);
+  }
+  return 0;
+};
+
 const PlanningDrawer: React.FC<PlanningDrawerProps> = ({
   showId,
   segments = [],
@@ -93,6 +110,9 @@ const PlanningDrawer: React.FC<PlanningDrawerProps> = ({
   notes = [],
   onSegmentClick,
   onSegmentReorder,
+  onSegmentCreate,
+  onSegmentUpdate,
+  onSegmentDelete,
   onAddMoment,
   onRemoveMoment,
   onAddNote,
@@ -107,13 +127,14 @@ const PlanningDrawer: React.FC<PlanningDrawerProps> = ({
   const [newMomentNotes, setNewMomentNotes] = useState('');
   const [newNoteScope, setNewNoteScope] = useState<NoteScope>('show');
   const [newNoteContent, setNewNoteContent] = useState('');
-
-  // Demo segments if none provided
-  const displaySegments = useMemo(() => {
-    if (segments.length > 0) return segments;
-    // Return empty array - segments will come from parent
-    return [];
-  }, [segments]);
+  
+  // Segment editing state
+  const [isAddingSegment, setIsAddingSegment] = useState(false);
+  const [newSegmentName, setNewSegmentName] = useState('');
+  const [newSegmentDuration, setNewSegmentDuration] = useState('15:00');
+  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
+  const [editSegmentName, setEditSegmentName] = useState('');
+  const [editSegmentDuration, setEditSegmentDuration] = useState('');
 
   const handleAddMoment = useCallback(() => {
     if (!newMomentLabel.trim()) return;
@@ -127,6 +148,46 @@ const PlanningDrawer: React.FC<PlanningDrawerProps> = ({
     onAddNote?.(newNoteScope, undefined, newNoteContent);
     setNewNoteContent('');
   }, [newNoteScope, newNoteContent, onAddNote]);
+
+  const handleCreateSegment = useCallback(() => {
+    if (!newSegmentName.trim()) return;
+    const durationSeconds = parseDuration(newSegmentDuration);
+    onSegmentCreate?.(newSegmentName.trim(), durationSeconds || 900);
+    setNewSegmentName('');
+    setNewSegmentDuration('15:00');
+    setIsAddingSegment(false);
+  }, [newSegmentName, newSegmentDuration, onSegmentCreate]);
+
+  const handleStartEdit = useCallback((segment: Segment) => {
+    setEditingSegmentId(segment.id);
+    setEditSegmentName(segment.name);
+    setEditSegmentDuration(formatDuration(segment.targetDuration));
+  }, []);
+
+  const handleSaveEdit = useCallback(() => {
+    if (!editingSegmentId || !editSegmentName.trim()) return;
+    const durationSeconds = parseDuration(editSegmentDuration);
+    onSegmentUpdate?.(editingSegmentId, editSegmentName.trim(), durationSeconds || 900);
+    setEditingSegmentId(null);
+    setEditSegmentName('');
+    setEditSegmentDuration('');
+  }, [editingSegmentId, editSegmentName, editSegmentDuration, onSegmentUpdate]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingSegmentId(null);
+    setEditSegmentName('');
+    setEditSegmentDuration('');
+  }, []);
+
+  const handleMoveSegment = useCallback((segmentId: string, direction: 'up' | 'down') => {
+    const currentIndex = segments.findIndex(s => s.id === segmentId);
+    if (currentIndex === -1) return;
+    
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= segments.length) return;
+    
+    onSegmentReorder?.(segmentId, newIndex);
+  }, [segments, onSegmentReorder]);
 
   const getStatusIcon = (status: Segment['status']) => {
     switch (status) {
@@ -181,6 +242,11 @@ const PlanningDrawer: React.FC<PlanningDrawerProps> = ({
             <TabsTrigger value="structure" className="text-xs h-7 px-3 gap-1.5">
               <LayoutGrid className="h-3.5 w-3.5" />
               Structure
+              {segments.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">
+                  {segments.length}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="moments" className="text-xs h-7 px-3 gap-1.5">
               <Sparkles className="h-3.5 w-3.5" />
@@ -218,37 +284,190 @@ const PlanningDrawer: React.FC<PlanningDrawerProps> = ({
         {activeTab === 'structure' && (
           <ScrollArea className="h-48">
             <div className="p-4 space-y-2">
-              {displaySegments.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
+              {/* Add segment button/form */}
+              {isAddingSegment ? (
+                <div className="flex items-center gap-2 p-2 rounded-lg border border-primary/50 bg-primary/5">
+                  <Input
+                    value={newSegmentName}
+                    onChange={(e) => setNewSegmentName(e.target.value)}
+                    placeholder="Segment name..."
+                    className="h-7 text-xs flex-1"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleCreateSegment();
+                      if (e.key === 'Escape') setIsAddingSegment(false);
+                    }}
+                  />
+                  <Input
+                    value={newSegmentDuration}
+                    onChange={(e) => setNewSegmentDuration(e.target.value)}
+                    placeholder="MM:SS"
+                    className="h-7 text-xs w-20"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={handleCreateSegment}
+                    disabled={!newSegmentName.trim()}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setIsAddingSegment(false)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-8 text-xs gap-1.5 border-dashed"
+                  onClick={() => setIsAddingSegment(true)}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Segment
+                </Button>
+              )}
+
+              {segments.length === 0 && !isAddingSegment ? (
+                <div className="text-center py-6 text-muted-foreground">
                   <LayoutGrid className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">No segments defined</p>
                   <p className="text-xs mt-1">Segments help organize your show into logical sections</p>
                 </div>
               ) : (
-                displaySegments.map((segment, index) => (
+                segments.map((segment, index) => (
                   <div
                     key={segment.id}
                     className={cn(
-                      "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors hover:bg-muted/50",
-                      getStatusColor(segment.status)
+                      "flex items-center gap-2 p-3 rounded-lg border transition-colors group",
+                      editingSegmentId === segment.id 
+                        ? "border-primary bg-primary/5" 
+                        : cn("cursor-pointer hover:bg-muted/50", getStatusColor(segment.status))
                     )}
-                    onClick={() => onSegmentClick?.(segment.id)}
                   >
-                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm truncate">{segment.name}</span>
-                        {getStatusIcon(segment.status)}
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatDuration(segment.actualDuration)} / {formatDuration(segment.targetDuration)}
-                        </span>
-                        <span>{segment.cueCount} cues</span>
-                      </div>
+                    {/* Reorder buttons */}
+                    <div className="flex flex-col gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0"
+                        disabled={index === 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMoveSegment(segment.id, 'up');
+                        }}
+                      >
+                        <ArrowUp className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0"
+                        disabled={index === segments.length - 1}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMoveSegment(segment.id, 'down');
+                        }}
+                      >
+                        <ArrowDown className="h-3 w-3" />
+                      </Button>
                     </div>
+                    
+                    {editingSegmentId === segment.id ? (
+                      <>
+                        <Input
+                          value={editSegmentName}
+                          onChange={(e) => setEditSegmentName(e.target.value)}
+                          className="h-7 text-xs flex-1"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveEdit();
+                            if (e.key === 'Escape') handleCancelEdit();
+                          }}
+                        />
+                        <Input
+                          value={editSegmentDuration}
+                          onChange={(e) => setEditSegmentDuration(e.target.value)}
+                          placeholder="MM:SS"
+                          className="h-7 text-xs w-20"
+                        />
+                        <Button
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={handleSaveEdit}
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0"
+                          onClick={handleCancelEdit}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <div 
+                          className="flex-1 min-w-0"
+                          onClick={() => onSegmentClick?.(segment.id)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm truncate">{segment.name}</span>
+                            {getStatusIcon(segment.status)}
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {formatDuration(segment.actualDuration)} / {formatDuration(segment.targetDuration)}
+                            </span>
+                            <span>{segment.cueCount} cues</span>
+                          </div>
+                        </div>
+                        
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStartEdit(segment);
+                                }}
+                              >
+                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Edit segment</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSegmentDelete?.(segment.id);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete segment</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))
               )}
