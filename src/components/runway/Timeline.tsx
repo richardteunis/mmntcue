@@ -25,8 +25,10 @@ import {
   Pencil,
   Flag,
   Square,
-  CheckSquare
+  CheckSquare,
+  CheckCircle2
 } from 'lucide-react';
+import { CueStatus } from '@/hooks/useShowState';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
@@ -91,6 +93,9 @@ export interface TimelineProps {
   scrollRef?: React.RefObject<HTMLDivElement>;
   onAssetDropOnCue?: (assetData: any, cueId: string) => void;
   onAssetDropToCreate?: (assetData: any) => void;
+  // Cue status for visual indicators
+  getCueStatus?: (cueId: string) => CueStatus;
+  nextCueId?: string | null;
   // Shared playback state
   playbackState?: {
     isPlaying: boolean;
@@ -179,6 +184,8 @@ const Timeline: React.FC<TimelineProps> = ({
   scrollRef,
   onAssetDropOnCue,
   onAssetDropToCreate,
+  getCueStatus,
+  nextCueId,
   playbackState
 }) => {
   const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
@@ -599,6 +606,9 @@ const Timeline: React.FC<TimelineProps> = ({
               const isDragging = draggedCueId === cue.id;
               const isDragOver = dragOverIndex === index;
               const animation = animatingCues.find(a => a.id === cue.id);
+              const cueStatus = getCueStatus?.(cue.id) || 'upcoming';
+              const isNextCue = nextCueId === cue.id;
+              const isFired = cueStatus === 'fired' || cueStatus === 'skipped';
               
               return (
                 <TableRow 
@@ -642,7 +652,10 @@ const Timeline: React.FC<TimelineProps> = ({
                     dropTargetCueId === cue.id && "ring-2 ring-runway-teal bg-runway-teal/10",
                     animation?.type === 'add' && "animate-fade-in bg-runway-success/10",
                     animation?.type === 'delete' && "animate-fade-out opacity-0",
-                    animation?.type === 'update' && "bg-runway-teal/10"
+                    animation?.type === 'update' && "bg-runway-teal/10",
+                    // Status-based styling
+                    isFired && "opacity-60 bg-muted/20",
+                    isNextCue && !isSelected && "ring-2 ring-primary animate-pulse"
                   )}
                   onClick={(e) => {
                     if (e.ctrlKey || e.metaKey || e.shiftKey) {
@@ -670,8 +683,15 @@ const Timeline: React.FC<TimelineProps> = ({
                         size={14} 
                         className="opacity-30 group-hover:opacity-70 cursor-grab active:cursor-grabbing text-muted-foreground" 
                       />
-                      {isCurrentCue && (
-                        <div className="w-2 h-2 rounded-full bg-runway-success animate-pulse" />
+                      {/* Status indicators */}
+                      {isFired && (
+                        <CheckCircle2 size={14} className="text-runway-success flex-shrink-0" />
+                      )}
+                      {isNextCue && !isFired && (
+                        <div className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0" />
+                      )}
+                      {isCurrentCue && !isNextCue && !isFired && (
+                        <div className="w-2 h-2 rounded-full bg-runway-success animate-pulse flex-shrink-0" />
                       )}
                       {editingCell?.id === cue.id && editingCell?.field === 'name' ? (
                         <Input
@@ -687,7 +707,11 @@ const Timeline: React.FC<TimelineProps> = ({
                         />
                       ) : (
                         <span 
-                          className="font-medium hover:text-primary cursor-text"
+                          className={cn(
+                            "font-medium hover:text-primary cursor-text",
+                            isFired && "line-through text-muted-foreground",
+                            cueStatus === 'skipped' && "line-through text-muted-foreground/60"
+                          )}
                           onDoubleClick={(e) => {
                             e.stopPropagation();
                             setEditingCell({ id: cue.id, field: 'name' });

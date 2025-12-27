@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { Play, Pause, SkipForward, RotateCcw, ZoomIn, ZoomOut, Hand, Volume2, Settings2, GripVertical, Magnet, Scissors } from 'lucide-react';
+import { Play, Pause, SkipForward, RotateCcw, ZoomIn, ZoomOut, Hand, Volume2, Settings2, GripVertical, Magnet, Scissors, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { CueStatus } from '@/hooks/useShowState';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,6 +53,9 @@ export interface TimelineViewProps {
   onAssetDropOnCue?: (assetData: any, cueId: string) => void;
   onAssetDropToCreate?: (assetData: any, trackId: string, startTime: number) => void;
   onTrackEdit?: (track: TimelineTrack) => void;
+  // Cue status for visual indicators
+  getCueStatus?: (cueId: string) => CueStatus;
+  nextCueId?: string | null;
   playbackState?: {
     isPlaying: boolean;
     currentTimeSeconds: number;
@@ -128,6 +132,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   onAssetDropOnCue,
   onAssetDropToCreate,
   onTrackEdit,
+  getCueStatus,
+  nextCueId,
   playbackState,
 }) => {
   const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
@@ -1024,6 +1030,11 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   const isDragging = dragState?.cueId === cue.id;
                   const isHoveringEdge = hoveredCueEdge?.cueId === cue.id;
                   
+                  // Status-based styling
+                  const cueStatus = getCueStatus?.(cue.id) || 'upcoming';
+                  const isNextCue = nextCueId === cue.id;
+                  const isFired = cueStatus === 'fired' || cueStatus === 'skipped';
+                  
                   const cueColor = cue.color && cue.color.startsWith('#') ? cue.color : track.color;
                   
                   return (
@@ -1039,7 +1050,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                             animation?.type === 'add' && "animate-scale-in",
                             animation?.type === 'delete' && "animate-fade-out opacity-0 scale-95",
                             animation?.type === 'update' && "ring-2 ring-runway-teal ring-offset-1",
-                            isDragging && "opacity-50"
+                            isDragging && "opacity-50",
+                            // Status-based styling
+                            isFired && "opacity-50 grayscale",
+                            isNextCue && !isFired && "ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse"
                           )}
                           style={{ 
                             left: startX, 
@@ -1089,9 +1103,17 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                           )} />
                           
                           <div className="px-2 py-1 h-full flex flex-col justify-center overflow-hidden relative">
-                            <span className="text-xs font-medium text-white truncate drop-shadow-sm">
-                              {cue.name}
-                            </span>
+                            <div className="flex items-center gap-1">
+                              {isFired && (
+                                <CheckCircle2 size={12} className="text-white flex-shrink-0 drop-shadow-sm" />
+                              )}
+                              <span className={cn(
+                                "text-xs font-medium text-white truncate drop-shadow-sm",
+                                isFired && "line-through opacity-80"
+                              )}>
+                                {cue.name}
+                              </span>
+                            </div>
                             <span className="text-[10px] text-white/80 truncate">
                               {cue.duration}
                             </span>

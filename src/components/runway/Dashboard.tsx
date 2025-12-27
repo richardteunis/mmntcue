@@ -1026,6 +1026,8 @@ const Dashboard: React.FC = () => {
                         onAssetDropOnCue={handleAssetDropOnCue}
                         onAssetDropToCreate={handleAssetDropToCreate}
                         onTrackEdit={(track) => { setEditingTrack(track); setIsAddTrackOpen(true); }}
+                        getCueStatus={showState.getCueStatus}
+                        nextCueId={showState.nextCue?.id}
                         playbackState={playback}
                       />
                     ) : (
@@ -1048,6 +1050,8 @@ const Dashboard: React.FC = () => {
                         scrollRef={timelineScrollRef}
                         onAssetDropOnCue={handleAssetDropOnCue}
                         onAssetDropToCreate={(asset) => handleAssetDropToCreate(asset, 'audio', 0)}
+                        getCueStatus={showState.getCueStatus}
+                        nextCueId={showState.nextCue?.id}
                         playbackState={playback}
                       />
                     )}
