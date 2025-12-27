@@ -150,7 +150,7 @@ const SegmentEditorBin: React.FC<SegmentEditorBinProps> = ({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="p-2 space-y-1.5">
           {/* Add segment form */}
           {isAddingSegment && (
