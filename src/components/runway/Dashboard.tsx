@@ -18,6 +18,9 @@ import CollaboratorCursors from './CollaboratorCursors';
 import ViewPresenceIndicator from './ViewPresenceIndicator';
 import PlaybackSettingsModal from './PlaybackSettingsModal';
 import BottomControlSystem from './BottomControlSystem';
+import NextCuePanel from './NextCuePanel';
+import GoButton from './GoButton';
+import ShowTimingBar from './ShowTimingBar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -27,10 +30,12 @@ import { useCues, useAISuggestions } from '@/hooks/useCues';
 import { useRealtimePresence } from '@/hooks/useRealtimePresence';
 import { useCueAssets } from '@/hooks/useAssets';
 import { usePlaybackState } from '@/hooks/usePlaybackState';
+import { useShowState } from '@/hooks/useShowState';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Cue, ViewMode, CueSuggestion, Show } from '@/types/cue';
 import { Asset, PlaybackSettings, DEFAULT_PLAYBACK_SETTINGS } from '@/types/asset';
 import ShowFormModal from './ShowFormModal';
+import { ShowMode } from './ShowOperationsBar';
 
 // Default tracks
 const DEFAULT_TRACKS: Track[] = [
@@ -110,6 +115,12 @@ const Dashboard: React.FC = () => {
   // Shared playback state for both timeline and table views
   const playbackCues = useMemo(() => cues.map(c => ({ id: c.id, time: c.start_time, duration: c.duration })), [cues]);
   const playback = usePlaybackState(playbackCues);
+  
+  // Show state management (cue status, GO button, timing)
+  const showState = useShowState(cues, playback.currentTimeSeconds);
+  
+  // Show mode state
+  const [showMode, setShowMode] = useState<ShowMode>('planning');
   
   // Realtime presence
   const presenceUser = useMemo(() => {
