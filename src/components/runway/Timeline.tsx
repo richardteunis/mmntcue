@@ -572,49 +572,129 @@ const Timeline: React.FC<TimelineProps> = ({
         </div>
       </div>
 
-      {/* Run of Show Grid */}
-      <div 
-        ref={(el) => {
-          tableContainerRef.current = el;
-          if (scrollRef && 'current' in scrollRef) {
-            (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
-          }
-        }}
-        className={cn(
-          "flex-1 overflow-auto border-t border-border transition-colors",
-          isDropZoneActive && "bg-runway-teal/5 ring-2 ring-runway-teal ring-inset"
+      {/* Run of Show Grid with Segment Side Rail */}
+      <div className="flex-1 flex overflow-hidden border-t border-border">
+        {/* Segment Side Rail */}
+        {segments.length > 0 && (
+          <div className="w-[100px] flex-shrink-0 border-r border-border bg-muted/30 relative overflow-hidden">
+            {/* Header spacer to align with table header */}
+            <div className="h-[41px] border-b-2 border-border bg-muted/50 flex items-center justify-center">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <Flag className="h-3 w-3" /> Segment
+              </span>
+            </div>
+            {/* Segment brackets container */}
+            <div className="relative">
+              {filteredCues.map((cue, index) => {
+                const segmentInfo = getSegmentRowInfo(index);
+                if (!segmentInfo.segment) {
+                  return (
+                    <div key={cue.id} className="h-[49px] flex items-center px-2">
+                      <span className="text-xs text-muted-foreground">—</span>
+                    </div>
+                  );
+                }
+                
+                const { segment, isFirst, isLast } = segmentInfo;
+                const bracketColor = segment.color || '#6B7280';
+                
+                return (
+                  <div key={cue.id} className="h-[49px] flex items-stretch relative">
+                    {/* Vertical bracket indicator */}
+                    <div className="w-6 flex items-center justify-center relative flex-shrink-0">
+                      {/* Top cap for first row */}
+                      {isFirst && (
+                        <div 
+                          className="absolute top-0 left-3 w-3 h-0.5 rounded-tl"
+                          style={{ backgroundColor: bracketColor }}
+                        />
+                      )}
+                      {/* Vertical line */}
+                      <div 
+                        className="absolute left-3 w-0.5"
+                        style={{ 
+                          backgroundColor: bracketColor,
+                          top: isFirst ? '0' : '0',
+                          bottom: isLast ? '0' : '0',
+                          height: isFirst && isLast ? '100%' : isFirst ? '50%' : isLast ? '50%' : '100%',
+                          marginTop: isFirst && !isLast ? '50%' : '0',
+                          marginBottom: isLast && !isFirst ? '50%' : '0'
+                        }}
+                      />
+                      {/* Bottom cap for last row */}
+                      {isLast && (
+                        <div 
+                          className="absolute bottom-0 left-3 w-3 h-0.5 rounded-bl"
+                          style={{ backgroundColor: bracketColor }}
+                        />
+                      )}
+                    </div>
+                    {/* Segment name - only show on first row */}
+                    <div className="flex-1 flex items-center pr-2 overflow-hidden">
+                      {isFirst && (
+                        <span 
+                          className="text-xs font-medium truncate"
+                          style={{ color: bracketColor }}
+                        >
+                          {segment.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
-        onScroll={(e) => {
-          const target = e.target as HTMLDivElement;
-          onViewportChange?.(target.scrollLeft, target.scrollTop);
-        }}
-        onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('application/json')) {
-            e.preventDefault();
-            setIsDropZoneActive(true);
-          }
-        }}
-        onDragLeave={(e) => {
-          // Only deactivate if leaving the container entirely
-          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+        
+        {/* Table container */}
+        <div 
+          ref={(el) => {
+            tableContainerRef.current = el;
+            if (scrollRef && 'current' in scrollRef) {
+              (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+            }
+          }}
+          className={cn(
+            "flex-1 overflow-auto transition-colors",
+            isDropZoneActive && "bg-runway-teal/5 ring-2 ring-runway-teal ring-inset"
+          )}
+          onScroll={(e) => {
+            const target = e.target as HTMLDivElement;
+            onViewportChange?.(target.scrollLeft, target.scrollTop);
+            // Sync segment rail scroll
+            const sideRail = target.previousElementSibling?.querySelector('.relative') as HTMLElement;
+            if (sideRail) {
+              sideRail.style.transform = `translateY(-${target.scrollTop}px)`;
+            }
+          }}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes('application/json')) {
+              e.preventDefault();
+              setIsDropZoneActive(true);
+            }
+          }}
+          onDragLeave={(e) => {
+            // Only deactivate if leaving the container entirely
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+              setIsDropZoneActive(false);
+            }
+          }}
+          onDrop={(e) => {
+            const jsonData = e.dataTransfer.getData('application/json');
+            if (jsonData && !dropTargetCueId) {
+              try {
+                const assetData = JSON.parse(jsonData);
+                if (assetData.file_url && onAssetDropToCreate) {
+                  e.preventDefault();
+                  onAssetDropToCreate(assetData);
+                }
+              } catch {}
+            }
             setIsDropZoneActive(false);
-          }
-        }}
-        onDrop={(e) => {
-          const jsonData = e.dataTransfer.getData('application/json');
-          if (jsonData && !dropTargetCueId) {
-            try {
-              const assetData = JSON.parse(jsonData);
-              if (assetData.file_url && onAssetDropToCreate) {
-                e.preventDefault();
-                onAssetDropToCreate(assetData);
-              }
-            } catch {}
-          }
-          setIsDropZoneActive(false);
-          setDropTargetCueId(null);
-        }}
-      >
+            setDropTargetCueId(null);
+          }}
+        >
         <Table className="border-collapse">
           <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow className="hover:bg-transparent border-b-2 border-border bg-muted/50">
@@ -636,13 +716,7 @@ const Timeline: React.FC<TimelineProps> = ({
                 />
               </TableHead>
               <TableHead className="w-[50px] text-center font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">Cue</TableHead>
-              {segments.length > 0 && (
-                <TableHead className="w-[90px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50 bg-muted/30 p-0">
-                  <div className="flex items-center gap-1 px-2">
-                    <Flag className="h-3 w-3" /> Segment
-                  </div>
-                </TableHead>
-              )}
+              <TableHead className="min-w-[250px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">Items</TableHead>
               <TableHead className="min-w-[250px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">Items</TableHead>
               <TableHead className="w-[100px] font-semibold text-[10px] uppercase tracking-wider border-r border-border/50">
                 <div className="flex items-center gap-1">
@@ -748,70 +822,6 @@ const Timeline: React.FC<TimelineProps> = ({
                   <TableCell className="text-center font-mono text-xs text-muted-foreground py-3 border-r border-border/50">
                     {index + 1}
                   </TableCell>
-                  {segments.length > 0 && (
-                    <TableCell className="p-0 border-r border-border/50 relative">
-                      {(() => {
-                        const segmentInfo = getSegmentRowInfo(index);
-                        if (!segmentInfo.segment) return <span className="text-xs text-muted-foreground px-2">—</span>;
-                        
-                        const { segment, isFirst, isLast, isMiddle } = segmentInfo;
-                        const bracketColor = segment.color || 'hsl(var(--muted-foreground))';
-                        
-                        return (
-                          <div className="flex items-stretch h-full min-h-[48px]">
-                            {/* Vertical bracket indicator */}
-                            <div 
-                              className="w-6 flex items-center justify-center relative"
-                              style={{ minHeight: '100%' }}
-                            >
-                              {/* Top cap for first row */}
-                              {isFirst && (
-                                <div 
-                                  className="absolute top-0 left-2 w-2 h-0.5 rounded-tl"
-                                  style={{ backgroundColor: bracketColor }}
-                                />
-                              )}
-                              {/* Vertical line */}
-                              <div 
-                                className={cn(
-                                  "absolute left-2 w-0.5",
-                                  isFirst && "top-0",
-                                  isLast && "bottom-0",
-                                  !isFirst && !isLast && "top-0 bottom-0"
-                                )}
-                                style={{ 
-                                  backgroundColor: bracketColor,
-                                  top: isFirst ? '0' : '0',
-                                  bottom: isLast ? '0' : '0',
-                                  height: isFirst || isLast ? '50%' : '100%',
-                                  marginTop: isFirst ? '50%' : '0',
-                                  marginBottom: isLast ? '50%' : '0'
-                                }}
-                              />
-                              {/* Bottom cap for last row */}
-                              {isLast && (
-                                <div 
-                                  className="absolute bottom-0 left-2 w-2 h-0.5 rounded-bl"
-                                  style={{ backgroundColor: bracketColor }}
-                                />
-                              )}
-                            </div>
-                            {/* Segment name - only show on first row */}
-                            <div className="flex-1 flex items-center pr-2">
-                              {isFirst && (
-                                <span 
-                                  className="text-xs font-medium truncate"
-                                  style={{ color: bracketColor }}
-                                >
-                                  {segment.name}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </TableCell>
-                  )}
                   <TableCell className="py-3 border-r border-border/50">
                     <div className="flex items-center gap-2">
                       <GripVertical 
@@ -985,6 +995,7 @@ const Timeline: React.FC<TimelineProps> = ({
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       {/* Playhead Progress Bar */}

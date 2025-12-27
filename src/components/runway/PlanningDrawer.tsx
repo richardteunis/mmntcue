@@ -25,6 +25,25 @@ import {
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+
+// Predefined segment colors
+const SEGMENT_COLORS = [
+  '#14B8A6', // teal
+  '#22C55E', // green
+  '#EAB308', // yellow
+  '#F97316', // orange
+  '#EF4444', // red
+  '#8B5CF6', // purple
+  '#3B82F6', // blue
+  '#EC4899', // pink
+  '#6366F1', // indigo
+  '#84CC16', // lime
+];
 
 // Segment types
 export interface Segment {
@@ -34,6 +53,7 @@ export interface Segment {
   actualDuration: number; // calculated from cues
   cueCount: number;
   status: 'empty' | 'balanced' | 'overloaded';
+  color?: string | null;
 }
 
 // Moment marker types
@@ -66,8 +86,9 @@ interface PlanningDrawerProps {
   notes?: PlanningNote[];
   onSegmentClick?: (segmentId: string) => void;
   onSegmentReorder?: (segmentId: string, newIndex: number) => void;
-  onSegmentCreate?: (name: string, targetDuration: number) => void;
-  onSegmentUpdate?: (segmentId: string, name: string, targetDuration: number) => void;
+  onSegmentCreate?: (name: string, targetDuration: number, color?: string) => void;
+  onSegmentUpdate?: (segmentId: string, name: string, targetDuration: number, color?: string) => void;
+  onSegmentColorChange?: (segmentId: string, color: string) => void;
   onSegmentDelete?: (segmentId: string) => void;
   onAddMoment?: (type: MomentType, label: string, notes?: string) => void;
   onRemoveMoment?: (momentId: string) => void;
@@ -112,6 +133,7 @@ const PlanningDrawer: React.FC<PlanningDrawerProps> = ({
   onSegmentReorder,
   onSegmentCreate,
   onSegmentUpdate,
+  onSegmentColorChange,
   onSegmentDelete,
   onAddMoment,
   onRemoveMoment,
@@ -350,6 +372,32 @@ const PlanningDrawer: React.FC<PlanningDrawerProps> = ({
                         : cn("cursor-pointer hover:bg-muted/50", getStatusColor(segment.status))
                     )}
                   >
+                    {/* Color indicator with picker */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          className="w-3 h-10 rounded-sm cursor-pointer hover:ring-2 hover:ring-primary transition-all flex-shrink-0"
+                          style={{ backgroundColor: segment.color || '#6B7280' }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-2" align="start">
+                        <div className="grid grid-cols-5 gap-1">
+                          {SEGMENT_COLORS.map((color) => (
+                            <button
+                              key={color}
+                              className={cn(
+                                "w-6 h-6 rounded cursor-pointer hover:scale-110 transition-transform border-2",
+                                segment.color === color ? "border-foreground" : "border-transparent"
+                              )}
+                              style={{ backgroundColor: color }}
+                              onClick={() => onSegmentColorChange?.(segment.id, color)}
+                            />
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                    
                     {/* Reorder buttons */}
                     <div className="flex flex-col gap-0.5">
                       <Button
