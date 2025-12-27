@@ -18,11 +18,12 @@ import CollaboratorCursors from './CollaboratorCursors';
 import ViewPresenceIndicator from './ViewPresenceIndicator';
 import PlaybackSettingsModal from './PlaybackSettingsModal';
 import BottomControlSystem from './BottomControlSystem';
+import PlanningDrawer from './PlanningDrawer';
+import PlanningStatusChip from './PlanningStatusChip';
 import NextCuePanel from './NextCuePanel';
 import GoButton from './GoButton';
 import ShowTimingBar from './ShowTimingBar';
 import LiveModeControlBar from './LiveModeControlBar';
-import ShowHealthIndicator from './ShowHealthIndicator';
 import IssueBar from './IssueBar';
 import GoFeedback from './GoFeedback';
 import PanicSafetyButton from './PanicSafetyButton';
@@ -1033,9 +1034,9 @@ const Dashboard: React.FC = () => {
                         </Button>
                       </div>
                       <div className="flex items-center gap-2">
-                        {/* Show Health Indicator - Planning mode only */}
+                        {/* Planning Status Chip - Planning mode only */}
                         {showMode === 'planning' && (
-                          <ShowHealthIndicator
+                          <PlanningStatusChip
                             totalDuration={cues.reduce((total, cue) => {
                               const parts = cue.start_time.split(':').map(Number);
                               const durParts = cue.duration.split(':').map(Number);
@@ -1127,8 +1128,16 @@ const Dashboard: React.FC = () => {
                       />
                     )}
                     
-                    {/* Bottom Control System - Only show in planning/rehearsal, hidden in live mode */}
-                    {showMode !== 'live' && (
+                    {/* Planning Drawer - Only in planning mode */}
+                    {showMode === 'planning' && (
+                      <PlanningDrawer
+                        showId={activeShowId}
+                        isExpanded={true}
+                      />
+                    )}
+                    
+                    {/* Bottom Control System - Only in rehearsal mode */}
+                    {showMode === 'rehearsal' && (
                       <BottomControlSystem
                         showId={activeShowId}
                         selectedCueId={selectedCueId}

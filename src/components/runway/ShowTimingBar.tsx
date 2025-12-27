@@ -29,7 +29,8 @@ import {
   Radio,
   Users,
   Calendar,
-  FileText
+  FileText,
+  LayoutGrid
 } from 'lucide-react';
 import { ShowStatus, ShowControlState } from '@/hooks/useShowState';
 
@@ -156,48 +157,52 @@ const ShowTimingBar: React.FC<ShowTimingBarProps> = ({
   };
 
   // ==================== PLANNING MODE ====================
+  // Simplified for design focus - emphasizes total runtime, hides playback controls
   if (mode === 'planning') {
     return (
       <>
-        {/* Planning Mode Banner */}
-        <div className="w-full py-2 px-4 flex items-center justify-between bg-primary/10 border-b border-primary/20">
+        {/* Planning Mode Banner - Calm, structure-focused */}
+        <div className="w-full py-2 px-4 flex items-center justify-between bg-primary/5 border-b border-primary/10">
           <div className="flex items-center gap-3">
-            <Badge className="bg-primary text-primary-foreground px-3 py-1 text-sm font-semibold">
-              📋 PLANNING MODE
+            <Badge className="bg-primary/10 text-primary border border-primary/20 px-3 py-1 text-xs font-medium">
+              <LayoutGrid className="h-3 w-3 mr-1.5" />
+              PLANNING
             </Badge>
-            {showName && (
-              <span className="text-sm font-medium text-foreground">{showName}</span>
-            )}
+            <span className="text-xs text-muted-foreground">Build & structure the show</span>
           </div>
           
           <div className="flex items-center gap-4">
-            {/* Show Stats */}
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" />
-                <span className="font-mono">{formatTime(totalDuration)}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5" />
-                <span>{cueCount} Cues</span>
-              </div>
-              {lastEdited && (
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5" />
-                  <span>{lastEdited}</span>
-                </div>
-              )}
+            {/* Total Runtime - PRIMARY focus in planning */}
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground uppercase">Total</span>
+              <span className="font-mono text-lg font-semibold tabular-nums">
+                {formatTime(totalDuration)}
+              </span>
+            </div>
+            
+            {/* Cue count */}
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <FileText className="h-3.5 w-3.5" />
+              <span>{cueCount} Cues</span>
+            </div>
+
+            {/* Wall clock - minimal */}
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground border-l border-border pl-4">
+              <span className="font-mono tabular-nums">
+                {wallClock.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+              </span>
             </div>
 
             {/* Mode Switcher */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  Switch to Rehearsal
-                  <ChevronDown className="h-3.5 w-3.5" />
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8">
+                  Start Rehearsal
+                  <ChevronDown className="h-3 w-3" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="bg-popover">
                 <DropdownMenuItem onClick={() => handleModeSelect('rehearsal')}>
                   🎭 Start Rehearsal
                 </DropdownMenuItem>
