@@ -890,94 +890,110 @@ const Dashboard: React.FC = () => {
             />
           ) : (
           <div className="flex flex-1 overflow-hidden relative">
-            {/* Next Cue Panel - Right side */}
-            <NextCuePanel
-              nextCue={showState.nextCue}
-              nextCueIndex={showState.nextCueIndex}
-              upcomingCues={showState.upcomingCues}
-              controlState={showState.controlState}
-              showTiming={{ overUnder: showState.showTiming.overUnder, status: showState.showTiming.status }}
-              getCueStatus={showState.getCueStatus}
-              className="w-72 flex-shrink-0 border-r border-border"
-            />
+            {/* Next Cue Panel - Only visible in rehearsal and live modes */}
+            {(showMode === 'rehearsal' || showMode === 'live') && (
+              <NextCuePanel
+                nextCue={showState.nextCue}
+                nextCueIndex={showState.nextCueIndex}
+                upcomingCues={showState.upcomingCues}
+                controlState={showState.controlState}
+                showTiming={{ overUnder: showState.showTiming.overUnder, status: showState.showTiming.status }}
+                getCueStatus={showState.getCueStatus}
+                className={
+                  showMode === 'live' 
+                    ? "w-80 flex-shrink-0 border-r-2 border-primary/30 bg-card" 
+                    : "w-72 flex-shrink-0 border-r border-border"
+                }
+              />
+            )}
             
             <ResizablePanelGroup direction="horizontal" className="flex-1">
-              <ResizablePanel defaultSize={75} minSize={50} id="timeline-panel">
+              <ResizablePanel defaultSize={showMode === 'planning' ? 100 : 75} minSize={50} id="timeline-panel">
                 <div className="h-full flex flex-col">
-                  <div className="p-3 border-b border-border flex items-center justify-between gap-4 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <Button onClick={handleAddCue} size="sm">
-                        <PlusCircle size={16} className="mr-1.5" /> Add Cue
-                      </Button>
-                      <Button 
-                        onClick={() => setIsAddTrackOpen(true)} 
-                        size="sm" 
-                        variant="outline"
-                      >
-                        <Layers size={16} className="mr-1.5" /> Add Track
-                      </Button>
-                      {selectedCue && (
-                        <Button onClick={() => handleEditCue()} size="sm" variant="outline">
-                          <Edit size={16} className="mr-1.5" /> Edit
+                  {/* Toolbar - Only show in planning/rehearsal modes, hidden in live */}
+                  {showMode !== 'live' && (
+                    <div className="p-3 border-b border-border flex items-center justify-between gap-4 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <Button onClick={handleAddCue} size="sm">
+                          <PlusCircle size={16} className="mr-1.5" /> Add Cue
                         </Button>
-                      )}
-                      {selectedCueIds.length > 1 && (
-                        <>
-                          <Button 
-                            onClick={() => setIsBulkEditOpen(true)} 
-                            size="sm" 
-                            variant="outline"
-                          >
-                            <Pencil size={16} className="mr-1.5" /> Edit ({selectedCueIds.length})
+                        <Button 
+                          onClick={() => setIsAddTrackOpen(true)} 
+                          size="sm" 
+                          variant="outline"
+                        >
+                          <Layers size={16} className="mr-1.5" /> Add Track
+                        </Button>
+                        {selectedCue && (
+                          <Button onClick={() => handleEditCue()} size="sm" variant="outline">
+                            <Edit size={16} className="mr-1.5" /> Edit
                           </Button>
-                          <Button 
-                            onClick={handleBulkDeleteConfirm} 
-                            size="sm" 
-                            variant="destructive"
-                          >
-                            <Trash2 size={16} className="mr-1.5" /> Delete ({selectedCueIds.length})
-                          </Button>
-                        </>
-                      )}
-                      <Button 
-                        onClick={() => setIsAIPanelOpen(true)} 
-                        size="sm" 
-                        variant="outline"
-                        className="bg-gradient-to-r from-primary/10 to-accent/10 hover:from-primary/20 hover:to-accent/20"
-                      >
-                        <Sparkles size={16} className="mr-1.5" /> AI Suggest
-                      </Button>
-                      <Button 
-                        onClick={handleEditShow} 
-                        size="sm" 
-                        variant="outline"
-                      >
-                        <Settings size={16} className="mr-1.5" /> Edit Show
-                      </Button>
+                        )}
+                        {selectedCueIds.length > 1 && (
+                          <>
+                            <Button 
+                              onClick={() => setIsBulkEditOpen(true)} 
+                              size="sm" 
+                              variant="outline"
+                            >
+                              <Pencil size={16} className="mr-1.5" /> Edit ({selectedCueIds.length})
+                            </Button>
+                            <Button 
+                              onClick={handleBulkDeleteConfirm} 
+                              size="sm" 
+                              variant="destructive"
+                            >
+                              <Trash2 size={16} className="mr-1.5" /> Delete ({selectedCueIds.length})
+                            </Button>
+                          </>
+                        )}
+                        <Button 
+                          onClick={() => setIsAIPanelOpen(true)} 
+                          size="sm" 
+                          variant="outline"
+                          className="bg-gradient-to-r from-primary/10 to-accent/10 hover:from-primary/20 hover:to-accent/20"
+                        >
+                          <Sparkles size={16} className="mr-1.5" /> AI Suggest
+                        </Button>
+                        <Button 
+                          onClick={handleEditShow} 
+                          size="sm" 
+                          variant="outline"
+                        >
+                          <Settings size={16} className="mr-1.5" /> Edit Show
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {selectedCueIds.length > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            <CheckSquare size={14} className="inline mr-1" />
+                            {selectedCueIds.length} selected
+                          </span>
+                        )}
+                        {/* Show users in other views */}
+                        {activeUsers.length > 0 && (
+                          <ViewPresenceIndicator 
+                            users={activeUsers} 
+                            currentArea={viewMode === 'timeline' ? 'timeline' : 'table'}
+                            followingUserId={followingUserId}
+                            onFollowUser={setFollowingUserId}
+                            onManagePermissions={(userId) => {
+                              setPermissionUserId(userId);
+                              setIsShareOpen(true);
+                            }}
+                          />
+                        )}
+                        <ViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {selectedCueIds.length > 0 && (
-                        <span className="text-xs text-muted-foreground">
-                          <CheckSquare size={14} className="inline mr-1" />
-                          {selectedCueIds.length} selected
-                        </span>
-                      )}
-                      {/* Show users in other views */}
-                      {activeUsers.length > 0 && (
-                        <ViewPresenceIndicator 
-                          users={activeUsers} 
-                          currentArea={viewMode === 'timeline' ? 'timeline' : 'table'}
-                          followingUserId={followingUserId}
-                          onFollowUser={setFollowingUserId}
-                          onManagePermissions={(userId) => {
-                            setPermissionUserId(userId);
-                            setIsShareOpen(true);
-                          }}
-                        />
-                      )}
+                  )}
+
+                  {/* Live mode: minimal toolbar with just view toggle */}
+                  {showMode === 'live' && (
+                    <div className="p-2 border-b border-border/50 flex items-center justify-end gap-2 bg-muted/30">
                       <ViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />
                     </div>
-                  </div>
+                  )}
                   
                   <div className="flex-1 flex flex-col overflow-hidden">
                     {viewMode === 'timeline' ? (
@@ -1025,39 +1041,45 @@ const Dashboard: React.FC = () => {
                       />
                     )}
                     
-                    {/* Bottom Control System - Quick Actions, VOG, Assets */}
-                    <BottomControlSystem
-                      showId={activeShowId}
-                      selectedCueId={selectedCueId}
-                      selectedCueType={selectedCue?.type}
-                      mode="planning"
-                      onAssetDragStart={(asset) => {
-                        // Handle asset drag for dropping on cues
-                      }}
-                      onAddCue={async (type, name) => {
-                        const nextStartTime = getNextStartTime();
-                        const newCue = {
-                          name,
-                          type,
-                          track: 'Stage Direction',
-                          start_time: nextStartTime,
-                          duration: '00:00:30',
-                          position: cues.length * 100,
-                          width: 100,
-                          color: type === 'ops_note' ? 'bg-runway-warning' : 'bg-runway-teal',
-                          notes: null,
-                          effects: [],
-                          auto_follow: false,
-                          order_index: cues.length
-                        };
-                        await addCue(newCue, false);
-                      }}
-                    />
+                    {/* Bottom Control System - Only show in planning/rehearsal, hidden in live mode */}
+                    {showMode !== 'live' && (
+                      <BottomControlSystem
+                        showId={activeShowId}
+                        selectedCueId={selectedCueId}
+                        selectedCueType={selectedCue?.type}
+                        mode={showMode}
+                        controlState={showState.controlState}
+                        onAssetDragStart={(asset) => {
+                          // Handle asset drag for dropping on cues
+                        }}
+                        onAddCue={async (type, name) => {
+                          const nextStartTime = getNextStartTime();
+                          const newCue = {
+                            name,
+                            type,
+                            track: 'Stage Direction',
+                            start_time: nextStartTime,
+                            duration: '00:00:30',
+                            position: cues.length * 100,
+                            width: 100,
+                            color: type === 'ops_note' ? 'bg-runway-warning' : 'bg-runway-teal',
+                            notes: null,
+                            effects: [],
+                            auto_follow: false,
+                            order_index: cues.length
+                          };
+                          await addCue(newCue, false);
+                        }}
+                        onStandby={showState.standby}
+                        onHold={showState.hold}
+                      />
+                    )}
                   </div>
                 </div>
               </ResizablePanel>
               
-              {selectedCueId && (
+              {/* Cue detail panel - only show in planning/rehearsal for editing */}
+              {selectedCueId && showMode !== 'live' && (
                 <>
                   <ResizableHandle withHandle />
                   <ResizablePanel defaultSize={25} minSize={20} id="cue-panel">
@@ -1077,17 +1099,19 @@ const Dashboard: React.FC = () => {
               )}
             </ResizablePanelGroup>
             
-            {/* Floating GO Button */}
-            <GoButton
-              nextCue={showState.nextCue}
-              nextCueIndex={showState.nextCueIndex}
-              controlState={showState.controlState}
-              onGo={showState.goToNext}
-              onStandby={showState.standby}
-              onHold={showState.hold}
-              onResume={showState.resume}
-              variant="floating"
-            />
+            {/* Floating GO Button - Only in rehearsal/live modes */}
+            {(showMode === 'rehearsal' || showMode === 'live') && (
+              <GoButton
+                nextCue={showState.nextCue}
+                nextCueIndex={showState.nextCueIndex}
+                controlState={showState.controlState}
+                onGo={showState.goToNext}
+                onStandby={showState.standby}
+                onHold={showState.hold}
+                onResume={showState.resume}
+                variant="floating"
+              />
+            )}
           </div>
           )}
         </div>
