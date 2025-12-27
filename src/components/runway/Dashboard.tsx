@@ -37,6 +37,7 @@ import { useRealtimePresence } from '@/hooks/useRealtimePresence';
 import { useCueAssets } from '@/hooks/useAssets';
 import { usePlaybackState } from '@/hooks/usePlaybackState';
 import { useShowState } from '@/hooks/useShowState';
+import { useSegments } from '@/hooks/useSegments';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Cue, ViewMode, CueSuggestion, Show } from '@/types/cue';
 import { Asset, PlaybackSettings, DEFAULT_PLAYBACK_SETTINGS } from '@/types/asset';
@@ -118,6 +119,14 @@ const Dashboard: React.FC = () => {
   // Use database hooks with active show
   const { cues, loading, animatingCues, addCue, updateCue, deleteCue, duplicateCue, reorderCues, bulkUpdateCues, bulkDeleteCues, getNextStartTime } = useCues(activeShowId);
   const { suggestions, loading: aiLoading, getSuggestions, setSuggestions } = useAISuggestions();
+  const { 
+    segments: dbSegments, 
+    loading: segmentsLoading, 
+    createSegment, 
+    updateSegment: updateDbSegment, 
+    deleteSegment: deleteDbSegment, 
+    reorderSegment: reorderDbSegment 
+  } = useSegments(activeShowId);
   
   // Shared playback state for both timeline and table views
   const playbackCues = useMemo(() => cues.map(c => ({ id: c.id, time: c.start_time, duration: c.duration })), [cues]);
@@ -145,14 +154,6 @@ const Dashboard: React.FC = () => {
     cueName?: string;
     note?: string;
     timestamp: Date;
-  }>>([]);
-  
-  // Custom segments state for planning mode
-  const [customSegments, setCustomSegments] = useState<Array<{
-    id: string;
-    name: string;
-    targetDuration: number;
-    order: number;
   }>>([]);
   
   // Auto-collapse sidebar when entering live mode
@@ -311,18 +312,18 @@ const Dashboard: React.FC = () => {
   // Convert database cues to timeline cues (already sorted by start_time from hook)
   const timelineCues = cues.map(cueToTimelineCue);
 
-  // Calculate segment stats based on custom segments and cues
+  // Calculate segment stats based on database segments and cues
   const segmentsWithStats = useMemo(() => {
-    if (customSegments.length === 0) return [];
+    if (dbSegments.length === 0) return [];
     
-    // Sort by order
-    const sorted = [...customSegments].sort((a, b) => a.order - b.order);
+    // Sort by order_index
+    const sorted = [...dbSegments].sort((a, b) => a.order_index - b.order_index);
     
     // Calculate cumulative start times
     let currentStart = 0;
     return sorted.map(segment => {
       const startTime = currentStart;
-      const endTime = startTime + segment.targetDuration;
+      const endTime = startTime + segment.target_duration;
       currentStart = endTime;
       
       // Find cues in this time range
@@ -336,7 +337,7 @@ const Dashboard: React.FC = () => {
       });
       
       const cueCount = segmentCues.length;
-      const actualDuration = segment.targetDuration;
+      const actualDuration = segment.target_duration;
       
       // Calculate total cue time in segment
       const totalCueTime = segmentCues.reduce((sum, cue) => {
@@ -347,7 +348,7 @@ const Dashboard: React.FC = () => {
       let status: 'empty' | 'balanced' | 'overloaded' = 'balanced';
       if (cueCount === 0) {
         status = 'empty';
-      } else if (totalCueTime > segment.targetDuration * 0.9) {
+      } else if (totalCueTime > segment.target_duration * 0.9) {
         status = 'overloaded';
       }
       
@@ -356,13 +357,14 @@ const Dashboard: React.FC = () => {
         name: segment.name,
         startTime,
         endTime,
-        targetDuration: segment.targetDuration,
+        targetDuration: segment.target_duration,
         actualDuration,
         cueCount,
         status,
+        color: segment.color,
       };
     });
-  }, [customSegments, cues]);
+  }, [dbSegments, cues]);
 
   // Generate segments for SegmentRail (different format)
   const showSegments = useMemo(() => {
@@ -372,49 +374,26 @@ const Dashboard: React.FC = () => {
       startTime: s.startTime,
       endTime: s.endTime,
       targetDuration: s.targetDuration,
+      color: s.color,
     }));
   }, [segmentsWithStats]);
 
-  // Segment management handlers
-  const handleSegmentCreate = useCallback((name: string, targetDuration: number) => {
-    const newSegment = {
-      id: `segment-${Date.now()}`,
-      name,
-      targetDuration,
-      order: customSegments.length,
-    };
-    setCustomSegments(prev => [...prev, newSegment]);
-  }, [customSegments.length]);
+  // Segment management handlers using database
+  const handleSegmentCreate = useCallback(async (name: string, targetDuration: number) => {
+    await createSegment(name, targetDuration);
+  }, [createSegment]);
 
-  const handleSegmentUpdate = useCallback((segmentId: string, name: string, targetDuration: number) => {
-    setCustomSegments(prev => prev.map(s => 
-      s.id === segmentId ? { ...s, name, targetDuration } : s
-    ));
-  }, []);
+  const handleSegmentUpdate = useCallback(async (segmentId: string, name: string, targetDuration: number) => {
+    await updateDbSegment(segmentId, { name, target_duration: targetDuration });
+  }, [updateDbSegment]);
 
-  const handleSegmentDelete = useCallback((segmentId: string) => {
-    setCustomSegments(prev => {
-      const filtered = prev.filter(s => s.id !== segmentId);
-      // Re-order remaining segments
-      return filtered.map((s, i) => ({ ...s, order: i }));
-    });
-  }, []);
+  const handleSegmentDelete = useCallback(async (segmentId: string) => {
+    await deleteDbSegment(segmentId);
+  }, [deleteDbSegment]);
 
-  const handleSegmentReorder = useCallback((segmentId: string, newIndex: number) => {
-    setCustomSegments(prev => {
-      const segment = prev.find(s => s.id === segmentId);
-      if (!segment) return prev;
-      
-      const filtered = prev.filter(s => s.id !== segmentId);
-      const reordered = [
-        ...filtered.slice(0, newIndex),
-        segment,
-        ...filtered.slice(newIndex)
-      ];
-      
-      return reordered.map((s, i) => ({ ...s, order: i }));
-    });
-  }, []);
+  const handleSegmentReorder = useCallback(async (segmentId: string, newIndex: number) => {
+    await reorderDbSegment(segmentId, newIndex);
+  }, [reorderDbSegment]);
 
   const handleSegmentClick = useCallback((segmentId: string) => {
     // Could scroll timeline to segment start, for now just log
@@ -422,11 +401,9 @@ const Dashboard: React.FC = () => {
   }, []);
 
   // Handle segment duration update from SegmentRail (just updates duration, keeps name)
-  const handleSegmentDurationUpdate = useCallback((segmentId: string, newDuration: number) => {
-    setCustomSegments(prev => prev.map(s => 
-      s.id === segmentId ? { ...s, targetDuration: newDuration } : s
-    ));
-  }, []);
+  const handleSegmentDurationUpdate = useCallback(async (segmentId: string, newDuration: number) => {
+    await updateDbSegment(segmentId, { target_duration: newDuration });
+  }, [updateDbSegment]);
   
   // Handle cue selection - also updates the show state to track current position
   const handleCueSelect = useCallback((cueId: string | null, cue: TimelineCue | null) => {
@@ -1253,6 +1230,7 @@ const Dashboard: React.FC = () => {
                         getCueStatus={showState.getCueStatus}
                         nextCueId={showState.nextCue?.id}
                         playbackState={playback}
+                        segments={showSegments}
                       />
                     )}
                     
