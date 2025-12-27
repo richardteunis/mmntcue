@@ -910,11 +910,11 @@ const Dashboard: React.FC = () => {
                     ? "w-96 flex-shrink-0" 
                     : "w-72 flex-shrink-0"
                 }
-                // Pass GO button handlers for live mode
-                onGo={showMode === 'live' ? showState.goToNext : undefined}
-                onStandby={showMode === 'live' ? showState.standby : undefined}
-                onHold={showMode === 'live' ? showState.hold : undefined}
-                onResume={showMode === 'live' ? showState.resume : undefined}
+                // Pass GO button handlers for live and rehearsal modes
+                onGo={showState.goToNext}
+                onStandby={showState.standby}
+                onHold={showState.hold}
+                onResume={showState.resume}
               />
             )}
             
@@ -1110,20 +1110,7 @@ const Dashboard: React.FC = () => {
               )}
             </ResizablePanelGroup>
             
-            {/* Floating GO Button - Only in rehearsal mode (live mode has GO in NextCuePanel) */}
-            {showMode === 'rehearsal' && (
-              <GoButton
-                nextCue={showState.nextCue}
-                nextCueIndex={showState.nextCueIndex}
-                controlState={showState.controlState}
-                mode={showMode}
-                onGo={showState.goToNext}
-                onStandby={showState.standby}
-                onHold={showState.hold}
-                onResume={showState.resume}
-                variant="floating"
-              />
-            )}
+            {/* GO Button moved into NextCuePanel for both rehearsal and live modes */}
           </div>
           )}
         </div>

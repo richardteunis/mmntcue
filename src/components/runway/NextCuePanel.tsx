@@ -366,8 +366,8 @@ const NextCuePanel: React.FC<NextCuePanelProps> = ({
           </div>
         </CollapsibleContent>
         
-        {/* Integrated GO Button - Live mode only */}
-        {isLiveMode && onGo && (
+        {/* Integrated GO Button */}
+        {onGo && (
           <div className="p-4 border-t border-border bg-card">
             <Button
               onClick={controlState === 'hold' ? onResume : onGo}
