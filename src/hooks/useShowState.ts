@@ -93,18 +93,46 @@ export const useShowState = (cues: Cue[], currentTimeSeconds: number = 0): UseSh
     return cueStates.get(cueId)?.status || 'upcoming';
   }, [cueStates]);
 
-  // Determine current cue index - use manual if set, otherwise find first unfired
-  const currentCueIndex = useMemo(() => {
-    if (manualCueIndex !== null && manualCueIndex >= 0 && manualCueIndex < sortedCues.length) {
-      return manualCueIndex;
+  // Calculate which cue should be "next" based on playhead position
+  const playheadCueIndex = useMemo(() => {
+    if (sortedCues.length === 0) return -1;
+    
+    // Find the cue that the playhead is at or the next cue after the playhead
+    for (let i = 0; i < sortedCues.length; i++) {
+      const cue = sortedCues[i];
+      const cueStartSeconds = timeToSeconds(cue.start_time);
+      const cueDurationSeconds = timeToSeconds(cue.duration);
+      const cueEndSeconds = cueStartSeconds + cueDurationSeconds;
+      
+      // If playhead is before or within this cue, this is the current/next cue
+      if (currentTimeSeconds < cueEndSeconds) {
+        return i;
+      }
     }
-    // Find first unfired cue
-    const index = sortedCues.findIndex(cue => {
-      const state = cueStates.get(cue.id);
-      return !state || state.status === 'upcoming' || state.status === 'ready';
-    });
-    return index >= 0 ? index : sortedCues.length - 1;
-  }, [sortedCues, cueStates, manualCueIndex]);
+    
+    // Playhead is past all cues, return last cue
+    return sortedCues.length - 1;
+  }, [sortedCues, currentTimeSeconds]);
+
+  // Determine current cue index - prioritize playhead position, then manual selection
+  const currentCueIndex = useMemo(() => {
+    // If manual index is set and matches roughly where playhead is, use it
+    // Otherwise, follow the playhead
+    if (manualCueIndex !== null && manualCueIndex >= 0 && manualCueIndex < sortedCues.length) {
+      // Check if playhead has moved significantly away from the manually selected cue
+      const manualCue = sortedCues[manualCueIndex];
+      const manualCueStart = timeToSeconds(manualCue.start_time);
+      const manualCueEnd = manualCueStart + timeToSeconds(manualCue.duration);
+      
+      // If playhead is within or near the manual cue, keep manual selection
+      if (currentTimeSeconds >= manualCueStart - 5 && currentTimeSeconds <= manualCueEnd + 5) {
+        return manualCueIndex;
+      }
+    }
+    
+    // Follow playhead position
+    return playheadCueIndex >= 0 ? playheadCueIndex : 0;
+  }, [sortedCues, manualCueIndex, playheadCueIndex, currentTimeSeconds]);
 
   // Next cue is the cue at current index
   const nextCue = sortedCues[currentCueIndex] || null;
