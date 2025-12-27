@@ -21,6 +21,7 @@ import BottomControlSystem from './BottomControlSystem';
 import NextCuePanel from './NextCuePanel';
 import GoButton from './GoButton';
 import ShowTimingBar from './ShowTimingBar';
+import LiveModeControlBar from './LiveModeControlBar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -899,10 +900,11 @@ const Dashboard: React.FC = () => {
                 controlState={showState.controlState}
                 showTiming={{ overUnder: showState.showTiming.overUnder, status: showState.showTiming.status }}
                 getCueStatus={showState.getCueStatus}
+                mode={showMode}
                 className={
                   showMode === 'live' 
-                    ? "w-80 flex-shrink-0 border-r-2 border-primary/30 bg-card" 
-                    : "w-72 flex-shrink-0 border-r border-border"
+                    ? "w-96 flex-shrink-0" 
+                    : "w-72 flex-shrink-0"
                 }
               />
             )}
@@ -1105,6 +1107,7 @@ const Dashboard: React.FC = () => {
                 nextCue={showState.nextCue}
                 nextCueIndex={showState.nextCueIndex}
                 controlState={showState.controlState}
+                mode={showMode}
                 onGo={showState.goToNext}
                 onStandby={showState.standby}
                 onHold={showState.hold}

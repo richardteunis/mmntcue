@@ -25,7 +25,11 @@ import {
   Pause, 
   AlertTriangle, 
   RefreshCw,
-  ChevronDown
+  ChevronDown,
+  Radio,
+  Users,
+  Calendar,
+  FileText
 } from 'lucide-react';
 import { ShowStatus, ShowControlState } from '@/hooks/useShowState';
 
@@ -42,10 +46,14 @@ interface ShowTimingBarProps {
   };
   controlState: ShowControlState;
   mode?: ShowMode;
+  showName?: string;
+  cueCount?: number;
+  lastEdited?: string;
   isPlaying: boolean;
   onPlayPause: () => void;
   onReset: () => void;
   onModeChange?: (mode: ShowMode) => void;
+  onEndShow?: () => void;
   className?: string;
 }
 
@@ -75,14 +83,19 @@ const ShowTimingBar: React.FC<ShowTimingBarProps> = ({
   showTiming,
   controlState,
   mode = 'planning',
+  showName,
+  cueCount = 0,
+  lastEdited,
   isPlaying,
   onPlayPause,
   onReset,
   onModeChange,
+  onEndShow,
   className
 }) => {
   const [wallClock, setWallClock] = useState(new Date());
   const [confirmLiveMode, setConfirmLiveMode] = useState(false);
+  const [confirmEndShow, setConfirmEndShow] = useState(false);
   const [pendingMode, setPendingMode] = useState<ShowMode | null>(null);
 
   // Update wall clock every second
@@ -111,7 +124,7 @@ const ShowTimingBar: React.FC<ShowTimingBarProps> = ({
   const controlIndicator = useMemo(() => {
     switch (controlState) {
       case 'standby':
-        return { text: 'STANDBY', color: 'bg-runway-warning', icon: Pause };
+        return { text: 'STANDBY', color: 'bg-runway-warning text-black', icon: Pause };
       case 'hold':
         return { text: 'HOLD', color: 'bg-destructive', icon: AlertTriangle };
       case 'go':
@@ -120,38 +133,6 @@ const ShowTimingBar: React.FC<ShowTimingBarProps> = ({
         return null;
     }
   }, [controlState]);
-
-  // Mode styling
-  const getModeStyles = (m: ShowMode) => {
-    switch (m) {
-      case 'live':
-        return { 
-          icon: '🔴', 
-          label: 'LIVE', 
-          bg: 'bg-destructive', 
-          text: 'text-white',
-          border: 'border-destructive'
-        };
-      case 'rehearsal':
-        return { 
-          icon: '🎭', 
-          label: 'REHEARSAL', 
-          bg: 'bg-runway-warning', 
-          text: 'text-black',
-          border: 'border-runway-warning'
-        };
-      default:
-        return { 
-          icon: '📋', 
-          label: 'PLANNING', 
-          bg: 'bg-primary', 
-          text: 'text-primary-foreground',
-          border: 'border-primary'
-        };
-    }
-  };
-
-  const currentModeStyle = getModeStyles(mode);
 
   const handleModeSelect = (newMode: ShowMode) => {
     if (newMode === 'live' && mode !== 'live') {
@@ -170,204 +151,336 @@ const ShowTimingBar: React.FC<ShowTimingBarProps> = ({
     setPendingMode(null);
   };
 
+  const handleEndShow = () => {
+    setConfirmEndShow(true);
+  };
+
+  // ==================== PLANNING MODE ====================
+  if (mode === 'planning') {
+    return (
+      <>
+        {/* Planning Mode Banner */}
+        <div className="w-full py-2 px-4 flex items-center justify-between bg-primary/10 border-b border-primary/20">
+          <div className="flex items-center gap-3">
+            <Badge className="bg-primary text-primary-foreground px-3 py-1 text-sm font-semibold">
+              📋 PLANNING MODE
+            </Badge>
+            {showName && (
+              <span className="text-sm font-medium text-foreground">{showName}</span>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-4">
+            {/* Show Stats */}
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                <span className="font-mono">{formatTime(totalDuration)}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5" />
+                <span>{cueCount} Cues</span>
+              </div>
+              {lastEdited && (
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5" />
+                  <span>{lastEdited}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Mode Switcher */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  Switch to Rehearsal
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleModeSelect('rehearsal')}>
+                  🎭 Start Rehearsal
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => handleModeSelect('live')}
+                  className="text-destructive font-semibold"
+                >
+                  🔴 Go Live
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Confirmation Dialogs */}
+        <AlertDialog open={confirmLiveMode} onOpenChange={setConfirmLiveMode}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Switch to Live Mode?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Switching to LIVE mode will enable real equipment control. 
+                Cues will trigger actual hardware and systems.
+                <br /><br />
+                <strong className="text-destructive">
+                  ⚠️ This action affects live production equipment.
+                </strong>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setPendingMode(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmModeChange}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                Go Live
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
+    );
+  }
+
+  // ==================== REHEARSAL MODE ====================
+  if (mode === 'rehearsal') {
+    return (
+      <>
+        {/* Rehearsal Mode Banner */}
+        <div className="w-full py-1.5 px-4 flex items-center justify-center gap-2 bg-runway-warning/20 border-b border-runway-warning/30">
+          <Badge className="bg-runway-warning text-black px-3 py-0.5 text-xs font-bold">
+            🎭 REHEARSAL
+          </Badge>
+          <span className="text-xs text-runway-warning font-medium">
+            Cues will not trigger equipment
+          </span>
+        </div>
+
+        {/* Timing Bar */}
+        <div className={cn(
+          "flex items-center justify-between gap-4 px-4 py-2 bg-card/80 border-b border-border backdrop-blur-sm",
+          className
+        )}>
+          {/* Left: Playback controls and current time */}
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={onPlayPause}
+            >
+              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            </Button>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={onReset}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Reset to start</TooltipContent>
+            </Tooltip>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground uppercase">Current</span>
+              <span className="font-mono text-lg font-semibold tabular-nums">
+                {formatTime(currentTimeSeconds)}
+              </span>
+              <span className="text-muted-foreground">/</span>
+              <span className="font-mono text-sm text-muted-foreground tabular-nums">
+                {formatTime(totalDuration)}
+              </span>
+            </div>
+          </div>
+
+          {/* Center: Status */}
+          <div className="flex items-center gap-4">
+            {controlIndicator && (
+              <Badge className={cn("text-xs font-bold uppercase px-3 py-1", controlIndicator.color)}>
+                <controlIndicator.icon className="h-3 w-3 mr-1.5" />
+                {controlIndicator.text}
+              </Badge>
+            )}
+
+            <div className={cn("flex items-center gap-2 px-3 py-1 rounded", statusStyles.bg)}>
+              <span className={cn("text-xs font-semibold uppercase", statusStyles.color)}>
+                {statusStyles.text}
+              </span>
+              {showTiming.overUnder !== 0 && (
+                <span className={cn("font-mono text-sm font-bold", statusStyles.color)}>
+                  {formatOverUnder(showTiming.overUnder)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Mode switcher and clock */}
+          <div className="flex items-center gap-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 border-runway-warning/50">
+                  Switch Mode
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleModeSelect('planning')}>
+                  📋 Return to Planning
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => handleModeSelect('live')}
+                  className="text-destructive font-semibold"
+                >
+                  🔴 Go Live
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="flex items-center gap-2 pl-3 border-l border-border">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="font-mono text-sm tabular-nums">
+                {wallClock.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Confirmation Dialog */}
+        <AlertDialog open={confirmLiveMode} onOpenChange={setConfirmLiveMode}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Switch to Live Mode?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Switching to LIVE mode will enable real equipment control.
+                <br /><br />
+                <strong className="text-destructive">⚠️ This action affects live production equipment.</strong>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setPendingMode(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmModeChange} className="bg-destructive hover:bg-destructive/90">
+                Go Live
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
+    );
+  }
+
+  // ==================== LIVE MODE ====================
   return (
     <>
-      {/* Mode Banner - Prominent at top */}
-      <div className={cn(
-        "w-full py-1.5 px-4 flex items-center justify-center gap-2 text-sm font-semibold",
-        mode === 'live' && "bg-destructive/20 border-b border-destructive/30",
-        mode === 'rehearsal' && "bg-runway-warning/20 border-b border-runway-warning/30",
-        mode === 'planning' && "bg-primary/10 border-b border-primary/20"
-      )}>
-        <span>{currentModeStyle.icon}</span>
-        <span className={cn(
-          mode === 'live' && "text-destructive",
-          mode === 'rehearsal' && "text-runway-warning",
-          mode === 'planning' && "text-primary"
-        )}>
-          {currentModeStyle.label} MODE
-        </span>
-        {mode === 'planning' && (
-          <span className="text-xs text-muted-foreground font-normal ml-2">
-            — Changes will not affect live show
-          </span>
-        )}
-        {mode === 'rehearsal' && (
-          <span className="text-xs text-muted-foreground font-normal ml-2">
-            — Cues fire but don't trigger hardware
-          </span>
-        )}
-        {mode === 'live' && (
-          <span className="text-xs text-white/70 font-normal ml-2">
-            — Equipment control active
-          </span>
-        )}
+      {/* Live Mode Banner - RED, PROMINENT */}
+      <div className="w-full py-2 px-4 flex items-center justify-between bg-destructive border-b border-destructive">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Radio className="h-4 w-4 text-white animate-pulse" />
+            <span className="text-white font-bold text-sm uppercase tracking-wide">
+              🔴 LIVE MODE — Equipment Active
+            </span>
+          </div>
+        </div>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleEndShow}
+          className="bg-white/10 border-white/30 text-white hover:bg-white/20 hover:text-white"
+        >
+          End Show
+        </Button>
       </div>
 
+      {/* Enhanced Timing Bar for Live */}
       <div className={cn(
-        "flex items-center justify-between gap-4 px-4 py-2 bg-card/80 border-b border-border backdrop-blur-sm",
+        "flex items-center justify-between gap-4 px-4 py-3 bg-card border-b-2 border-border",
         className
       )}>
-        {/* Left: Playback controls and current time */}
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={onPlayPause}
-            disabled={mode === 'planning'}
-          >
-            {isPlaying ? (
-              <Pause className="h-4 w-4" />
-            ) : (
-              <Play className="h-4 w-4" />
-            )}
-          </Button>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={onReset}
-              >
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Reset to start</TooltipContent>
-          </Tooltip>
-
+        {/* Left: Current time - LARGER */}
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground uppercase">Current</span>
-            <span className="font-mono text-lg font-semibold tabular-nums">
+            <span className="font-mono text-2xl font-bold tabular-nums">
               {formatTime(currentTimeSeconds)}
             </span>
           </div>
-
-          <span className="text-muted-foreground">/</span>
-
+          <span className="text-muted-foreground text-lg">/</span>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground uppercase">Total</span>
-            <span className="font-mono text-sm text-muted-foreground tabular-nums">
+            <span className="font-mono text-lg text-muted-foreground tabular-nums">
               {formatTime(totalDuration)}
             </span>
           </div>
         </div>
 
-        {/* Center: Control state and Over/Under */}
+        {/* Center: Status - MORE PROMINENT */}
         <div className="flex items-center gap-4">
-          {/* Control state indicator */}
           {controlIndicator && (
-            <Badge 
-              className={cn(
-                "text-xs font-bold uppercase px-3 py-1",
-                controlIndicator.color,
-                controlState === 'hold' && "animate-pulse"
-              )}
-            >
-              <controlIndicator.icon className="h-3 w-3 mr-1.5" />
+            <Badge className={cn(
+              "text-sm font-bold uppercase px-4 py-1.5",
+              controlIndicator.color,
+              controlState === 'hold' && "animate-pulse"
+            )}>
+              <controlIndicator.icon className="h-4 w-4 mr-2" />
               {controlIndicator.text}
             </Badge>
           )}
 
-          {/* Over/Under display */}
           <div className={cn(
-            "flex items-center gap-2 px-3 py-1 rounded",
-            statusStyles.bg
+            "flex items-center gap-2 px-4 py-2 rounded-lg",
+            statusStyles.bg,
+            showTiming.status === 'significantly_behind' && "animate-pulse"
           )}>
-            <span className={cn("text-xs font-semibold uppercase", statusStyles.color)}>
+            <span className={cn("text-sm font-bold uppercase", statusStyles.color)}>
               {statusStyles.text}
             </span>
             {showTiming.overUnder !== 0 && (
-              <span className={cn("font-mono text-sm font-bold", statusStyles.color)}>
+              <span className={cn("font-mono text-lg font-bold", statusStyles.color)}>
                 {formatOverUnder(showTiming.overUnder)}
               </span>
             )}
           </div>
+
+          {/* Live indicator */}
+          <Badge className="bg-destructive text-white px-3 py-1 animate-pulse">
+            <Radio className="h-3 w-3 mr-1.5" />
+            LIVE
+          </Badge>
         </div>
 
-        {/* Right: Mode switcher and wall clock */}
-        <div className="flex items-center gap-3">
-          {/* Mode switcher dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "h-7 text-xs gap-1.5 font-semibold",
-                  currentModeStyle.border
-                )}
-              >
-                {currentModeStyle.icon} {currentModeStyle.label}
-                <ChevronDown className="h-3 w-3 opacity-70" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem 
-                onClick={() => handleModeSelect('planning')}
-                className={mode === 'planning' ? 'bg-primary/10' : ''}
-              >
-                📋 Planning
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => handleModeSelect('rehearsal')}
-                className={mode === 'rehearsal' ? 'bg-runway-warning/10' : ''}
-              >
-                🎭 Rehearsal
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => handleModeSelect('live')}
-                className={cn(
-                  mode === 'live' ? 'bg-destructive/10' : '',
-                  "text-destructive font-semibold"
-                )}
-              >
-                🔴 Live
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Wall clock */}
-          <div className="flex items-center gap-2 pl-3 border-l border-border">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="font-mono text-sm tabular-nums">
-              {wallClock.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit',
-                hour12: true 
-              })}
-            </span>
-          </div>
+        {/* Right: Clock - LARGER */}
+        <div className="flex items-center gap-2">
+          <Clock className="h-5 w-5 text-muted-foreground" />
+          <span className="font-mono text-xl font-semibold tabular-nums">
+            {wallClock.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+          </span>
         </div>
       </div>
 
-      {/* Confirmation Dialog for Live Mode */}
-      <AlertDialog open={confirmLiveMode} onOpenChange={setConfirmLiveMode}>
+      {/* End Show Confirmation */}
+      <AlertDialog open={confirmEndShow} onOpenChange={setConfirmEndShow}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              Switch to Live Mode?
-            </AlertDialogTitle>
+            <AlertDialogTitle>End Live Show?</AlertDialogTitle>
             <AlertDialogDescription>
-              Switching to LIVE mode will enable real equipment control. 
-              Cues will trigger actual hardware and systems.
-              <br /><br />
-              <strong className="text-destructive">
-                ⚠️ This action affects live production equipment.
-              </strong>
+              This will exit live mode and return to planning. 
+              Make sure all cues have been fired and the show is complete.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingMode(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmModeChange}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              Go Live
+            <AlertDialogCancel>Continue Show</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              onEndShow?.();
+              onModeChange?.('planning');
+              setConfirmEndShow(false);
+            }}>
+              End Show
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

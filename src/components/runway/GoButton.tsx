@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Play, Pause, AlertTriangle } from 'lucide-react';
+import { Play, Pause } from 'lucide-react';
 import { ShowControlState } from '@/hooks/useShowState';
 import { Cue } from '@/types/cue';
+import { ShowMode } from './ShowOperationsBar';
 
 interface GoButtonProps {
   nextCue: Cue | null;
   nextCueIndex: number;
   controlState: ShowControlState;
+  mode?: ShowMode;
   onGo: () => void;
   onStandby: () => void;
   onHold: () => void;
@@ -22,6 +24,7 @@ const GoButton: React.FC<GoButtonProps> = ({
   nextCue,
   nextCueIndex,
   controlState,
+  mode = 'rehearsal',
   onGo,
   onStandby,
   onHold,
@@ -30,6 +33,8 @@ const GoButton: React.FC<GoButtonProps> = ({
   variant = 'inline',
   disabled = false
 }) => {
+  const isLiveMode = mode === 'live';
+
   // Keyboard shortcuts - ONLY this button responds to Space/Enter
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -77,8 +82,13 @@ const GoButton: React.FC<GoButtonProps> = ({
     return 'ready';
   }, [controlState, nextCue, disabled]);
 
-  // State-based styling
+  // State-based styling - LARGER for live mode
   const stateStyles = useMemo(() => {
+    const cueName = nextCue?.name || '';
+    const truncatedName = cueName.length > (isLiveMode ? 30 : 25) 
+      ? cueName.slice(0, isLiveMode ? 30 : 25) + '...' 
+      : cueName;
+
     switch (buttonState) {
       case 'ready':
         return {
@@ -87,8 +97,8 @@ const GoButton: React.FC<GoButtonProps> = ({
           animation: 'animate-pulse',
           icon: Play,
           label: 'GO',
-          sublabel: nextCue ? `#${nextCueIndex + 1} ${nextCue.name.slice(0, 25)}${nextCue.name.length > 25 ? '...' : ''}` : '',
-          hint: 'Press [Space] to GO'
+          sublabel: nextCue ? `#${nextCueIndex + 1} ${truncatedName}` : '',
+          hint: 'Press [SPACE] to GO'
         };
       case 'standby':
         return {
@@ -97,8 +107,8 @@ const GoButton: React.FC<GoButtonProps> = ({
           animation: 'animate-[pulse_1s_ease-in-out_infinite]',
           icon: Pause,
           label: 'READY',
-          sublabel: nextCue ? `#${nextCueIndex + 1} ${nextCue.name.slice(0, 25)}${nextCue.name.length > 25 ? '...' : ''}` : '',
-          hint: 'Press [Space] to GO'
+          sublabel: nextCue ? `#${nextCueIndex + 1} ${truncatedName}` : '',
+          hint: 'Press [SPACE] to GO'
         };
       case 'hold':
         return {
@@ -108,7 +118,7 @@ const GoButton: React.FC<GoButtonProps> = ({
           icon: Pause,
           label: 'ON HOLD',
           sublabel: 'Show Paused',
-          hint: 'Press [Space] to Resume'
+          hint: 'Press [SPACE] to Resume'
         };
       case 'disabled':
       default:
@@ -122,7 +132,7 @@ const GoButton: React.FC<GoButtonProps> = ({
           hint: 'Add cues to timeline'
         };
     }
-  }, [buttonState, nextCue, nextCueIndex]);
+  }, [buttonState, nextCue, nextCueIndex, isLiveMode]);
 
   const Icon = stateStyles.icon;
   const isDisabled = buttonState === 'disabled';
@@ -130,19 +140,24 @@ const GoButton: React.FC<GoButtonProps> = ({
   if (variant === 'floating') {
     return (
       <div className={cn(
-        "fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2",
+        "fixed z-50 flex flex-col items-end gap-2",
+        isLiveMode ? "bottom-8 right-8" : "bottom-6 right-6",
         className
       )}>
-        {/* Main GO Button - THE ONLY PRIMARY ACTION */}
+        {/* Main GO Button */}
         <Button
           size="lg"
           disabled={isDisabled}
           className={cn(
-            "h-24 px-10 gap-4 shadow-2xl rounded-2xl transition-all font-bold",
+            "shadow-2xl rounded-2xl transition-all font-bold",
             stateStyles.bg,
             stateStyles.text,
             stateStyles.animation,
-            isDisabled && "cursor-not-allowed opacity-50"
+            isDisabled && "cursor-not-allowed opacity-50",
+            // Size based on mode
+            isLiveMode 
+              ? "h-32 px-12 gap-5" // HUGE in live mode
+              : "h-24 px-10 gap-4"
           )}
           onClick={() => {
             if (isDisabled) return;
@@ -153,16 +168,27 @@ const GoButton: React.FC<GoButtonProps> = ({
             }
           }}
         >
-          <Icon className="h-8 w-8" />
+          <Icon className={cn(isLiveMode ? "h-12 w-12" : "h-8 w-8")} />
           <div className="flex flex-col items-start">
-            <span className="text-2xl leading-tight">{stateStyles.label}</span>
-            <span className="text-sm opacity-80 font-normal max-w-48 truncate">
+            <span className={cn(
+              "leading-tight font-extrabold",
+              isLiveMode ? "text-4xl" : "text-2xl"
+            )}>
+              {stateStyles.label}
+            </span>
+            <span className={cn(
+              "opacity-80 font-normal truncate",
+              isLiveMode ? "text-base max-w-64" : "text-sm max-w-48"
+            )}>
               {stateStyles.sublabel}
             </span>
           </div>
         </Button>
 
-        <span className="text-xs text-muted-foreground text-center opacity-70 mr-2">
+        <span className={cn(
+          "text-muted-foreground text-center opacity-70 mr-2",
+          isLiveMode ? "text-sm" : "text-xs"
+        )}>
           {stateStyles.hint}
         </span>
       </div>
@@ -175,11 +201,12 @@ const GoButton: React.FC<GoButtonProps> = ({
       size="lg"
       disabled={isDisabled}
       className={cn(
-        "h-16 px-6 gap-2 transition-all font-bold",
+        "transition-all font-bold",
         stateStyles.bg,
         stateStyles.text,
         stateStyles.animation,
         isDisabled && "cursor-not-allowed opacity-50",
+        isLiveMode ? "h-20 px-8 gap-3" : "h-16 px-6 gap-2",
         className
       )}
       onClick={() => {
@@ -191,11 +218,13 @@ const GoButton: React.FC<GoButtonProps> = ({
         }
       }}
     >
-      <Icon className="h-6 w-6" />
+      <Icon className={cn(isLiveMode ? "h-8 w-8" : "h-6 w-6")} />
       <div className="flex flex-col items-start">
-        <span className="text-lg leading-tight">{stateStyles.label}</span>
+        <span className={cn("leading-tight", isLiveMode ? "text-2xl" : "text-lg")}>
+          {stateStyles.label}
+        </span>
         {stateStyles.sublabel && (
-          <span className="text-xs opacity-70 font-normal">
+          <span className={cn("opacity-70 font-normal", isLiveMode ? "text-sm" : "text-xs")}>
             {stateStyles.sublabel}
           </span>
         )}
