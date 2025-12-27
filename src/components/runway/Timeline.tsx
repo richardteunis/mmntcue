@@ -574,48 +574,48 @@ const Timeline: React.FC<TimelineProps> = ({
 
       {/* Run of Show Grid with Segment Side Rail */}
       <div className="flex-1 flex overflow-hidden border-t border-border">
-        {/* Segment Side Rail */}
-        <div className="w-[120px] flex-shrink-0 border-r border-border bg-muted/30 relative overflow-hidden">
+        {/* Segment Side Rail - Narrow with rotated text */}
+        <div className="w-8 flex-shrink-0 border-r border-border bg-muted/30 relative overflow-hidden">
           {/* Header spacer to align with table header */}
           <div className="h-[41px] border-b-2 border-border bg-muted/50 flex items-center justify-center">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-              <Flag className="h-3 w-3" /> Segment
-            </span>
+            <Flag className="h-3 w-3 text-muted-foreground" />
           </div>
           {/* Segment rows container */}
           <div className="segment-rail-content relative" style={{ minHeight: `${filteredCues.length * 49}px` }}>
-            {filteredCues.map((cue, index) => {
-              const segmentInfo = getSegmentRowInfo(index);
-              const { segment, isFirst, isLast, isMiddle } = segmentInfo;
+            {/* Render segment groups as continuous blocks */}
+            {Array.from(segmentGroups.values()).map((group) => {
+              const { segment, startIdx, endIdx } = group;
               const segmentColor = segment?.color || '#6B7280';
-              const hasSegment = !!segment;
+              const rowCount = endIdx - startIdx + 1;
               
               return (
-                <div key={cue.id} className="h-[49px] flex items-stretch relative border-b border-border/30">
-                  {hasSegment ? (
-                    <>
-                      {/* Colored vertical bar on left edge */}
-                      <div 
-                        className="w-1 flex-shrink-0"
-                        style={{ backgroundColor: segmentColor }}
-                      />
-                      {/* Segment name area */}
-                      <div className="flex-1 flex items-center px-2 overflow-hidden">
-                        {isFirst && (
-                          <span 
-                            className="text-xs font-medium truncate"
-                            style={{ color: segmentColor }}
-                          >
-                            {segment.name}
-                          </span>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex-1 flex items-center px-3">
-                      <span className="text-xs text-muted-foreground">—</span>
-                    </div>
-                  )}
+                <div 
+                  key={segment.id}
+                  className="absolute left-0 right-0 flex"
+                  style={{
+                    top: `${startIdx * 49}px`,
+                    height: `${rowCount * 49}px`,
+                  }}
+                >
+                  {/* Colored vertical bar on left edge */}
+                  <div 
+                    className="w-1 flex-shrink-0"
+                    style={{ backgroundColor: segmentColor }}
+                  />
+                  {/* Rotated segment name */}
+                  <div className="flex-1 flex items-center justify-center overflow-hidden">
+                    <span 
+                      className="text-[10px] font-medium whitespace-nowrap"
+                      style={{ 
+                        color: segmentColor,
+                        writingMode: 'vertical-rl',
+                        textOrientation: 'mixed',
+                        transform: 'rotate(180deg)',
+                      }}
+                    >
+                      {segment.name}
+                    </span>
+                  </div>
                 </div>
               );
             })}
