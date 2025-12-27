@@ -1240,23 +1240,8 @@ const Dashboard: React.FC = () => {
                       />
                     )}
                     
-                    {/* Planning Drawer - Only in planning mode */}
-                    {showMode === 'planning' && (
-                      <PlanningDrawer
-                        showId={activeShowId}
-                        segments={segmentsWithStats}
-                        onSegmentClick={handleSegmentClick}
-                        onSegmentCreate={handleSegmentCreate}
-                        onSegmentUpdate={handleSegmentUpdate}
-                        onSegmentColorChange={handleSegmentColorChange}
-                        onSegmentDelete={handleSegmentDelete}
-                        onSegmentReorder={handleSegmentReorder}
-                        isExpanded={true}
-                      />
-                    )}
-                    
-                    {/* Bottom Control System - Only in rehearsal mode */}
-                    {showMode === 'rehearsal' && (
+                    {/* Bottom Control System - In planning and rehearsal modes */}
+                    {(showMode === 'planning' || showMode === 'rehearsal') && (
                       <BottomControlSystem
                         showId={activeShowId}
                         selectedCueId={selectedCueId}

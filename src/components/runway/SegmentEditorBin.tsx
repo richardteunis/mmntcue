@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   LayoutGrid,
   Plus,
@@ -151,7 +150,7 @@ const SegmentEditorBin: React.FC<SegmentEditorBinProps> = ({
       </div>
 
       {/* Content */}
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <div className="p-2 space-y-1.5">
           {/* Add segment form */}
           {isAddingSegment && (
@@ -365,7 +364,7 @@ const SegmentEditorBin: React.FC<SegmentEditorBinProps> = ({
             </div>
           ))}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 };

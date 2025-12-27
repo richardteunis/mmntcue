@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { 
@@ -146,7 +145,7 @@ const MediaBin: React.FC<MediaBinProps> = ({
       </div>
 
       {/* Content */}
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center h-full py-8 text-sm text-muted-foreground">
             Loading...
@@ -219,7 +218,7 @@ const MediaBin: React.FC<MediaBinProps> = ({
             })}
           </div>
         )}
-      </ScrollArea>
+      </div>
     </div>
   );
 };
