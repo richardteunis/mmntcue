@@ -859,6 +859,27 @@ const Dashboard: React.FC = () => {
             }}
           />
           
+          {/* Show Timing Bar - visible when a show is active */}
+          {activeShowId && (
+            <ShowTimingBar
+              currentTimeSeconds={playback.currentTimeSeconds}
+              totalDuration={cues.reduce((total, cue) => {
+                const parts = cue.start_time.split(':').map(Number);
+                const durParts = cue.duration.split(':').map(Number);
+                const endTime = (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0) + 
+                               (durParts[0] || 0) * 3600 + (durParts[1] || 0) * 60 + (durParts[2] || 0);
+                return Math.max(total, endTime);
+              }, 0)}
+              showTiming={showState.showTiming}
+              controlState={showState.controlState}
+              isRehearsalMode={showMode === 'rehearsal'}
+              isPlaying={playback.isPlaying}
+              onPlayPause={playback.togglePlay}
+              onReset={playback.reset}
+              onToggleRehearsalMode={() => setShowMode(prev => prev === 'rehearsal' ? 'live' : 'rehearsal')}
+            />
+          )}
+          
           {!activeShowId ? (
             <HomeView 
               onCreateShow={() => {
@@ -869,7 +890,23 @@ const Dashboard: React.FC = () => {
             />
           ) : (
           <div className="flex flex-1 overflow-hidden relative">
-            <ResizablePanelGroup direction="horizontal">
+            {/* Next Cue Panel - Right side */}
+            <NextCuePanel
+              nextCue={showState.nextCue}
+              nextCueIndex={showState.nextCueIndex}
+              upcomingCues={showState.upcomingCues}
+              controlState={showState.controlState}
+              showTiming={{ overUnder: showState.showTiming.overUnder, status: showState.showTiming.status }}
+              getCueStatus={showState.getCueStatus}
+              onGo={showState.goToNext}
+              onStandby={showState.standby}
+              onHold={showState.hold}
+              onResume={showState.resume}
+              onSkipCue={showState.skipCue}
+              className="w-72 flex-shrink-0 border-r border-border"
+            />
+            
+            <ResizablePanelGroup direction="horizontal" className="flex-1">
               <ResizablePanel defaultSize={75} minSize={50} id="timeline-panel">
                 <div className="h-full flex flex-col">
                   <div className="p-3 border-b border-border flex items-center justify-between gap-4 flex-wrap">
@@ -1044,6 +1081,18 @@ const Dashboard: React.FC = () => {
                 </>
               )}
             </ResizablePanelGroup>
+            
+            {/* Floating GO Button */}
+            <GoButton
+              nextCue={showState.nextCue}
+              nextCueIndex={showState.nextCueIndex}
+              controlState={showState.controlState}
+              onGo={showState.goToNext}
+              onStandby={showState.standby}
+              onHold={showState.hold}
+              onResume={showState.resume}
+              variant="floating"
+            />
           </div>
           )}
         </div>
