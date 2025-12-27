@@ -25,6 +25,8 @@ interface UseShowStateReturn {
   nextCue: Cue | null;
   nextCueIndex: number;
   upcomingCues: Cue[];
+  lastFiredCue: Cue | null;
+  lastFiredAt: Date | null;
   
   // Show control
   controlState: ShowControlState;
@@ -32,6 +34,11 @@ interface UseShowStateReturn {
   
   // Show timing
   showTiming: ShowTiming;
+  
+  // Navigation
+  currentCueIndex: number;
+  setCurrentCueIndex: (index: number) => void;
+  jumpToCue: (cueId: string) => void;
   
   // Actions
   fireCue: (cueId: string) => void;
@@ -65,10 +72,20 @@ export const useShowState = (cues: Cue[], currentTimeSeconds: number = 0): UseSh
   const [controlState, setControlState] = useState<ShowControlState>('idle');
   const [isRehearsalMode, setRehearsalMode] = useState(false);
   const [showStartTime, setShowStartTime] = useState<Date | null>(null);
+  const [manualCueIndex, setManualCueIndex] = useState<number | null>(null);
+  const [lastFiredCueId, setLastFiredCueId] = useState<string | null>(null);
+  const [lastFiredAt, setLastFiredAt] = useState<Date | null>(null);
 
-  // Sort cues by start time
+  // Sort cues by order_index first, then by start_time
   const sortedCues = useMemo(() => {
-    return [...cues].sort((a, b) => timeToSeconds(a.start_time) - timeToSeconds(b.start_time));
+    return [...cues].sort((a, b) => {
+      // First sort by order_index
+      if (a.order_index !== b.order_index) {
+        return a.order_index - b.order_index;
+      }
+      // Then by start_time as fallback
+      return timeToSeconds(a.start_time) - timeToSeconds(b.start_time);
+    });
   }, [cues]);
 
   // Get cue status
@@ -76,30 +93,33 @@ export const useShowState = (cues: Cue[], currentTimeSeconds: number = 0): UseSh
     return cueStates.get(cueId)?.status || 'upcoming';
   }, [cueStates]);
 
-  // Find next unfired cue
-  const nextCueInfo = useMemo(() => {
+  // Determine current cue index - use manual if set, otherwise find first unfired
+  const currentCueIndex = useMemo(() => {
+    if (manualCueIndex !== null && manualCueIndex >= 0 && manualCueIndex < sortedCues.length) {
+      return manualCueIndex;
+    }
+    // Find first unfired cue
     const index = sortedCues.findIndex(cue => {
       const state = cueStates.get(cue.id);
       return !state || state.status === 'upcoming' || state.status === 'ready';
     });
-    return {
-      cue: index >= 0 ? sortedCues[index] : null,
-      index
-    };
-  }, [sortedCues, cueStates]);
+    return index >= 0 ? index : sortedCues.length - 1;
+  }, [sortedCues, cueStates, manualCueIndex]);
 
-  const nextCue = nextCueInfo.cue;
-  const nextCueIndex = nextCueInfo.index;
+  // Next cue is the cue at current index
+  const nextCue = sortedCues[currentCueIndex] || null;
+  const nextCueIndex = currentCueIndex;
 
-  // Get upcoming cues (next 5 unfired)
+  // Get upcoming cues starting from current position
   const upcomingCues = useMemo(() => {
-    return sortedCues
-      .filter(cue => {
-        const state = cueStates.get(cue.id);
-        return !state || state.status === 'upcoming' || state.status === 'ready';
-      })
-      .slice(0, 5);
-  }, [sortedCues, cueStates]);
+    return sortedCues.slice(currentCueIndex, currentCueIndex + 6);
+  }, [sortedCues, currentCueIndex]);
+
+  // Get last fired cue
+  const lastFiredCue = useMemo(() => {
+    if (!lastFiredCueId) return null;
+    return sortedCues.find(c => c.id === lastFiredCueId) || null;
+  }, [sortedCues, lastFiredCueId]);
 
   // Calculate show timing
   const showTiming = useMemo((): ShowTiming => {
@@ -137,6 +157,21 @@ export const useShowState = (cues: Cue[], currentTimeSeconds: number = 0): UseSh
     return { scheduledElapsed, actualElapsed, overUnder, status };
   }, [showStartTime, sortedCues, cueStates]);
 
+  // Set current cue index manually (for navigation)
+  const setCurrentCueIndex = useCallback((index: number) => {
+    if (index >= 0 && index < sortedCues.length) {
+      setManualCueIndex(index);
+    }
+  }, [sortedCues.length]);
+
+  // Jump to a specific cue by ID
+  const jumpToCue = useCallback((cueId: string) => {
+    const index = sortedCues.findIndex(c => c.id === cueId);
+    if (index >= 0) {
+      setManualCueIndex(index);
+    }
+  }, [sortedCues]);
+
   // Fire a cue
   const fireCue = useCallback((cueId: string) => {
     setCueStates(prev => {
@@ -148,13 +183,23 @@ export const useShowState = (cues: Cue[], currentTimeSeconds: number = 0): UseSh
       return next;
     });
     
+    // Track last fired cue
+    setLastFiredCueId(cueId);
+    setLastFiredAt(new Date());
+    
     // Start show timer on first cue
     if (!showStartTime) {
       setShowStartTime(new Date());
     }
     
+    // Move to next cue after firing
+    const firedIndex = sortedCues.findIndex(c => c.id === cueId);
+    if (firedIndex >= 0 && firedIndex < sortedCues.length - 1) {
+      setManualCueIndex(firedIndex + 1);
+    }
+    
     setControlState('idle');
-  }, [showStartTime]);
+  }, [showStartTime, sortedCues]);
 
   // Skip a cue
   const skipCue = useCallback((cueId: string) => {
@@ -163,7 +208,13 @@ export const useShowState = (cues: Cue[], currentTimeSeconds: number = 0): UseSh
       next.set(cueId, { status: 'skipped' });
       return next;
     });
-  }, []);
+    
+    // Move to next cue after skipping
+    const skippedIndex = sortedCues.findIndex(c => c.id === cueId);
+    if (skippedIndex >= 0 && skippedIndex < sortedCues.length - 1) {
+      setManualCueIndex(skippedIndex + 1);
+    }
+  }, [sortedCues]);
 
   // Mark cue as failed
   const markCueFailed = useCallback((cueId: string) => {
@@ -188,9 +239,12 @@ export const useShowState = (cues: Cue[], currentTimeSeconds: number = 0): UseSh
     setCueStates(new Map());
     setControlState('idle');
     setShowStartTime(null);
+    setManualCueIndex(null);
+    setLastFiredCueId(null);
+    setLastFiredAt(null);
   }, []);
 
-  // Go to next cue
+  // Go to next cue (fire current)
   const goToNext = useCallback(() => {
     if (nextCue) {
       fireCue(nextCue.id);
@@ -226,9 +280,14 @@ export const useShowState = (cues: Cue[], currentTimeSeconds: number = 0): UseSh
     nextCue,
     nextCueIndex,
     upcomingCues,
+    lastFiredCue,
+    lastFiredAt,
     controlState,
     setControlState,
     showTiming,
+    currentCueIndex,
+    setCurrentCueIndex,
+    jumpToCue,
     fireCue,
     skipCue,
     markCueFailed,
