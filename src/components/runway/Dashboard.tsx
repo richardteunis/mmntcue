@@ -420,6 +420,13 @@ const Dashboard: React.FC = () => {
     // Could scroll timeline to segment start, for now just log
     console.log('Clicked segment:', segmentId);
   }, []);
+
+  // Handle segment duration update from SegmentRail (just updates duration, keeps name)
+  const handleSegmentDurationUpdate = useCallback((segmentId: string, newDuration: number) => {
+    setCustomSegments(prev => prev.map(s => 
+      s.id === segmentId ? { ...s, targetDuration: newDuration } : s
+    ));
+  }, []);
   
   // Handle cue selection - also updates the show state to track current position
   const handleCueSelect = useCallback((cueId: string | null, cue: TimelineCue | null) => {
@@ -1221,6 +1228,7 @@ const Dashboard: React.FC = () => {
                         playbackState={playback}
                         segments={showSegments}
                         onSegmentClick={handleSegmentClick}
+                        onSegmentUpdate={handleSegmentDurationUpdate}
                       />
                     ) : (
                       <Timeline 
