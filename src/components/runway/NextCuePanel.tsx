@@ -14,9 +14,12 @@ import {
   Square,
   Mic2,
   FileText,
-  CheckCircle2
+  CheckCircle2,
+  Play,
+  Pause
 } from 'lucide-react';
 import { ShowMode } from './ShowOperationsBar';
+import { Button } from '@/components/ui/button';
 
 interface NextCuePanelProps {
   nextCue: Cue | null;
@@ -34,6 +37,10 @@ interface NextCuePanelProps {
   isExpanded?: boolean;
   onToggleExpand?: () => void;
   className?: string;
+  onGo?: () => void;
+  onStandby?: () => void;
+  onHold?: () => void;
+  onResume?: () => void;
 }
 
 // Helper to get track icon
@@ -114,7 +121,11 @@ const NextCuePanel: React.FC<NextCuePanelProps> = ({
   lastFiredAt,
   isExpanded = true,
   onToggleExpand,
-  className
+  className,
+  onGo,
+  onStandby,
+  onHold,
+  onResume
 }) => {
   const TrackIcon = nextCue ? getTrackIcon(nextCue.type) : FileText;
   const [countdown, setCountdown] = useState<number>(0);
@@ -354,6 +365,52 @@ const NextCuePanel: React.FC<NextCuePanelProps> = ({
             )}
           </div>
         </CollapsibleContent>
+        
+        {/* Integrated GO Button - Live mode only */}
+        {isLiveMode && onGo && (
+          <div className="p-4 border-t border-border bg-card">
+            <Button
+              onClick={controlState === 'hold' ? onResume : onGo}
+              disabled={!nextCue}
+              className={cn(
+                "w-full h-20 text-xl font-bold transition-all",
+                controlState === 'hold' 
+                  ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                  : controlState === 'standby'
+                    ? "bg-runway-warning hover:bg-runway-warning/90 text-black animate-pulse"
+                    : "bg-runway-success hover:bg-runway-success/90 text-white",
+                !nextCue && "bg-muted text-muted-foreground cursor-not-allowed"
+              )}
+            >
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-2">
+                  {controlState === 'hold' ? (
+                    <>
+                      <Pause className="h-6 w-6" />
+                      <span>RESUME</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-6 w-6" />
+                      <span>GO</span>
+                    </>
+                  )}
+                </div>
+                {nextCue && controlState !== 'hold' && (
+                  <span className="text-sm font-normal opacity-90">
+                    #{nextCueIndex + 1} {nextCue.name}
+                  </span>
+                )}
+                {controlState === 'hold' && (
+                  <span className="text-sm font-normal">Press [H] to resume</span>
+                )}
+                {controlState !== 'hold' && (
+                  <span className="text-xs opacity-70">Press [Space]</span>
+                )}
+              </div>
+            </Button>
+          </div>
+        )}
       </div>
     </Collapsible>
   );
