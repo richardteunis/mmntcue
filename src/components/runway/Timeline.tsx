@@ -575,77 +575,52 @@ const Timeline: React.FC<TimelineProps> = ({
       {/* Run of Show Grid with Segment Side Rail */}
       <div className="flex-1 flex overflow-hidden border-t border-border">
         {/* Segment Side Rail */}
-        {segments.length > 0 && (
-          <div className="w-[100px] flex-shrink-0 border-r border-border bg-muted/30 relative overflow-hidden">
-            {/* Header spacer to align with table header */}
-            <div className="h-[41px] border-b-2 border-border bg-muted/50 flex items-center justify-center">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                <Flag className="h-3 w-3" /> Segment
-              </span>
-            </div>
-            {/* Segment brackets container */}
-            <div className="relative">
-              {filteredCues.map((cue, index) => {
-                const segmentInfo = getSegmentRowInfo(index);
-                if (!segmentInfo.segment) {
-                  return (
-                    <div key={cue.id} className="h-[49px] flex items-center px-2">
+        <div className="w-[120px] flex-shrink-0 border-r border-border bg-muted/30 relative overflow-hidden">
+          {/* Header spacer to align with table header */}
+          <div className="h-[41px] border-b-2 border-border bg-muted/50 flex items-center justify-center">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <Flag className="h-3 w-3" /> Segment
+            </span>
+          </div>
+          {/* Segment rows container */}
+          <div className="segment-rail-content relative" style={{ minHeight: `${filteredCues.length * 49}px` }}>
+            {filteredCues.map((cue, index) => {
+              const segmentInfo = getSegmentRowInfo(index);
+              const { segment, isFirst, isLast, isMiddle } = segmentInfo;
+              const segmentColor = segment?.color || '#6B7280';
+              const hasSegment = !!segment;
+              
+              return (
+                <div key={cue.id} className="h-[49px] flex items-stretch relative border-b border-border/30">
+                  {hasSegment ? (
+                    <>
+                      {/* Colored vertical bar on left edge */}
+                      <div 
+                        className="w-1 flex-shrink-0"
+                        style={{ backgroundColor: segmentColor }}
+                      />
+                      {/* Segment name area */}
+                      <div className="flex-1 flex items-center px-2 overflow-hidden">
+                        {isFirst && (
+                          <span 
+                            className="text-xs font-medium truncate"
+                            style={{ color: segmentColor }}
+                          >
+                            {segment.name}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex-1 flex items-center px-3">
                       <span className="text-xs text-muted-foreground">—</span>
                     </div>
-                  );
-                }
-                
-                const { segment, isFirst, isLast } = segmentInfo;
-                const bracketColor = segment.color || '#6B7280';
-                
-                return (
-                  <div key={cue.id} className="h-[49px] flex items-stretch relative">
-                    {/* Vertical bracket indicator */}
-                    <div className="w-6 flex items-center justify-center relative flex-shrink-0">
-                      {/* Top cap for first row */}
-                      {isFirst && (
-                        <div 
-                          className="absolute top-0 left-3 w-3 h-0.5 rounded-tl"
-                          style={{ backgroundColor: bracketColor }}
-                        />
-                      )}
-                      {/* Vertical line */}
-                      <div 
-                        className="absolute left-3 w-0.5"
-                        style={{ 
-                          backgroundColor: bracketColor,
-                          top: isFirst ? '0' : '0',
-                          bottom: isLast ? '0' : '0',
-                          height: isFirst && isLast ? '100%' : isFirst ? '50%' : isLast ? '50%' : '100%',
-                          marginTop: isFirst && !isLast ? '50%' : '0',
-                          marginBottom: isLast && !isFirst ? '50%' : '0'
-                        }}
-                      />
-                      {/* Bottom cap for last row */}
-                      {isLast && (
-                        <div 
-                          className="absolute bottom-0 left-3 w-3 h-0.5 rounded-bl"
-                          style={{ backgroundColor: bracketColor }}
-                        />
-                      )}
-                    </div>
-                    {/* Segment name - only show on first row */}
-                    <div className="flex-1 flex items-center pr-2 overflow-hidden">
-                      {isFirst && (
-                        <span 
-                          className="text-xs font-medium truncate"
-                          style={{ color: bracketColor }}
-                        >
-                          {segment.name}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
         
         {/* Table container */}
         <div 
@@ -663,9 +638,9 @@ const Timeline: React.FC<TimelineProps> = ({
             const target = e.target as HTMLDivElement;
             onViewportChange?.(target.scrollLeft, target.scrollTop);
             // Sync segment rail scroll
-            const sideRail = target.previousElementSibling?.querySelector('.relative') as HTMLElement;
-            if (sideRail) {
-              sideRail.style.transform = `translateY(-${target.scrollTop}px)`;
+            const segmentRailContent = target.previousElementSibling?.querySelector('.segment-rail-content') as HTMLElement;
+            if (segmentRailContent) {
+              segmentRailContent.style.transform = `translateY(-${target.scrollTop}px)`;
             }
           }}
           onDragOver={(e) => {
