@@ -82,7 +82,7 @@ const BottomControlSystem: React.FC<BottomControlSystemProps> = ({
   return (
     <>
       <div className={cn(
-        "flex w-full h-[240px] gap-2 p-2 bg-background border-t border-border"
+        "flex w-full min-h-[240px] max-h-[280px] gap-2 p-2 bg-background border-t border-border"
       )}>
         {/* Segment Editor Bin */}
         <div className="flex-1 min-w-0">
