@@ -9,18 +9,27 @@ import { cn } from '@/lib/utils';
 import type { Cue } from '@/types/cue';
 import ReviewChangesModal from './ReviewChangesModal';
 
+interface Segment {
+  id: string;
+  name: string;
+  target_duration: number;
+  color?: string;
+  order_index: number;
+}
+
 interface CocoChatProps {
   showId: string;
   cues: Cue[];
+  segments?: Segment[];
   canApplyChanges: boolean;
   onRefresh: () => void;
 }
 
 const QUICK_ACTIONS = [
   { icon: Clock, label: 'Shift time', prompt: 'Shift all cues by 5 minutes' },
-  { icon: Plus, label: 'Insert cue', prompt: 'Add a new cue called "Welcome" at the beginning' },
-  { icon: ArrowRight, label: 'Move item', prompt: 'Move the last cue to position 3' },
-  { icon: User, label: 'Set speaker', prompt: 'Set the speaker for cue 1 to "John Smith"' }
+  { icon: Plus, label: 'Add cue', prompt: 'Add a new cue called "Welcome" at the beginning' },
+  { icon: ArrowRight, label: 'Add segment', prompt: 'Add a new segment called "Opening" with 30 minutes' },
+  { icon: User, label: 'Analyze show', prompt: 'Analyze my show and suggest improvements' }
 ];
 
 // Typing indicator with animated dots
@@ -82,7 +91,7 @@ function StreamingMessage({ content, isLatest }: { content: string; isLatest: bo
   );
 }
 
-export default function CocoChat({ showId, cues, canApplyChanges, onRefresh }: CocoChatProps) {
+export default function CocoChat({ showId, cues, segments = [], canApplyChanges, onRefresh }: CocoChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -98,7 +107,7 @@ export default function CocoChat({ showId, cues, canApplyChanges, onRefresh }: C
     applyChanges,
     rejectChanges,
     clearHistory
-  } = useCuePilot(showId, cues);
+  } = useCuePilot(showId, cues, segments);
 
   // Track the latest assistant message for streaming effect
   useEffect(() => {

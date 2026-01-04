@@ -17,18 +17,12 @@ interface Cue {
   notes?: string;
 }
 
-interface ChangeOperation {
-  type: "insert" | "update" | "delete" | "move" | "shift";
-  item?: Record<string, unknown>;
-  id?: string;
-  changes?: Record<string, unknown>;
-  previous?: Record<string, unknown>;
-  index?: number;
-  from_index?: number;
-  to_index?: number;
-  ids?: string[];
-  time_delta?: number;
-  direction?: "forward" | "backward";
+interface Segment {
+  id: string;
+  name: string;
+  target_duration: number;
+  color?: string;
+  order_index: number;
 }
 
 serve(async (req) => {
@@ -37,7 +31,7 @@ serve(async (req) => {
   }
 
   try {
-    const { show_id, message, cues, history } = await req.json();
+    const { show_id, message, cues, segments, history } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -50,38 +44,69 @@ serve(async (req) => {
 
     // Build the system prompt with show context
     const cueList = (cues as Cue[])
-      .map((c, i) => `${i + 1}. "${c.name}" (${c.type}) - ${c.start_time}, ${c.duration} on ${c.track}`)
+      .map((c, i) => `${i + 1}. [${c.id.slice(0,8)}] "${c.name}" (${c.type}) - ${c.start_time}, dur: ${c.duration}, track: ${c.track}${c.notes ? `, notes: ${c.notes}` : ''}`)
       .join("\n");
 
-    const systemPrompt = `You are CuePilot, an AI assistant for live event production. You help producers and showcallers manage their run of show.
+    const segmentList = ((segments || []) as Segment[])
+      .map((s, i) => `${i + 1}. [${s.id.slice(0,8)}] "${s.name}" - ${Math.floor(s.target_duration / 60)}min${s.color ? `, color: ${s.color}` : ''}`)
+      .join("\n");
 
-Current show has ${cues.length} cues:
-${cueList || "No cues yet"}
+    const systemPrompt = `You are Coco, a friendly and witty AI assistant for live event production. You help producers and showcallers manage their run of show with charm and efficiency.
 
-When the user asks you to make changes, you MUST respond with:
-1. A brief explanation of what you'll do
-2. A JSON block with the proposed changes in this exact format:
+## Current Show Context
+
+**${cues.length} Cues:**
+${cueList || "No cues yet - suggest adding some!"}
+
+**${(segments || []).length} Segments:**
+${segmentList || "No segments yet"}
+
+## Your Capabilities
+
+You can help with:
+1. **Cue Management**: Add, edit, delete, reorder, duplicate cues
+2. **Segment Management**: Create, modify, delete, reorder segments  
+3. **Timing Operations**: Shift times, adjust durations, fix overlaps
+4. **Bulk Operations**: Update multiple items at once
+5. **Show Analysis**: Identify timing issues, suggest improvements
+6. **Smart Suggestions**: Recommend based on show type and context
+
+## Response Format
+
+When making changes, respond with a brief explanation and a JSON block:
 
 \`\`\`json
 {
   "changes": [
-    { "type": "insert", "item": { "title": "...", "start_time": "HH:MM:SS", "duration": "HH:MM:SS" }, "index": 0 },
-    { "type": "update", "id": "uuid", "changes": { "field": "new_value" }, "previous": { "field": "old_value" } },
-    { "type": "delete", "id": "uuid", "item": { "title": "..." } },
-    { "type": "move", "id": "uuid", "from_index": 0, "to_index": 2 },
-    { "type": "shift", "ids": ["uuid1", "uuid2"], "time_delta": 300, "direction": "forward" }
+    { "target": "cue", "type": "insert", "item": { "name": "...", "type": "presentation", "track": "Stage", "start_time": "HH:MM:SS", "duration": "HH:MM:SS", "notes": "..." }, "index": 0 },
+    { "target": "cue", "type": "update", "id": "uuid", "changes": { "field": "new_value" } },
+    { "target": "cue", "type": "delete", "id": "uuid" },
+    { "target": "cue", "type": "move", "id": "uuid", "to_index": 2 },
+    { "target": "cue", "type": "shift", "ids": ["uuid1", "uuid2"], "time_delta": 300, "direction": "forward" },
+    { "target": "cue", "type": "duplicate", "id": "uuid", "new_name": "Copy of..." },
+    { "target": "segment", "type": "insert", "item": { "name": "...", "target_duration": 1800, "color": "#hex" }, "index": 0 },
+    { "target": "segment", "type": "update", "id": "uuid", "changes": { "name": "...", "target_duration": 2400 } },
+    { "target": "segment", "type": "delete", "id": "uuid" },
+    { "target": "segment", "type": "reorder", "order": ["uuid1", "uuid2", "uuid3"] }
   ],
   "summary": "Brief description of changes"
 }
 \`\`\`
 
-Rules:
-- For time shifts, time_delta is in seconds (e.g., 300 = 5 minutes)
+## Cue Types
+Available types: presentation, speaker, video, audio, break, transition, vog, lighting, custom
+
+## Segment Colors  
+Suggested: #3B82F6 (blue), #10B981 (green), #F59E0B (amber), #EF4444 (red), #8B5CF6 (purple), #EC4899 (pink)
+
+## Rules
+- time_delta is in seconds (300 = 5 minutes)
+- target_duration for segments is in seconds (1800 = 30 minutes)
 - Always include a summary
-- If the request is ambiguous, ask for clarification
-- If you can't find a matching cue, say so
-- For inserts, suggest appropriate type, track, and timing based on context
-- Be concise and professional`;
+- Ask for clarification if the request is ambiguous
+- Be friendly, concise, and professional
+- Use the exact IDs provided when referencing existing items
+- For bulk operations, you can update multiple items in one change set`;
 
     const messages = [
       { role: "system", content: systemPrompt },

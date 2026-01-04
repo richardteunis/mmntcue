@@ -1513,6 +1513,13 @@ const Dashboard: React.FC = () => {
           <CocoChat
             showId={activeShowId}
             cues={cues}
+            segments={dbSegments.map(s => ({
+              id: s.id,
+              name: s.name,
+              target_duration: s.target_duration,
+              color: s.color || undefined,
+              order_index: s.order_index
+            }))}
             canApplyChanges={true}
             onRefresh={() => {
               // Cues will auto-refresh via realtime subscription
