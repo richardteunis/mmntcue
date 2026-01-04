@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessageCircle, Send, Clock, Plus, ArrowRight, User, Loader2, Check, X, Sparkles, Trash2, Minimize2 } from 'lucide-react';
+import { Send, Clock, Plus, ArrowRight, User, Check, X, Sparkles, Trash2, Minimize2, BotMessageSquare, Loader2 } from 'lucide-react';
 import { useCuePilot } from '@/hooks/useCuePilot';
 import { cn } from '@/lib/utils';
 import type { Cue } from '@/types/cue';
@@ -23,10 +23,70 @@ const QUICK_ACTIONS = [
   { icon: User, label: 'Set speaker', prompt: 'Set the speaker for cue 1 to "John Smith"' }
 ];
 
+// Typing indicator with animated dots
+function TypingDots() {
+  return (
+    <div className="flex items-center gap-1 px-1">
+      <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.3s]" />
+      <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.15s]" />
+      <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce" />
+    </div>
+  );
+}
+
+// Hook for word-by-word streaming effect
+function useStreamingText(text: string, isComplete: boolean, speed: number = 30) {
+  const [displayedText, setDisplayedText] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  useEffect(() => {
+    if (!isComplete || !text) {
+      setDisplayedText('');
+      setIsStreaming(false);
+      return;
+    }
+
+    setIsStreaming(true);
+    const words = text.split(' ');
+    let currentIndex = 0;
+    setDisplayedText('');
+
+    const interval = setInterval(() => {
+      if (currentIndex < words.length) {
+        setDisplayedText(prev => prev + (currentIndex > 0 ? ' ' : '') + words[currentIndex]);
+        currentIndex++;
+      } else {
+        setIsStreaming(false);
+        clearInterval(interval);
+      }
+    }, speed);
+
+    return () => clearInterval(interval);
+  }, [text, isComplete, speed]);
+
+  return { displayedText: isComplete ? displayedText : '', isStreaming };
+}
+
+// Message component with streaming effect for latest assistant message
+function StreamingMessage({ content, isLatest }: { content: string; isLatest: boolean }) {
+  const { displayedText, isStreaming } = useStreamingText(content, isLatest, 25);
+  
+  // If this is the latest message, show streaming effect; otherwise show full content
+  const textToShow = isLatest ? displayedText : content;
+  
+  return (
+    <p className="whitespace-pre-wrap text-xs">
+      {textToShow}
+      {isStreaming && <span className="inline-block w-0.5 h-3 bg-foreground/70 ml-0.5 animate-pulse" />}
+    </p>
+  );
+}
+
 export default function CocoChat({ showId, cues, canApplyChanges, onRefresh }: CocoChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [latestMessageId, setLatestMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -39,6 +99,14 @@ export default function CocoChat({ showId, cues, canApplyChanges, onRefresh }: C
     rejectChanges,
     clearHistory
   } = useCuePilot(showId, cues);
+
+  // Track the latest assistant message for streaming effect
+  useEffect(() => {
+    const lastAssistantMessage = [...messages].reverse().find(m => m.role === 'assistant');
+    if (lastAssistantMessage && lastAssistantMessage.id !== latestMessageId) {
+      setLatestMessageId(lastAssistantMessage.id);
+    }
+  }, [messages, latestMessageId]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -150,7 +218,14 @@ export default function CocoChat({ showId, cues, canApplyChanges, onRefresh }: C
                             : "bg-muted"
                         )}
                       >
-                        <p className="whitespace-pre-wrap text-xs">{message.content}</p>
+                        {message.role === 'assistant' ? (
+                          <StreamingMessage 
+                            content={message.content} 
+                            isLatest={message.id === latestMessageId} 
+                          />
+                        ) : (
+                          <p className="whitespace-pre-wrap text-xs">{message.content}</p>
+                        )}
                         {message.change_request_id && (
                           <Badge 
                             variant="secondary" 
@@ -174,11 +249,8 @@ export default function CocoChat({ showId, cues, canApplyChanges, onRefresh }: C
                       <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
                         <span className="text-primary-foreground font-bold text-[9px]">Co</span>
                       </div>
-                      <div className="bg-muted rounded-lg px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          <span className="text-xs text-muted-foreground">Thinking...</span>
-                        </div>
+                      <div className="bg-muted rounded-lg px-3 py-2.5">
+                        <TypingDots />
                       </div>
                     </div>
                   )}
@@ -271,25 +343,33 @@ export default function CocoChat({ showId, cues, canApplyChanges, onRefresh }: C
           </div>
         )}
 
-        {/* Floating trigger button */}
-        <Button
-          size="lg"
+        {/* Floating trigger button - larger hit zone */}
+        <button
           className={cn(
-            "h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all",
-            "bg-gradient-to-br from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70",
-            isOpen && "ring-2 ring-primary/30 ring-offset-2 ring-offset-background"
+            "group relative flex items-center justify-center",
+            "h-16 w-16 -m-1", // Larger hit zone with negative margin to keep visual size
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           )}
           onClick={() => setIsOpen(!isOpen)}
         >
-          <div className="relative">
-            <MessageCircle className="h-6 w-6" />
-            {pendingCount > 0 && (
-              <span className="absolute -top-2 -right-2 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold flex items-center justify-center text-destructive-foreground">
-                {pendingCount}
-              </span>
+          <div
+            className={cn(
+              "h-14 w-14 rounded-full shadow-lg group-hover:shadow-xl transition-all",
+              "bg-gradient-to-br from-primary to-primary/80 group-hover:from-primary/90 group-hover:to-primary/70",
+              "flex items-center justify-center",
+              isOpen && "ring-2 ring-primary/30 ring-offset-2 ring-offset-background"
             )}
+          >
+            <div className="relative">
+              <BotMessageSquare className="h-6 w-6 text-primary-foreground" />
+              {pendingCount > 0 && (
+                <span className="absolute -top-2 -right-2 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold flex items-center justify-center text-destructive-foreground">
+                  {pendingCount}
+                </span>
+              )}
+            </div>
           </div>
-        </Button>
+        </button>
       </div>
 
       {/* Review Modal */}
