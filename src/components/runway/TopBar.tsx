@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Share2, Check, Presentation, Wifi, WifiOff, Upload, Bot, RefreshCw } from 'lucide-react';
+import { Clock, Share2, Check, Presentation, Wifi, WifiOff, Upload, RefreshCw } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationPopover from './NotificationPopover';
@@ -28,8 +28,6 @@ interface TopBarProps {
   onShowcallerMode?: () => void;
   onShare?: () => void;
   onImport?: () => void;
-  onCuePilotToggle?: () => void;
-  isCuePilotOpen?: boolean;
   hasSyncSources?: boolean;
   isSyncing?: boolean;
   onSync?: () => void;
@@ -47,8 +45,6 @@ const TopBar: React.FC<TopBarProps> = ({
   onShowcallerMode, 
   onShare,
   onImport,
-  onCuePilotToggle,
-  isCuePilotOpen = false,
   hasSyncSources = false,
   isSyncing = false,
   onSync,
@@ -178,24 +174,6 @@ const TopBar: React.FC<TopBarProps> = ({
                 </Tooltip>
               )}
             </div>
-          )}
-
-          {/* CuePilot toggle */}
-          {showName && onCuePilotToggle && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  size="sm" 
-                  variant={isCuePilotOpen ? "default" : "outline"} 
-                  className="h-8 gap-1.5 text-xs" 
-                  onClick={onCuePilotToggle}
-                >
-                  <Bot size={14} />
-                  <span className="hidden md:inline">CuePilot</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>AI assistant for editing your show</TooltipContent>
-            </Tooltip>
           )}
 
           {/* Version History */}

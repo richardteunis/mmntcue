@@ -29,12 +29,12 @@ import GoFeedback from './GoFeedback';
 import PanicSafetyButton from './PanicSafetyButton';
 import ROSImportModal from './ROSImportModal';
 import VersionHistoryRail from './VersionHistoryRail';
-import CuePilotPanel from './CuePilotPanel';
+import CocoChat from './CocoChat';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings, Eye, EyeOff, ChevronLeft, ChevronRight, Upload, Bot } from 'lucide-react';
+import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings, Eye, EyeOff, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
 import { useCues, useAISuggestions } from '@/hooks/useCues';
 import { useRealtimePresence } from '@/hooks/useRealtimePresence';
 import { useCueAssets } from '@/hooks/useAssets';
@@ -116,7 +116,6 @@ const Dashboard: React.FC = () => {
   const [isPlaybackSettingsOpen, setIsPlaybackSettingsOpen] = useState(false);
   const [pendingAssetForCue, setPendingAssetForCue] = useState<{ asset: Asset; cueId: string } | null>(null);
   const [isROSImportOpen, setIsROSImportOpen] = useState(false);
-  const [isCuePilotOpen, setIsCuePilotOpen] = useState(false);
   const sidebarRef = useRef<{ openCreateModal: () => void } | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -1042,8 +1041,6 @@ const Dashboard: React.FC = () => {
             showInfo={showInfo}
             onShare={activeShowId ? () => setIsShareOpen(true) : undefined}
             onImport={activeShowId ? () => setIsROSImportOpen(true) : undefined}
-            onCuePilotToggle={activeShowId ? () => setIsCuePilotOpen(!isCuePilotOpen) : undefined}
-            isCuePilotOpen={isCuePilotOpen}
             hasSyncSources={syncSources.length > 0}
             isSyncing={isSyncing}
             onSync={syncSources.length > 0 ? () => syncFromSource(syncSources[0]) : undefined}
@@ -1120,7 +1117,7 @@ const Dashboard: React.FC = () => {
             )}
             
             <ResizablePanelGroup direction="horizontal" className="flex-1">
-              <ResizablePanel defaultSize={isCuePilotOpen ? 75 : (showMode === 'planning' ? 100 : 75)} minSize={50} id="timeline-panel">
+              <ResizablePanel defaultSize={showMode === 'planning' ? 100 : 75} minSize={50} id="timeline-panel">
                 <div className="h-full flex flex-col">
                   {/* Toolbar - Only show in planning/rehearsal modes, hidden in live */}
                   {showMode !== 'live' && (
@@ -1400,22 +1397,6 @@ const Dashboard: React.FC = () => {
                 </>
               )}
 
-              {/* CuePilot Panel */}
-              {isCuePilotOpen && (
-                <>
-                  <ResizableHandle withHandle />
-                  <ResizablePanel defaultSize={25} minSize={20} maxSize={40} id="cuepilot-panel">
-                    <CuePilotPanel
-                      showId={activeShowId!}
-                      cues={cues}
-                      canApplyChanges={true} // TODO: Check user role
-                      onRefresh={() => {
-                        // Refresh cues after AI changes
-                      }}
-                    />
-                  </ResizablePanel>
-                </>
-              )}
             </ResizablePanelGroup>
             
             {/* GO Button moved into NextCuePanel for both rehearsal and live modes */}
@@ -1523,6 +1504,18 @@ const Dashboard: React.FC = () => {
             showId={activeShowId}
             onImportComplete={() => {
               toast({ title: 'Import complete', description: 'Run of Show items imported successfully' });
+            }}
+          />
+        )}
+
+        {/* Coco Chat - Floating AI Assistant */}
+        {activeShowId && (
+          <CocoChat
+            showId={activeShowId}
+            cues={cues}
+            canApplyChanges={true}
+            onRefresh={() => {
+              // Cues will auto-refresh via realtime subscription
             }}
           />
         )}
