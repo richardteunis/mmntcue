@@ -27,11 +27,14 @@ import LiveModeControlBar from './LiveModeControlBar';
 import IssueBar from './IssueBar';
 import GoFeedback from './GoFeedback';
 import PanicSafetyButton from './PanicSafetyButton';
+import ROSImportModal from './ROSImportModal';
+import VersionHistoryRail from './VersionHistoryRail';
+import CuePilotPanel from './CuePilotPanel';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings, Eye, EyeOff, ChevronLeft, ChevronRight, Upload, Bot } from 'lucide-react';
 import { useCues, useAISuggestions } from '@/hooks/useCues';
 import { useRealtimePresence } from '@/hooks/useRealtimePresence';
 import { useCueAssets } from '@/hooks/useAssets';
@@ -111,6 +114,8 @@ const Dashboard: React.FC = () => {
   const [permissionUserId, setPermissionUserId] = useState<string | null>(null);
   const [isPlaybackSettingsOpen, setIsPlaybackSettingsOpen] = useState(false);
   const [pendingAssetForCue, setPendingAssetForCue] = useState<{ asset: Asset; cueId: string } | null>(null);
+  const [isROSImportOpen, setIsROSImportOpen] = useState(false);
+  const [isCuePilotOpen, setIsCuePilotOpen] = useState(false);
   const sidebarRef = useRef<{ openCreateModal: () => void } | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -1463,6 +1468,18 @@ const Dashboard: React.FC = () => {
           onSave={handleSaveAssetToCue}
           asset={pendingAssetForCue?.asset || null}
         />
+
+        {/* ROS Import Modal */}
+        {activeShowId && (
+          <ROSImportModal
+            open={isROSImportOpen}
+            onOpenChange={setIsROSImportOpen}
+            showId={activeShowId}
+            onImportComplete={() => {
+              toast({ title: 'Import complete', description: 'Run of Show items imported successfully' });
+            }}
+          />
+        )}
       </div>
     </TooltipProvider>
   );
