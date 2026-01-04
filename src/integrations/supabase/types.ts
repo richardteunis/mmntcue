@@ -536,6 +536,388 @@ export type Database = {
         }
         Relationships: []
       }
+      ros_change_requests: {
+        Row: {
+          ai_prompt: string | null
+          ai_response: string | null
+          created_at: string
+          diff_payload: Json
+          id: string
+          proposed_by: string | null
+          request_type: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          show_id: string
+          status: string
+          summary: string | null
+          updated_at: string
+          version_id: string | null
+        }
+        Insert: {
+          ai_prompt?: string | null
+          ai_response?: string | null
+          created_at?: string
+          diff_payload: Json
+          id?: string
+          proposed_by?: string | null
+          request_type?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          show_id: string
+          status?: string
+          summary?: string | null
+          updated_at?: string
+          version_id?: string | null
+        }
+        Update: {
+          ai_prompt?: string | null
+          ai_response?: string | null
+          created_at?: string
+          diff_payload?: Json
+          id?: string
+          proposed_by?: string | null
+          request_type?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          show_id?: string
+          status?: string
+          summary?: string | null
+          updated_at?: string
+          version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ros_change_requests_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ros_change_requests_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "ros_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ros_chat_messages: {
+        Row: {
+          change_request_id: string | null
+          content: string
+          created_at: string
+          id: string
+          role: string
+          show_id: string
+          user_id: string | null
+        }
+        Insert: {
+          change_request_id?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          role?: string
+          show_id: string
+          user_id?: string | null
+        }
+        Update: {
+          change_request_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          show_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ros_chat_messages_change_request_id_fkey"
+            columns: ["change_request_id"]
+            isOneToOne: false
+            referencedRelation: "ros_change_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ros_chat_messages_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ros_import_templates: {
+        Row: {
+          column_mapping: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          show_id: string | null
+          updated_at: string
+          workspace_id: string | null
+        }
+        Insert: {
+          column_mapping: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          show_id?: string | null
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          column_mapping?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          show_id?: string | null
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ros_import_templates_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ros_import_templates_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ros_items: {
+        Row: {
+          audio: string | null
+          created_at: string
+          cue_id: string | null
+          duration: string | null
+          hard_time: boolean | null
+          id: string
+          item_type: string
+          lighting: string | null
+          notes: string | null
+          order_index: number
+          owner: string | null
+          room: string | null
+          show_id: string
+          slide_ref: string | null
+          source_row_id: string | null
+          speaker: string | null
+          start_time: string | null
+          status: string | null
+          title: string
+          updated_at: string
+          video: string | null
+        }
+        Insert: {
+          audio?: string | null
+          created_at?: string
+          cue_id?: string | null
+          duration?: string | null
+          hard_time?: boolean | null
+          id?: string
+          item_type?: string
+          lighting?: string | null
+          notes?: string | null
+          order_index?: number
+          owner?: string | null
+          room?: string | null
+          show_id: string
+          slide_ref?: string | null
+          source_row_id?: string | null
+          speaker?: string | null
+          start_time?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string
+          video?: string | null
+        }
+        Update: {
+          audio?: string | null
+          created_at?: string
+          cue_id?: string | null
+          duration?: string | null
+          hard_time?: boolean | null
+          id?: string
+          item_type?: string
+          lighting?: string | null
+          notes?: string | null
+          order_index?: number
+          owner?: string | null
+          room?: string | null
+          show_id?: string
+          slide_ref?: string | null
+          source_row_id?: string | null
+          speaker?: string | null
+          start_time?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string
+          video?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ros_items_cue_id_fkey"
+            columns: ["cue_id"]
+            isOneToOne: false
+            referencedRelation: "cues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ros_items_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ros_snapshots: {
+        Row: {
+          created_at: string
+          id: string
+          show_id: string
+          snapshot_data: Json
+          version_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          show_id: string
+          snapshot_data: Json
+          version_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          show_id?: string
+          snapshot_data?: Json
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ros_snapshots_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ros_snapshots_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "ros_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ros_sync_sources: {
+        Row: {
+          column_mapping: Json | null
+          created_at: string
+          created_by: string | null
+          id: string
+          last_snapshot: Json | null
+          last_synced_at: string | null
+          show_id: string
+          source_name: string | null
+          source_type: string
+          source_url: string
+          sync_enabled: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          column_mapping?: Json | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_snapshot?: Json | null
+          last_synced_at?: string | null
+          show_id: string
+          source_name?: string | null
+          source_type: string
+          source_url: string
+          sync_enabled?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          column_mapping?: Json | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_snapshot?: Json | null
+          last_synced_at?: string | null
+          show_id?: string
+          source_name?: string | null
+          source_type?: string
+          source_url?: string
+          sync_enabled?: boolean | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ros_sync_sources_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ros_versions: {
+        Row: {
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          show_id: string
+          source_type: string
+          summary: string | null
+          version_number: number
+        }
+        Insert: {
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          show_id: string
+          source_type?: string
+          summary?: string | null
+          version_number?: number
+        }
+        Update: {
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          show_id?: string
+          source_type?: string
+          summary?: string | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ros_versions_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       show_assets: {
         Row: {
           added_by: string | null
