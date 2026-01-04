@@ -115,13 +115,32 @@ export interface ColumnMapping {
   hard_time?: string;
 }
 
+// Change item types for AI operations
+export interface CueChangeItem {
+  name?: string;
+  title?: string; // alias for name
+  type?: string;
+  track?: string;
+  start_time?: string;
+  duration?: string;
+  notes?: string;
+}
+
+export interface SegmentChangeItem {
+  name?: string;
+  target_duration?: number;
+  color?: string;
+}
+
 // Change operations for diffs
 export type ChangeOperation = 
-  | { type: 'insert'; item: Partial<ROSItem>; index: number }
-  | { type: 'update'; id: string; changes: Partial<ROSItem>; previous: Partial<ROSItem> }
-  | { type: 'delete'; id: string; item: ROSItem }
-  | { type: 'move'; id: string; from_index: number; to_index: number }
-  | { type: 'shift'; ids: string[]; time_delta: number; direction: 'forward' | 'backward' };
+  | { target?: 'cue' | 'segment'; type: 'insert'; item?: CueChangeItem | SegmentChangeItem; index?: number }
+  | { target?: 'cue' | 'segment'; type: 'update'; id?: string; changes?: Record<string, unknown>; previous?: Record<string, unknown> }
+  | { target?: 'cue' | 'segment'; type: 'delete'; id?: string; item?: Record<string, unknown> }
+  | { target?: 'cue' | 'segment'; type: 'move'; id?: string; from_index?: number; to_index?: number }
+  | { target?: 'cue'; type: 'shift'; ids?: string[]; time_delta?: number; direction?: 'forward' | 'backward' }
+  | { target?: 'cue'; type: 'duplicate'; id?: string; new_name?: string }
+  | { target?: 'segment'; type: 'reorder'; order?: string[] };
 
 // CSV parsing result
 export interface CSVParseResult {

@@ -83,13 +83,20 @@ export default function ReviewChangesModal({
   };
 
   const renderChangeDetails = (change: ChangeOperation) => {
+    const item = (change as any).item as Record<string, unknown> | undefined;
+    const changes_ = (change as any).changes as Record<string, unknown> | undefined;
+    const previous = (change as any).previous as Record<string, unknown> | undefined;
+
     switch (change.type) {
       case 'insert':
         return (
           <div className="text-sm">
-            <span className="font-medium">{change.item.title || 'New Item'}</span>
-            {change.item.start_time && (
-              <span className="text-muted-foreground ml-2">@ {change.item.start_time}</span>
+            <span className="font-medium">{String(item?.title || item?.name || 'New Item')}</span>
+            {item?.start_time && (
+              <span className="text-muted-foreground ml-2">@ {String(item.start_time)}</span>
+            )}
+            {item?.target_duration && (
+              <span className="text-muted-foreground ml-2">({Math.floor(Number(item.target_duration) / 60)} min)</span>
             )}
           </div>
         );
@@ -98,7 +105,7 @@ export default function ReviewChangesModal({
         return (
           <div className="text-sm">
             <span className="font-medium line-through text-muted-foreground">
-              {change.item.title}
+              {String(item?.title || item?.name || 'Item')}
             </span>
           </div>
         );
@@ -106,11 +113,11 @@ export default function ReviewChangesModal({
       case 'update':
         return (
           <div className="text-sm space-y-1">
-            {Object.entries(change.changes).map(([field, value]) => (
+            {changes_ && Object.entries(changes_).map(([field, value]) => (
               <div key={field} className="flex items-center gap-2">
                 <span className="text-muted-foreground">{field}:</span>
                 <span className="line-through text-muted-foreground text-xs">
-                  {String(change.previous[field as keyof typeof change.previous] || '-')}
+                  {String(previous?.[field] || '-')}
                 </span>
                 <ArrowRight className="h-3 w-3 text-muted-foreground" />
                 <span className="font-medium">{String(value)}</span>
@@ -122,21 +129,42 @@ export default function ReviewChangesModal({
       case 'move':
         return (
           <div className="text-sm flex items-center gap-2">
-            <span>Position {change.from_index + 1}</span>
+            <span>Position {((change as any).from_index || 0) + 1}</span>
             <ArrowRight className="h-3 w-3" />
-            <span>Position {change.to_index + 1}</span>
+            <span>Position {((change as any).to_index || 0) + 1}</span>
           </div>
         );
       
       case 'shift':
+        const shiftChange = change as { ids?: string[]; time_delta?: number; direction?: string };
         return (
           <div className="text-sm">
-            <span>{change.ids.length} items shifted</span>
+            <span>{(shiftChange.ids || []).length} items shifted</span>
             <span className="ml-2 font-medium">
-              {change.direction === 'forward' ? '+' : '-'}{Math.floor(change.time_delta / 60)} min
+              {shiftChange.direction === 'forward' ? '+' : '-'}{Math.floor((shiftChange.time_delta || 0) / 60)} min
             </span>
           </div>
         );
+
+      case 'duplicate':
+        return (
+          <div className="text-sm">
+            <span>Duplicating cue</span>
+            {(change as any).new_name && (
+              <span className="ml-1 font-medium">as "{(change as any).new_name}"</span>
+            )}
+          </div>
+        );
+
+      case 'reorder':
+        return (
+          <div className="text-sm">
+            <span>Reordering {((change as any).order || []).length} segments</span>
+          </div>
+        );
+
+      default:
+        return null;
     }
   };
 

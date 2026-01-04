@@ -255,30 +255,32 @@ export function useROSSync(showId: string | null) {
 
     try {
       for (const change of changesToApply) {
+        const item = (change as any).item as Record<string, unknown> | undefined;
+        
         switch (change.type) {
           case 'insert':
             await supabase.from('ros_items').insert([{
               show_id: showId,
-              title: change.item.title || 'Untitled',
-              order_index: change.item.order_index || 0,
-              item_type: change.item.item_type || 'cue',
-              status: change.item.status || 'pending'
+              title: String(item?.title || 'Untitled'),
+              order_index: Number(item?.order_index || 0),
+              item_type: String(item?.item_type || 'cue'),
+              status: String(item?.status || 'pending')
             }]);
             break;
           case 'update':
             await supabase.from('ros_items')
-              .update(change.changes)
-              .eq('id', change.id);
+              .update((change as any).changes || {})
+              .eq('id', (change as any).id);
             break;
           case 'delete':
             await supabase.from('ros_items')
               .delete()
-              .eq('id', change.id);
+              .eq('id', (change as any).id);
             break;
           case 'move':
             await supabase.from('ros_items')
-              .update({ order_index: change.to_index })
-              .eq('id', change.id);
+              .update({ order_index: (change as any).to_index })
+              .eq('id', (change as any).id);
             break;
         }
       }
@@ -410,7 +412,7 @@ function generateDiff(
   // Find removed items
   for (const item of currentItems) {
     if (!newTitles.has(item.title.toLowerCase())) {
-      changes.push({ type: 'delete', id: item.id, item });
+      changes.push({ type: 'delete', id: item.id, item: item as unknown as Record<string, unknown> });
     }
   }
 
@@ -428,7 +430,7 @@ function generateDiff(
           order_index: index,
           item_type: 'cue',
           status: 'pending'
-        },
+        } as Record<string, unknown>,
         index
       });
     } else {
