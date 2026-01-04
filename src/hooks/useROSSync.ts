@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { 
@@ -23,6 +23,9 @@ function extractGoogleSheetsId(url: string): string | null {
   return null;
 }
 
+// Default sync interval: 5 minutes
+const DEFAULT_SYNC_INTERVAL = 5 * 60 * 1000;
+
 export function useROSSync(showId: string | null) {
   const { toast } = useToast();
   const [syncSources, setSyncSources] = useState<ROSSyncSource[]>([]);
@@ -33,6 +36,10 @@ export function useROSSync(showId: string | null) {
     removed: number;
     modified: number;
   } | null>(null);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
+  const [syncInterval, setSyncInterval] = useState(DEFAULT_SYNC_INTERVAL);
+  const [lastAutoSync, setLastAutoSync] = useState<Date | null>(null);
+  const autoSyncTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch sync sources for the show
   const fetchSyncSources = useCallback(async () => {
@@ -301,17 +308,89 @@ export function useROSSync(showId: string | null) {
     setLastSyncResult(null);
   }, []);
 
+  // Auto-sync all connected sources
+  const autoSync = useCallback(async () => {
+    if (syncSources.length === 0 || isSyncing) return;
+
+    for (const source of syncSources) {
+      if (source.sync_enabled) {
+        await syncFromSource(source);
+      }
+    }
+    setLastAutoSync(new Date());
+  }, [syncSources, isSyncing, syncFromSource]);
+
+  // Start auto-sync polling
+  const startAutoSync = useCallback((interval?: number) => {
+    if (autoSyncTimerRef.current) {
+      clearInterval(autoSyncTimerRef.current);
+    }
+
+    const syncMs = interval || syncInterval;
+    setSyncInterval(syncMs);
+    setAutoSyncEnabled(true);
+
+    // Run initial sync
+    autoSync();
+
+    // Set up interval
+    autoSyncTimerRef.current = setInterval(() => {
+      autoSync();
+    }, syncMs);
+
+    toast({
+      title: 'Auto-sync enabled',
+      description: `Syncing every ${Math.round(syncMs / 60000)} minutes`
+    });
+  }, [syncInterval, autoSync, toast]);
+
+  // Stop auto-sync polling
+  const stopAutoSync = useCallback(() => {
+    if (autoSyncTimerRef.current) {
+      clearInterval(autoSyncTimerRef.current);
+      autoSyncTimerRef.current = null;
+    }
+    setAutoSyncEnabled(false);
+    toast({ title: 'Auto-sync disabled' });
+  }, [toast]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSyncTimerRef.current) {
+        clearInterval(autoSyncTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Watch for changes and notify
+  useEffect(() => {
+    if (lastSyncResult && (lastSyncResult.added > 0 || lastSyncResult.removed > 0 || lastSyncResult.modified > 0)) {
+      toast({
+        title: '📊 Sheet changes detected',
+        description: `${lastSyncResult.added} added, ${lastSyncResult.removed} removed, ${lastSyncResult.modified} modified`,
+        duration: 10000
+      });
+    }
+  }, [lastSyncResult, toast]);
+
   return {
     syncSources,
     isSyncing,
     pendingChanges,
     lastSyncResult,
+    autoSyncEnabled,
+    syncInterval,
+    lastAutoSync,
     fetchSyncSources,
     addSyncSource,
     removeSyncSource,
     syncFromSource,
     applyChanges,
-    dismissChanges
+    dismissChanges,
+    startAutoSync,
+    stopAutoSync,
+    setSyncInterval
   };
 }
 

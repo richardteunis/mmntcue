@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Share2, Check, Presentation, Wifi, WifiOff } from 'lucide-react';
+import { Clock, Share2, Check, Presentation, Wifi, WifiOff, Upload, Bot, RefreshCw } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import NotificationPopover from './NotificationPopover';
 import UserMenu from './UserMenu';
 import CollaboratorAvatars from './CollaboratorAvatars';
+import VersionHistoryRail from './VersionHistoryRail';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 import { PresenceUser } from '@/hooks/useRealtimePresence';
@@ -21,9 +23,16 @@ interface ShowInfo {
 
 interface TopBarProps {
   showName: string;
+  showId?: string | null;
   showInfo?: ShowInfo;
   onShowcallerMode?: () => void;
   onShare?: () => void;
+  onImport?: () => void;
+  onCuePilotToggle?: () => void;
+  isCuePilotOpen?: boolean;
+  hasSyncSources?: boolean;
+  isSyncing?: boolean;
+  onSync?: () => void;
   activeUsers?: PresenceUser[];
   isConnected?: boolean;
   followingUserId?: string | null;
@@ -33,9 +42,16 @@ interface TopBarProps {
 
 const TopBar: React.FC<TopBarProps> = ({ 
   showName, 
+  showId,
   showInfo, 
   onShowcallerMode, 
-  onShare, 
+  onShare,
+  onImport,
+  onCuePilotToggle,
+  isCuePilotOpen = false,
+  hasSyncSources = false,
+  isSyncing = false,
+  onSync,
   activeUsers = [], 
   isConnected = false,
   followingUserId,
@@ -136,6 +152,55 @@ const TopBar: React.FC<TopBarProps> = ({
               />
               <Separator orientation="vertical" className="h-6" />
             </>
+          )}
+
+          {/* Import/Sync button */}
+          {showName && onImport && (
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={onImport}>
+                <Upload size={14} />
+                <span className="hidden md:inline">Import</span>
+              </Button>
+              {hasSyncSources && onSync && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      className="h-8 w-8 p-0" 
+                      onClick={onSync}
+                      disabled={isSyncing}
+                    >
+                      <RefreshCw size={14} className={cn(isSyncing && "animate-spin")} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Sync from connected sheet</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          )}
+
+          {/* CuePilot toggle */}
+          {showName && onCuePilotToggle && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  size="sm" 
+                  variant={isCuePilotOpen ? "default" : "outline"} 
+                  className="h-8 gap-1.5 text-xs" 
+                  onClick={onCuePilotToggle}
+                >
+                  <Bot size={14} />
+                  <span className="hidden md:inline">CuePilot</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>AI assistant for editing your show</TooltipContent>
+            </Tooltip>
+          )}
+
+          {/* Version History */}
+          {showId && (
+            <VersionHistoryRail showId={showId} />
           )}
 
           {onShowcallerMode && (

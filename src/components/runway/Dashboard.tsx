@@ -41,6 +41,7 @@ import { useCueAssets } from '@/hooks/useAssets';
 import { usePlaybackState } from '@/hooks/usePlaybackState';
 import { useShowState } from '@/hooks/useShowState';
 import { useSegments } from '@/hooks/useSegments';
+import { useROSSync } from '@/hooks/useROSSync';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Cue, ViewMode, CueSuggestion, Show } from '@/types/cue';
 import { Asset, PlaybackSettings, DEFAULT_PLAYBACK_SETTINGS } from '@/types/asset';
@@ -133,6 +134,20 @@ const Dashboard: React.FC = () => {
     reorderSegment: reorderDbSegment 
   } = useSegments(activeShowId);
   
+  // ROS Sync for auto-sync functionality
+  const {
+    syncSources,
+    isSyncing,
+    pendingChanges,
+    lastSyncResult,
+    fetchSyncSources,
+    syncFromSource,
+    applyChanges: applySyncChanges,
+    dismissChanges: dismissSyncChanges,
+    startAutoSync,
+    autoSyncEnabled
+  } = useROSSync(activeShowId);
+  
   // Shared playback state for both timeline and table views
   const playbackCues = useMemo(() => cues.map(c => ({ id: c.id, time: c.start_time, duration: c.duration })), [cues]);
   const playback = usePlaybackState(playbackCues);
@@ -160,6 +175,13 @@ const Dashboard: React.FC = () => {
     note?: string;
     timestamp: Date;
   }>>([]);
+
+  // Fetch sync sources when show changes
+  useEffect(() => {
+    if (activeShowId) {
+      fetchSyncSources();
+    }
+  }, [activeShowId, fetchSyncSources]);
   
   // Auto-collapse sidebar when entering live mode
   useEffect(() => {
@@ -1016,8 +1038,15 @@ const Dashboard: React.FC = () => {
           
           <TopBar 
             showName={showName || 'Home'} 
+            showId={activeShowId}
             showInfo={showInfo}
             onShare={activeShowId ? () => setIsShareOpen(true) : undefined}
+            onImport={activeShowId ? () => setIsROSImportOpen(true) : undefined}
+            onCuePilotToggle={activeShowId ? () => setIsCuePilotOpen(!isCuePilotOpen) : undefined}
+            isCuePilotOpen={isCuePilotOpen}
+            hasSyncSources={syncSources.length > 0}
+            isSyncing={isSyncing}
+            onSync={syncSources.length > 0 ? () => syncFromSource(syncSources[0]) : undefined}
             activeUsers={activeUsers}
             isConnected={isConnected}
             followingUserId={followingUserId}
@@ -1091,7 +1120,7 @@ const Dashboard: React.FC = () => {
             )}
             
             <ResizablePanelGroup direction="horizontal" className="flex-1">
-              <ResizablePanel defaultSize={showMode === 'planning' ? 100 : 75} minSize={50} id="timeline-panel">
+              <ResizablePanel defaultSize={isCuePilotOpen ? 75 : (showMode === 'planning' ? 100 : 75)} minSize={50} id="timeline-panel">
                 <div className="h-full flex flex-col">
                   {/* Toolbar - Only show in planning/rehearsal modes, hidden in live */}
                   {showMode !== 'live' && (
@@ -1365,6 +1394,23 @@ const Dashboard: React.FC = () => {
                       onClose={() => {
                         setSelectedCueId(null);
                         setSelectedCue(null);
+                      }}
+                    />
+                  </ResizablePanel>
+                </>
+              )}
+
+              {/* CuePilot Panel */}
+              {isCuePilotOpen && (
+                <>
+                  <ResizableHandle withHandle />
+                  <ResizablePanel defaultSize={25} minSize={20} maxSize={40} id="cuepilot-panel">
+                    <CuePilotPanel
+                      showId={activeShowId!}
+                      cues={cues}
+                      canApplyChanges={true} // TODO: Check user role
+                      onRefresh={() => {
+                        // Refresh cues after AI changes
                       }}
                     />
                   </ResizablePanel>
