@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Cue } from '@/types/cue';
+import { Segment } from '@/hooks/useSegments';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -19,55 +20,53 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { 
-  ArrowUpDown, 
   Pencil, 
   Trash2, 
   Copy, 
-  ChevronUp,
-  ChevronDown,
   Search,
-  Plus,
+  Clock,
+  ChevronDown,
   ChevronRight,
-  Columns,
-  Clock
+  AlertTriangle,
+  CheckCircle2,
+  Timer,
+  TrendingUp,
+  TrendingDown,
+  Minus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 interface TableViewProps {
   cues: Cue[];
+  segments: Segment[];
   selectedCueId: string | null;
   onCueSelect: (id: string | null, cue: Cue | null) => void;
   onCueUpdate: (cue: Cue) => void;
   onCueDelete: (id: string) => void;
   onCueDuplicate: (id: string) => void;
   onEditCue: (cue: Cue) => void;
+  onSegmentDurationUpdate?: (segmentId: string, newDuration: number) => void;
   showCountdown?: { text: string; isLive: boolean } | null;
   onAssetDropOnCue?: (assetData: any, cueId: string) => void;
   onAssetDropToCreate?: (assetData: any) => void;
+  // Live timing data
+  currentTimeSeconds?: number;
+  isLive?: boolean;
 }
 
-type SortField = 'name' | 'type' | 'track' | 'start_time' | 'duration';
-type SortDirection = 'asc' | 'desc';
-
-// Track columns that can be toggled
-const TRACK_COLUMNS = [
-  { id: 'audio', label: 'Audio', color: 'bg-runway-teal' },
-  { id: 'video', label: 'Video', color: 'bg-runway-success' },
-  { id: 'lighting', label: 'Lights', color: 'bg-runway-highlight' },
-  { id: 'stage', label: 'Stage', color: 'bg-runway-warning' },
-];
-
-// Helper to convert time string to seconds for sorting
+// Helper to convert time string to seconds
 const timeToSeconds = (timeString: string): number => {
   const parts = timeString.split(':').map(Number);
   if (parts.length === 3) {
@@ -78,153 +77,265 @@ const timeToSeconds = (timeString: string): number => {
   return 0;
 };
 
-// Format time for display (show relative time from start)
-const formatStartTime = (timeString: string): string => {
-  const parts = timeString.split(':').map(Number);
-  const hours = parts[0] || 0;
-  const minutes = parts[1] || 0;
-  const seconds = parts[2] || 0;
-  
-  // For show timing, use 12-hour format starting from noon
-  const totalMinutes = hours * 60 + minutes;
-  const displayHour = Math.floor((12 * 60 + totalMinutes) / 60) % 12 || 12;
-  const displayMinutes = (minutes).toString().padStart(2, '0');
-  const displaySeconds = seconds > 0 ? `:${seconds.toString().padStart(2, '0')}` : '';
-  const ampm = totalMinutes >= 720 ? 'pm' : 'pm'; // Assuming afternoon show
-  
-  return `${displayHour}:${displayMinutes}${displaySeconds}${ampm}`;
+// Format seconds to MM:SS or HH:MM:SS
+const formatDuration = (seconds: number): string => {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
-// Format duration for display
-const formatDuration = (durationString: string): string => {
-  const parts = durationString.split(':').map(Number);
-  if (parts.length === 3) {
-    const [h, m, s] = parts;
-    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  } else if (parts.length === 2) {
-    return `${parts[0].toString().padStart(2, '0')}:${parts[1].toString().padStart(2, '0')}`;
+// Format variance with +/- prefix
+const formatVariance = (seconds: number): string => {
+  const prefix = seconds > 0 ? '+' : seconds < 0 ? '' : '';
+  return `${prefix}${formatDuration(Math.abs(seconds))}`;
+};
+
+// Parse duration input (supports MM:SS, HH:MM:SS, or just minutes)
+const parseDurationInput = (input: string): number | null => {
+  const trimmed = input.trim();
+  
+  // Try HH:MM:SS or MM:SS format
+  if (trimmed.includes(':')) {
+    const parts = trimmed.split(':').map(Number);
+    if (parts.some(isNaN)) return null;
+    if (parts.length === 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    } else if (parts.length === 2) {
+      return parts[0] * 60 + parts[1];
+    }
+    return null;
   }
-  return durationString;
+  
+  // Try just minutes
+  const mins = parseFloat(trimmed);
+  if (!isNaN(mins)) {
+    return Math.round(mins * 60);
+  }
+  
+  return null;
+};
+
+const TRACK_COLORS: Record<string, string> = {
+  audio: 'bg-runway-teal',
+  video: 'bg-runway-success',
+  lighting: 'bg-runway-highlight',
+  stage: 'bg-runway-warning',
 };
 
 const TableView: React.FC<TableViewProps> = ({
   cues,
+  segments,
   selectedCueId,
   onCueSelect,
   onCueUpdate,
   onCueDelete,
   onCueDuplicate,
   onEditCue,
+  onSegmentDurationUpdate,
   showCountdown,
   onAssetDropOnCue,
-  onAssetDropToCreate
+  onAssetDropToCreate,
+  currentTimeSeconds = 0,
+  isLive = false,
 }) => {
-  const [sortField, setSortField] = useState<SortField>('start_time');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  const [filterType, setFilterType] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(['audio', 'video', 'lighting', 'stage']);
+  const [editingDuration, setEditingDuration] = useState<string | null>(null);
+  const [durationInput, setDurationInput] = useState('');
+  const [collapsedSegments, setCollapsedSegments] = useState<Set<string>>(new Set());
   const [goMode, setGoMode] = useState(false);
-  const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
-  const [isDropZoneActive, setIsDropZoneActive] = useState(false);
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
+  // Sort segments by order_index and calculate cumulative start times
+  const segmentsWithTiming = useMemo(() => {
+    const sorted = [...segments].sort((a, b) => a.order_index - b.order_index);
+    let currentStart = 0;
+    
+    return sorted.map(segment => {
+      const startTime = currentStart;
+      const endTime = startTime + segment.target_duration;
+      currentStart = endTime;
+      return { ...segment, startTime, endTime };
+    });
+  }, [segments]);
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'audio': return 'bg-runway-teal/20 border-runway-teal/50';
-      case 'video': return 'bg-runway-success/20 border-runway-success/50';
-      case 'lighting': return 'bg-runway-highlight/20 border-runway-highlight/50';
-      case 'stage': return 'bg-runway-warning/20 border-runway-warning/50';
-      default: return 'bg-muted';
-    }
-  };
-
-  const getTrackHeaderColor = (type: string) => {
-    switch (type) {
-      case 'audio': return 'bg-runway-teal/10';
-      case 'video': return 'bg-runway-success/10';
-      case 'lighting': return 'bg-runway-highlight/10';
-      case 'stage': return 'bg-runway-warning/10';
-      default: return '';
-    }
-  };
-
-  const filteredAndSortedCues = useMemo(() => {
-    return [...cues]
-      .filter(cue => {
-        const matchesType = filterType === 'all' || cue.type === filterType;
-        const matchesSearch = cue.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             cue.notes?.toLowerCase().includes(searchTerm.toLowerCase());
-        return matchesType && matchesSearch;
-      })
-      .sort((a, b) => {
-        let comparison = 0;
-        switch (sortField) {
-          case 'name':
-            comparison = a.name.localeCompare(b.name);
-            break;
-          case 'type':
-            comparison = a.type.localeCompare(b.type);
-            break;
-          case 'track':
-            comparison = a.track.localeCompare(b.track);
-            break;
-          case 'start_time':
-            comparison = timeToSeconds(a.start_time) - timeToSeconds(b.start_time);
-            break;
-          case 'duration':
-            comparison = timeToSeconds(a.duration) - timeToSeconds(b.duration);
-            break;
+  // Group cues by segment based on time ranges
+  const cuesBySegment = useMemo(() => {
+    const groups = new Map<string, Cue[]>();
+    const unassigned: Cue[] = [];
+    
+    // Initialize empty arrays for each segment
+    segmentsWithTiming.forEach(seg => groups.set(seg.id, []));
+    
+    // Sort cues by start time
+    const sortedCues = [...cues].sort((a, b) => timeToSeconds(a.start_time) - timeToSeconds(b.start_time));
+    
+    sortedCues.forEach(cue => {
+      const cueStart = timeToSeconds(cue.start_time);
+      
+      // Find which segment this cue belongs to
+      let assigned = false;
+      for (const seg of segmentsWithTiming) {
+        if (cueStart >= seg.startTime && cueStart < seg.endTime) {
+          groups.get(seg.id)?.push(cue);
+          assigned = true;
+          break;
         }
-        return sortDirection === 'asc' ? comparison : -comparison;
-      });
-  }, [cues, filterType, searchTerm, sortField, sortDirection]);
+      }
+      
+      if (!assigned) {
+        unassigned.push(cue);
+      }
+    });
+    
+    return { groups, unassigned };
+  }, [cues, segmentsWithTiming]);
 
-  // Group cues by track type for display in columns
-  const getCueForTrack = (cue: Cue, trackType: string): string | null => {
-    if (cue.type === trackType || cue.track.toLowerCase().includes(trackType)) {
-      return cue.notes || cue.name;
-    }
-    return null;
-  };
+  // Calculate actual duration for each segment (sum of cue durations)
+  const segmentActualDurations = useMemo(() => {
+    const durations = new Map<string, number>();
+    
+    cuesBySegment.groups.forEach((segmentCues, segmentId) => {
+      const total = segmentCues.reduce((sum, cue) => sum + timeToSeconds(cue.duration), 0);
+      durations.set(segmentId, total);
+    });
+    
+    return durations;
+  }, [cuesBySegment]);
 
-  const handleCellEdit = (cue: Cue, field: keyof Cue, value: string) => {
-    onCueUpdate({ ...cue, [field]: value });
-    setEditingCell(null);
-  };
-
-  const toggleColumn = (columnId: string) => {
-    setVisibleColumns(prev => 
-      prev.includes(columnId) 
-        ? prev.filter(c => c !== columnId)
-        : [...prev, columnId]
+  // Filter cues by search term
+  const filterCues = useCallback((cueList: Cue[]) => {
+    if (!searchTerm) return cueList;
+    return cueList.filter(cue => 
+      cue.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cue.notes?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+  }, [searchTerm]);
+
+  // Toggle segment collapse
+  const toggleSegment = (segmentId: string) => {
+    setCollapsedSegments(prev => {
+      const next = new Set(prev);
+      if (next.has(segmentId)) {
+        next.delete(segmentId);
+      } else {
+        next.add(segmentId);
+      }
+      return next;
+    });
   };
 
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) {
-      return <ArrowUpDown className="h-3 w-3 opacity-50" />;
+  // Start editing segment duration
+  const startEditingDuration = (segmentId: string, currentDuration: number) => {
+    setEditingDuration(segmentId);
+    setDurationInput(formatDuration(currentDuration));
+  };
+
+  // Save segment duration
+  const saveDuration = (segmentId: string) => {
+    const newDuration = parseDurationInput(durationInput);
+    if (newDuration !== null && onSegmentDurationUpdate) {
+      onSegmentDurationUpdate(segmentId, newDuration);
     }
-    return sortDirection === 'asc' 
-      ? <ChevronUp className="h-3 w-3" /> 
-      : <ChevronDown className="h-3 w-3" />;
+    setEditingDuration(null);
+    setDurationInput('');
+  };
+
+  // Calculate total show duration
+  const totalTargetDuration = useMemo(() => {
+    return segmentsWithTiming.reduce((sum, seg) => sum + seg.target_duration, 0);
+  }, [segmentsWithTiming]);
+
+  const totalActualDuration = useMemo(() => {
+    let total = 0;
+    segmentActualDurations.forEach(duration => {
+      total += duration;
+    });
+    return total;
+  }, [segmentActualDurations]);
+
+  const totalVariance = totalActualDuration - totalTargetDuration;
+
+  // Get status for a segment
+  const getSegmentStatus = (segmentId: string) => {
+    const target = segments.find(s => s.id === segmentId)?.target_duration || 0;
+    const actual = segmentActualDurations.get(segmentId) || 0;
+    const variance = actual - target;
+    
+    if (Math.abs(variance) < 30) return 'on-track';
+    if (variance > 0) return 'over';
+    return 'under';
   };
 
   return (
     <div className="h-full flex flex-col bg-card">
+      {/* Header Stats Bar */}
+      <div className="px-4 py-3 border-b border-border bg-background">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <div className="text-center">
+              <div className="text-[10px] uppercase text-muted-foreground tracking-wider">Target Duration</div>
+              <div className="font-mono text-lg font-semibold text-foreground">{formatDuration(totalTargetDuration)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] uppercase text-muted-foreground tracking-wider">Actual Duration</div>
+              <div className="font-mono text-lg font-semibold text-foreground">{formatDuration(totalActualDuration)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] uppercase text-muted-foreground tracking-wider">Variance</div>
+              <div className={cn(
+                "font-mono text-lg font-semibold flex items-center gap-1",
+                totalVariance > 60 && "text-runway-error",
+                totalVariance < -60 && "text-runway-teal",
+                Math.abs(totalVariance) <= 60 && "text-runway-success"
+              )}>
+                {totalVariance > 0 && <TrendingUp className="h-4 w-4" />}
+                {totalVariance < 0 && <TrendingDown className="h-4 w-4" />}
+                {totalVariance === 0 && <Minus className="h-4 w-4" />}
+                {formatVariance(totalVariance)}
+              </div>
+            </div>
+          </div>
+          
+          {showCountdown && (
+            <div className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-md",
+              showCountdown.isLive ? "bg-runway-success/20" : "bg-muted/50"
+            )}>
+              <Clock className={cn("h-4 w-4", showCountdown.isLive ? "text-runway-success" : "text-primary")} />
+              <span className={cn(
+                "text-sm font-mono font-semibold",
+                showCountdown.isLive && "text-runway-success"
+              )}>
+                {showCountdown.isLive ? "LIVE" : `T-${showCountdown.text}`}
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant={goMode ? "default" : "outline"} 
+                  size="sm" 
+                  className={cn("h-8 gap-1.5", goMode && "bg-runway-success hover:bg-runway-success/90")}
+                  onClick={() => setGoMode(!goMode)}
+                >
+                  <Timer className="h-3.5 w-3.5" />
+                  GO Mode
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Simplified view for live show</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+      </div>
+
       {/* Toolbar */}
-      <div className="px-4 py-3 border-b border-border flex items-center gap-3 bg-card/80 backdrop-blur">
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
+      <div className="px-4 py-2 border-b border-border flex items-center gap-3 bg-card/80">
+        <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search cues..."
@@ -233,411 +344,289 @@ const TableView: React.FC<TableViewProps> = ({
             className="pl-9 h-8 bg-background"
           />
         </div>
-        
-        <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="w-[130px] h-8">
-            <SelectValue placeholder="All Types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="audio">Audio</SelectItem>
-            <SelectItem value="video">Video</SelectItem>
-            <SelectItem value="lighting">Lighting</SelectItem>
-            <SelectItem value="stage">Stage</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-8 gap-1.5">
-              <Columns className="h-3.5 w-3.5" />
-              Columns
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {TRACK_COLUMNS.map(col => (
-              <DropdownMenuCheckboxItem
-                key={col.id}
-                checked={visibleColumns.includes(col.id)}
-                onCheckedChange={() => toggleColumn(col.id)}
-              >
-                <div className="flex items-center gap-2">
-                  <div className={cn("w-2 h-2 rounded-full", col.color)} />
-                  {col.label}
-                </div>
-              </DropdownMenuCheckboxItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setVisibleColumns(['audio', 'video', 'lighting', 'stage'])}>
-              Show All
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         <div className="flex-1" />
+        <div className="text-xs text-muted-foreground">
+          {cues.length} cue{cues.length !== 1 ? 's' : ''} • {segments.length} segment{segments.length !== 1 ? 's' : ''}
+        </div>
+      </div>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button 
-              variant={goMode ? "default" : "outline"} 
-              size="sm" 
-              className={cn("h-8 gap-1.5", goMode && "bg-runway-success hover:bg-runway-success/90")}
-              onClick={() => setGoMode(!goMode)}
-            >
-              <Clock className="h-3.5 w-3.5" />
-              GO Mode
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Simplified view for live show operation</TooltipContent>
-        </Tooltip>
-
-        {showCountdown && (
-          <div className={cn(
-            "flex items-center gap-2 px-3 py-1 rounded",
-            showCountdown.isLive ? "bg-runway-success/20" : "bg-muted/50"
-          )}>
-            <Clock className={cn("h-3.5 w-3.5", showCountdown.isLive ? "text-runway-success" : "text-primary")} />
-            <span className={cn(
-              "text-xs font-mono font-medium",
-              showCountdown.isLive && "text-runway-success"
-            )}>
-              {showCountdown.isLive ? "LIVE" : `T-${showCountdown.text}`}
-            </span>
+      {/* Segment-based Table */}
+      <div className="flex-1 overflow-auto">
+        {segmentsWithTiming.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            <div className="text-center">
+              <Clock className="h-12 w-12 mx-auto mb-3 opacity-40" />
+              <p className="font-medium">No segments yet</p>
+              <p className="text-sm mt-1">Create segments in the Segment Editor to organize your show</p>
+            </div>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {segmentsWithTiming.map((segment, segIndex) => {
+              const segmentCues = filterCues(cuesBySegment.groups.get(segment.id) || []);
+              const actualDuration = segmentActualDurations.get(segment.id) || 0;
+              const variance = actualDuration - segment.target_duration;
+              const status = getSegmentStatus(segment.id);
+              const isCollapsed = collapsedSegments.has(segment.id);
+              
+              return (
+                <Collapsible key={segment.id} open={!isCollapsed} onOpenChange={() => toggleSegment(segment.id)}>
+                  {/* Segment Header Row */}
+                  <div className={cn(
+                    "flex items-center gap-3 px-4 py-3 bg-muted/30 sticky top-0 z-10",
+                    status === 'over' && "bg-runway-error/5",
+                    status === 'under' && "bg-runway-teal/5"
+                  )}>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </Button>
+                    </CollapsibleTrigger>
+                    
+                    {/* Segment color indicator */}
+                    <div 
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: segment.color || '#6366f1' }}
+                    />
+                    
+                    {/* Segment name and count */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm truncate">{segment.name}</span>
+                        <Badge variant="secondary" className="text-[10px] h-5">
+                          {segmentCues.length} cue{segmentCues.length !== 1 ? 's' : ''}
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    {/* Duration editing */}
+                    <div className="flex items-center gap-4">
+                      {/* Target Duration - Editable */}
+                      <div className="text-center min-w-[100px]">
+                        <div className="text-[9px] uppercase text-muted-foreground tracking-wider mb-0.5">Target</div>
+                        {editingDuration === segment.id ? (
+                          <Input
+                            autoFocus
+                            value={durationInput}
+                            onChange={(e) => setDurationInput(e.target.value)}
+                            onBlur={() => saveDuration(segment.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveDuration(segment.id);
+                              if (e.key === 'Escape') setEditingDuration(null);
+                            }}
+                            className="h-7 w-20 text-center font-mono text-sm"
+                            placeholder="MM:SS"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => startEditingDuration(segment.id, segment.target_duration)}
+                            className="font-mono text-sm font-medium hover:text-primary transition-colors cursor-text"
+                          >
+                            {formatDuration(segment.target_duration)}
+                          </button>
+                        )}
+                      </div>
+                      
+                      {/* Actual Duration - Read only */}
+                      <div className="text-center min-w-[80px]">
+                        <div className="text-[9px] uppercase text-muted-foreground tracking-wider mb-0.5">Actual</div>
+                        <div className="font-mono text-sm font-medium">{formatDuration(actualDuration)}</div>
+                      </div>
+                      
+                      {/* Variance */}
+                      <div className="text-center min-w-[80px]">
+                        <div className="text-[9px] uppercase text-muted-foreground tracking-wider mb-0.5">Variance</div>
+                        <div className={cn(
+                          "font-mono text-sm font-medium flex items-center justify-center gap-1",
+                          status === 'over' && "text-runway-error",
+                          status === 'under' && "text-runway-teal",
+                          status === 'on-track' && "text-runway-success"
+                        )}>
+                          {status === 'over' && <AlertTriangle className="h-3 w-3" />}
+                          {status === 'on-track' && <CheckCircle2 className="h-3 w-3" />}
+                          {formatVariance(variance)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Cues Table */}
+                  <CollapsibleContent>
+                    {segmentCues.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-muted-foreground text-sm">
+                        No cues in this segment
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead className="w-[50px] text-center text-xs">#</TableHead>
+                            <TableHead className="text-xs">Cue Name</TableHead>
+                            <TableHead className="w-[80px] text-xs">Duration</TableHead>
+                            <TableHead className="w-[60px] text-xs">Type</TableHead>
+                            {!goMode && <TableHead className="text-xs">Notes</TableHead>}
+                            {!goMode && <TableHead className="w-[100px] text-right text-xs">Actions</TableHead>}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {segmentCues.map((cue, cueIndex) => (
+                            <TableRow
+                              key={cue.id}
+                              className={cn(
+                                "cursor-pointer transition-colors group",
+                                selectedCueId === cue.id && "bg-primary/10 border-l-2 border-l-primary"
+                              )}
+                              onClick={() => onCueSelect(cue.id, cue)}
+                            >
+                              <TableCell className="text-center font-mono text-xs text-muted-foreground">
+                                {segIndex + 1}.{cueIndex + 1}
+                              </TableCell>
+                              <TableCell className="py-2">
+                                <div className={cn("font-medium", goMode && "text-base")}>
+                                  {cue.name}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-2">
+                                <div className="font-mono text-xs">
+                                  {formatDuration(timeToSeconds(cue.duration))}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-2">
+                                <div className={cn(
+                                  "w-2 h-2 rounded-full",
+                                  TRACK_COLORS[cue.type] || 'bg-muted'
+                                )} />
+                              </TableCell>
+                              {!goMode && (
+                                <TableCell className="py-2">
+                                  <div className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                    {cue.notes || '—'}
+                                  </div>
+                                </TableCell>
+                              )}
+                              {!goMode && (
+                                <TableCell className="py-2">
+                                  <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onEditCue(cue);
+                                      }}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onCueDuplicate(cue.id);
+                                      }}
+                                    >
+                                      <Copy className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-destructive hover:text-destructive"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onCueDelete(cue.id);
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+            
+            {/* Unassigned cues */}
+            {cuesBySegment.unassigned.length > 0 && (
+              <div className="border-t border-border">
+                <div className="flex items-center gap-3 px-4 py-3 bg-muted/50">
+                  <AlertTriangle className="h-4 w-4 text-runway-warning" />
+                  <span className="font-medium text-sm">Unassigned Cues</span>
+                  <Badge variant="outline" className="text-[10px]">
+                    {cuesBySegment.unassigned.length}
+                  </Badge>
+                </div>
+                <Table>
+                  <TableBody>
+                    {filterCues(cuesBySegment.unassigned).map((cue, index) => (
+                      <TableRow
+                        key={cue.id}
+                        className={cn(
+                          "cursor-pointer transition-colors group",
+                          selectedCueId === cue.id && "bg-primary/10"
+                        )}
+                        onClick={() => onCueSelect(cue.id, cue)}
+                      >
+                        <TableCell className="w-[50px] text-center font-mono text-xs text-muted-foreground">
+                          —
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <div className="font-medium">{cue.name}</div>
+                        </TableCell>
+                        <TableCell className="w-[80px] py-2">
+                          <div className="font-mono text-xs">{formatDuration(timeToSeconds(cue.duration))}</div>
+                        </TableCell>
+                        <TableCell className="w-[60px] py-2">
+                          <div className={cn("w-2 h-2 rounded-full", TRACK_COLORS[cue.type] || 'bg-muted')} />
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <div className="text-xs text-muted-foreground truncate max-w-[200px]">
+                            {cue.notes || '—'}
+                          </div>
+                        </TableCell>
+                        <TableCell className="w-[100px] py-2">
+                          <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditCue(cue);
+                              }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </div>
         )}
-
-        <div className="text-xs text-muted-foreground">
-          {filteredAndSortedCues.length} cue{filteredAndSortedCues.length !== 1 ? 's' : ''}
-        </div>
       </div>
 
-      {/* Run of Show Table */}
-      <div 
-        className={cn(
-          "flex-1 overflow-auto transition-colors",
-          isDropZoneActive && "bg-runway-teal/5 ring-2 ring-runway-teal ring-inset"
-        )}
-        onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('application/json')) {
-            e.preventDefault();
-            setIsDropZoneActive(true);
-          }
-        }}
-        onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-            setIsDropZoneActive(false);
-          }
-        }}
-        onDrop={(e) => {
-          const jsonData = e.dataTransfer.getData('application/json');
-          if (jsonData && !dropTargetCueId) {
-            try {
-              const assetData = JSON.parse(jsonData);
-              if (assetData.file_url && onAssetDropToCreate) {
-                e.preventDefault();
-                onAssetDropToCreate(assetData);
-              }
-            } catch {}
-          }
-          setIsDropZoneActive(false);
-          setDropTargetCueId(null);
-        }}
-      >
-        <Table>
-          <TableHeader className="sticky top-0 bg-card z-10">
-            <TableRow className="hover:bg-transparent border-b-2 border-border">
-              <TableHead className="w-[40px] text-center font-semibold text-xs">#</TableHead>
-              <TableHead 
-                className="cursor-pointer hover:bg-muted/50 transition-colors min-w-[200px]"
-                onClick={() => handleSort('name')}
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold">
-                  Items <SortIcon field="name" />
-                </div>
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer hover:bg-muted/50 transition-colors w-[100px]"
-                onClick={() => handleSort('start_time')}
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold">
-                  <ChevronDown className="h-3 w-3" /> Start <SortIcon field="start_time" />
-                </div>
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer hover:bg-muted/50 transition-colors w-[80px]"
-                onClick={() => handleSort('duration')}
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold">
-                  Duration <SortIcon field="duration" />
-                </div>
-              </TableHead>
-              {!goMode && (
-                <TableHead className="w-[120px]">
-                  <div className="text-xs font-semibold">Notes</div>
-                </TableHead>
-              )}
-              {visibleColumns.map(colId => {
-                const col = TRACK_COLUMNS.find(c => c.id === colId);
-                if (!col) return null;
-                return (
-                  <TableHead 
-                    key={col.id} 
-                    className={cn("w-[100px] text-center", getTrackHeaderColor(col.id))}
-                  >
-                    <div className="flex items-center justify-center gap-1.5 text-xs font-semibold">
-                      <ChevronDown className="h-3 w-3 opacity-50" />
-                      {col.label}
-                    </div>
-                  </TableHead>
-                );
-              })}
-              {!goMode && (
-                <TableHead className="w-[80px] text-right">
-                  <div className="text-xs font-semibold">Actions</div>
-                </TableHead>
-              )}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredAndSortedCues.map((cue, index) => (
-              <TableRow 
-                key={cue.id}
-                className={cn(
-                  "cursor-pointer transition-colors group",
-                  selectedCueId === cue.id && "bg-primary/10 border-l-2 border-l-primary",
-                  dropTargetCueId === cue.id && "ring-2 ring-runway-teal bg-runway-teal/10",
-                  goMode && "h-14"
-                )}
-                onClick={() => onCueSelect(cue.id, cue)}
-                onDragOver={(e) => {
-                  if (e.dataTransfer.types.includes('application/json')) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDropTargetCueId(cue.id);
-                    setIsDropZoneActive(false);
-                  }
-                }}
-                onDragLeave={() => setDropTargetCueId(null)}
-                onDrop={(e) => {
-                  const jsonData = e.dataTransfer.getData('application/json');
-                  if (jsonData) {
-                    try {
-                      const assetData = JSON.parse(jsonData);
-                      if (assetData.file_url && onAssetDropOnCue) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onAssetDropOnCue(assetData, cue.id);
-                      }
-                    } catch {}
-                  }
-                  setDropTargetCueId(null);
-                }}
-              >
-                <TableCell className="text-center font-mono text-xs text-muted-foreground">
-                  {index + 1}
-                </TableCell>
-                <TableCell className="py-2">
-                  {editingCell?.id === cue.id && editingCell?.field === 'name' ? (
-                    <Input
-                      autoFocus
-                      defaultValue={cue.name}
-                      onBlur={(e) => handleCellEdit(cue, 'name', e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleCellEdit(cue, 'name', e.currentTarget.value);
-                        }
-                        if (e.key === 'Escape') {
-                          setEditingCell(null);
-                        }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="h-7 text-sm"
-                    />
-                  ) : (
-                    <div 
-                      className={cn(
-                        "font-medium hover:text-primary cursor-text",
-                        goMode && "text-base"
-                      )}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        setEditingCell({ id: cue.id, field: 'name' });
-                      }}
-                    >
-                      {cue.name}
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell className="py-2">
-                  {editingCell?.id === cue.id && editingCell?.field === 'start_time' ? (
-                    <Input
-                      autoFocus
-                      defaultValue={cue.start_time}
-                      onBlur={(e) => handleCellEdit(cue, 'start_time', e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleCellEdit(cue, 'start_time', e.currentTarget.value);
-                        }
-                        if (e.key === 'Escape') {
-                          setEditingCell(null);
-                        }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="h-7 font-mono text-xs"
-                    />
-                  ) : (
-                    <div 
-                      className={cn(
-                        "font-mono text-xs hover:text-primary cursor-text",
-                        goMode && "text-sm font-medium"
-                      )}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        setEditingCell({ id: cue.id, field: 'start_time' });
-                      }}
-                    >
-                      {formatStartTime(cue.start_time)}
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell className="py-2">
-                  {editingCell?.id === cue.id && editingCell?.field === 'duration' ? (
-                    <Input
-                      autoFocus
-                      defaultValue={cue.duration}
-                      onBlur={(e) => handleCellEdit(cue, 'duration', e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleCellEdit(cue, 'duration', e.currentTarget.value);
-                        }
-                        if (e.key === 'Escape') {
-                          setEditingCell(null);
-                        }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="h-7 font-mono text-xs"
-                    />
-                  ) : (
-                    <div 
-                      className={cn(
-                        "font-mono text-xs hover:text-primary cursor-text",
-                        goMode && "text-sm"
-                      )}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        setEditingCell({ id: cue.id, field: 'duration' });
-                      }}
-                    >
-                      {formatDuration(cue.duration)}
-                    </div>
-                  )}
-                </TableCell>
-                {!goMode && (
-                  <TableCell className="py-2">
-                    <div className="text-xs text-muted-foreground truncate max-w-[120px]">
-                      {cue.notes || '—'}
-                    </div>
-                  </TableCell>
-                )}
-                {visibleColumns.map(colId => {
-                  const isActiveColumn = cue.type === colId;
-                  return (
-                    <TableCell 
-                      key={colId} 
-                      className={cn(
-                        "py-2 text-center",
-                        isActiveColumn && getTypeColor(colId)
-                      )}
-                    >
-                      {isActiveColumn && (
-                        <div className="text-xs truncate px-1">
-                          {cue.notes || cue.name.slice(0, 15)}
-                        </div>
-                      )}
-                    </TableCell>
-                  );
-                })}
-                {!goMode && (
-                  <TableCell className="py-2">
-                    <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEditCue(cue);
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onCueDuplicate(cue.id);
-                        }}
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onCueDelete(cue.id);
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-            {filteredAndSortedCues.length === 0 && (
-              <TableRow>
-                <TableCell 
-                  colSpan={5 + visibleColumns.length + (goMode ? 0 : 1)} 
-                  className="h-32 text-center text-muted-foreground"
-                >
-                  {cues.length === 0 
-                    ? "No cues yet. Click 'Add Cue' to get started."
-                    : "No cues match your search criteria."
-                  }
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Time Stats Footer */}
+      {/* Footer */}
       <div className="px-4 py-2 border-t border-border bg-card/80 flex items-center gap-6 text-xs">
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Over/Under:</span>
-          <span className="font-mono font-medium text-foreground">00:00</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Total Run Time:</span>
-          <span className="font-mono font-medium text-foreground">
-            {(() => {
-              const totalSeconds = filteredAndSortedCues.reduce((acc, cue) => acc + timeToSeconds(cue.duration), 0);
-              const hours = Math.floor(totalSeconds / 3600);
-              const minutes = Math.floor((totalSeconds % 3600) / 60);
-              const seconds = totalSeconds % 60;
-              return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            })()}
-          </span>
+          <span className="text-muted-foreground">Segments:</span>
+          <span className="font-mono font-medium text-foreground">{segments.length}</span>
         </div>
         <div className="flex-1" />
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Current Time:</span>
+          <span className="text-muted-foreground">Clock:</span>
           <span className="font-mono font-medium text-foreground">
-            {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}
+            {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
           </span>
         </div>
       </div>

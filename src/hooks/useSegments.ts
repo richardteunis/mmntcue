@@ -119,6 +119,145 @@ export function useSegments(showId: string | null) {
     }
   }, [toast]);
 
+  // Update segment duration with cascading timing updates
+  const updateSegmentDuration = useCallback(async (segmentId: string, newDuration: number) => {
+    const segmentIndex = segments.findIndex(s => s.id === segmentId);
+    if (segmentIndex === -1) return null;
+
+    const oldDuration = segments[segmentIndex].target_duration;
+    const durationDelta = newDuration - oldDuration;
+    
+    if (durationDelta === 0) return segments[segmentIndex];
+
+    // Optimistic update - calculate new start times for all segments
+    const sortedSegments = [...segments].sort((a, b) => a.order_index - b.order_index);
+    let accumulatedTime = 0;
+    const updatedSegments = sortedSegments.map((seg, i) => {
+      const newStartTime = accumulatedTime;
+      const duration = seg.id === segmentId ? newDuration : seg.target_duration;
+      accumulatedTime += duration;
+      return { ...seg, start_time: newStartTime, target_duration: seg.id === segmentId ? newDuration : seg.target_duration };
+    });
+
+    // Apply optimistic update
+    setSegments(updatedSegments);
+
+    try {
+      // Update the target segment's duration
+      const { error: targetError } = await supabase
+        .from('show_segments')
+        .update({ target_duration: newDuration })
+        .eq('id', segmentId);
+
+      if (targetError) throw targetError;
+
+      // Update start_times for all segments after the changed one
+      const updatePromises = updatedSegments.map(seg => 
+        supabase
+          .from('show_segments')
+          .update({ start_time: seg.start_time })
+          .eq('id', seg.id)
+      );
+      await Promise.all(updatePromises);
+
+      // Now cascade timing changes to cues
+      // Fetch all cues for this show
+      const { data: cuesData, error: cuesError } = await supabase
+        .from('cues')
+        .select('id, start_time, show_id')
+        .eq('show_id', showId!);
+
+      if (cuesError) throw cuesError;
+
+      if (cuesData && cuesData.length > 0) {
+        // Build old and new segment time ranges
+        const oldSegmentRanges = sortedSegments.map(seg => {
+          let start = 0;
+          for (const s of sortedSegments) {
+            if (s.id === seg.id) break;
+            start += s.target_duration;
+          }
+          return { id: seg.id, startTime: start, endTime: start + seg.target_duration };
+        });
+
+        const newSegmentRanges = updatedSegments.map(seg => ({
+          id: seg.id,
+          startTime: seg.start_time,
+          endTime: seg.start_time + seg.target_duration
+        }));
+
+        const cueUpdates: { id: string; newStartTime: string }[] = [];
+
+        for (const cue of cuesData) {
+          const cueStartSeconds = timeStringToSeconds(cue.start_time);
+          
+          // Find which segment this cue was in
+          let oldSegmentId: string | null = null;
+          for (const range of oldSegmentRanges) {
+            if (cueStartSeconds >= range.startTime && cueStartSeconds < range.endTime) {
+              oldSegmentId = range.id;
+              break;
+            }
+          }
+          
+          if (!oldSegmentId) {
+            // Cue before all segments - assign to first
+            if (oldSegmentRanges.length > 0 && cueStartSeconds < oldSegmentRanges[0].startTime) {
+              oldSegmentId = oldSegmentRanges[0].id;
+            } else if (oldSegmentRanges.length > 0) {
+              // Cue after all segments - assign to last
+              oldSegmentId = oldSegmentRanges[oldSegmentRanges.length - 1].id;
+            }
+          }
+
+          if (!oldSegmentId) continue;
+
+          const oldRange = oldSegmentRanges.find(r => r.id === oldSegmentId);
+          const newRange = newSegmentRanges.find(r => r.id === oldSegmentId);
+
+          if (!oldRange || !newRange) continue;
+
+          // Calculate offset within the segment and apply to new position
+          const offsetWithinSegment = cueStartSeconds - oldRange.startTime;
+          const newCueStartSeconds = newRange.startTime + offsetWithinSegment;
+          const newStartTimeStr = secondsToTimeString(newCueStartSeconds);
+
+          if (cue.start_time !== newStartTimeStr) {
+            cueUpdates.push({ id: cue.id, newStartTime: newStartTimeStr });
+          }
+        }
+
+        // Apply cue updates in parallel
+        if (cueUpdates.length > 0) {
+          const cueUpdatePromises = cueUpdates.map(update =>
+            supabase
+              .from('cues')
+              .update({ start_time: update.newStartTime })
+              .eq('id', update.id)
+          );
+          await Promise.all(cueUpdatePromises);
+        }
+      }
+
+      toast({
+        title: 'Segment duration updated',
+        description: 'Show timing has been recalculated',
+      });
+
+      return updatedSegments.find(s => s.id === segmentId);
+    } catch (error: any) {
+      console.error('Error updating segment duration:', error);
+      toast({
+        title: 'Error updating segment',
+        description: error.message,
+        variant: 'destructive',
+      });
+      // Revert on error
+      fetchSegments();
+      return null;
+    }
+  }, [segments, showId, toast, fetchSegments]);
+
   // Delete segment
   const deleteSegment = useCallback(async (segmentId: string) => {
     try {
@@ -386,6 +525,7 @@ export function useSegments(showId: string | null) {
     loading,
     createSegment,
     updateSegment,
+    updateSegmentDuration,
     deleteSegment,
     reorderSegment,
     refetch: fetchSegments,
