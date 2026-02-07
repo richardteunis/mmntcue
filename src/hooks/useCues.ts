@@ -300,31 +300,39 @@ export function useCues(showId: string | null) {
 
     // Recalculate start times sequentially
     let currentTime = 0;
+    const updatedCues = sortedCues.map((cue, i) => {
+      const newStartTime = secondsToTime(currentTime);
+      currentTime += parseDuration(cue.duration);
+      return { ...cue, start_time: newStartTime, order_index: i };
+    });
+
+    // OPTIMISTIC UPDATE - Apply immediately for instant UI feedback
+    setCues(updatedCues);
 
     try {
-      for (let i = 0; i < sortedCues.length; i++) {
-        const cue = sortedCues[i];
-        const newStartTime = secondsToTime(currentTime);
-        
-        if (cue.start_time !== newStartTime) {
-          const { error } = await supabase
+      // Batch updates in parallel for speed
+      const updatePromises = updatedCues
+        .filter((cue, i) => {
+          const original = cues.find(c => c.id === cue.id);
+          return original?.start_time !== cue.start_time || original?.order_index !== cue.order_index;
+        })
+        .map(cue => 
+          supabase
             .from('cues')
-            .update({ start_time: newStartTime, order_index: i })
-            .eq('id', cue.id);
-          
-          if (error) throw error;
-        }
-        
-        currentTime += parseDuration(cue.duration);
-      }
+            .update({ start_time: cue.start_time, order_index: cue.order_index })
+            .eq('id', cue.id)
+        );
+
+      await Promise.all(updatePromises);
 
       toast({
         title: 'Cues reordered',
         description: 'Timeline order has been updated'
       });
-      await fetchCues();
     } catch (error) {
       console.error('Error reordering cues:', error);
+      // Revert on error
+      await fetchCues();
       toast({
         title: 'Error reordering',
         description: 'Could not update cue order',
