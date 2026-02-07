@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useScriptAnnotations } from '@/hooks/useScriptAnnotations';
 import ScriptAnnotationToolbar from './ScriptAnnotationToolbar';
+import ScriptHighlightOverlay from './ScriptHighlightOverlay';
 import { Cue } from '@/types/cue';
 
 // Configure PDF.js worker
@@ -78,10 +79,12 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     cuePageLinks,
     selectedColor,
     isAnnotating,
+    isLoading: annotationsLoading,
     highlightColors,
     setSelectedColor,
     setIsAnnotating,
     addAnnotation,
+    removeAnnotation,
     getAnnotationsForPage,
     linkCueToPage,
     unlinkCue,
@@ -89,6 +92,9 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     getCueForPage,
     clearAllAnnotations,
   } = useScriptAnnotations(showId);
+
+  // Get annotations for current page
+  const currentPageAnnotations = getAnnotationsForPage(currentPage);
 
   // Get linked cue for current page
   const linkedCueForCurrentPage = getCueForPage(currentPage);
@@ -803,55 +809,94 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
               /* Document Content */
               <ScrollArea className="h-full" ref={scrollAreaRef}>
                 <div className="p-4 flex flex-col items-center gap-4">
-                  {/* PDF Pages */}
-                  {fileType === 'pdf' && pageImages.map((imgSrc, index) => (
-                    <div 
-                      key={index}
-                      ref={el => pageRefs.current[index] = el}
-                      className="bg-card rounded-lg shadow-lg overflow-hidden"
-                      style={{ width: `${zoom}%`, maxWidth: '100%' }}
-                    >
-                      <img 
-                        src={imgSrc} 
-                        alt={`Page ${index + 1}`}
-                        className="w-full h-auto block"
-                        draggable={false}
+                  {/* Highlights for current page */}
+                  {currentPageAnnotations.length > 0 && fileType === 'pdf' && (
+                    <div className="w-full max-w-[800px]">
+                      <ScriptHighlightOverlay 
+                        annotations={currentPageAnnotations}
+                        onRemove={removeAnnotation}
                       />
                     </div>
-                  ))}
+                  )}
+                  
+                  {/* PDF Pages */}
+                  {fileType === 'pdf' && pageImages.map((imgSrc, index) => {
+                    const pageAnnotations = getAnnotationsForPage(index + 1);
+                    return (
+                      <div 
+                        key={index}
+                        ref={el => pageRefs.current[index] = el}
+                        className={cn(
+                          "bg-card rounded-lg shadow-lg overflow-hidden relative",
+                          pageAnnotations.length > 0 && "ring-2 ring-primary/30"
+                        )}
+                        style={{ width: `${zoom}%`, maxWidth: '100%' }}
+                      >
+                        <img 
+                          src={imgSrc} 
+                          alt={`Page ${index + 1}`}
+                          className="w-full h-auto block"
+                          draggable={false}
+                        />
+                        {pageAnnotations.length > 0 && (
+                          <div className="absolute top-2 right-2 px-2 py-1 rounded bg-primary/80 text-primary-foreground text-xs">
+                            {pageAnnotations.length} highlight{pageAnnotations.length > 1 ? 's' : ''}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
 
                   {/* Word Document Content */}
                   {fileType === 'word' && htmlContent && (
-                    <div 
-                      className={cn(
-                        "bg-card rounded-lg shadow-lg overflow-hidden w-full max-w-[800px]",
-                        isAnnotating && "select-text cursor-text"
+                    <div className="w-full max-w-[800px]">
+                      {/* Highlights for Word docs */}
+                      {annotations.length > 0 && (
+                        <ScriptHighlightOverlay 
+                          annotations={annotations}
+                          onRemove={removeAnnotation}
+                        />
                       )}
-                      style={{ fontSize: `${zoom}%` }}
-                    >
                       <div 
-                        className="p-8 prose prose-sm max-w-none dark:prose-invert
-                          prose-headings:font-bold
-                          prose-p:leading-relaxed
-                          prose-a:text-primary"
-                        dangerouslySetInnerHTML={{ __html: htmlContent }}
-                      />
+                        className={cn(
+                          "bg-card rounded-lg shadow-lg overflow-hidden",
+                          isAnnotating && "select-text cursor-text"
+                        )}
+                        style={{ fontSize: `${zoom}%` }}
+                      >
+                        <div 
+                          className="p-8 prose prose-sm max-w-none dark:prose-invert
+                            prose-headings:font-bold
+                            prose-p:leading-relaxed
+                            prose-a:text-primary"
+                          dangerouslySetInnerHTML={{ __html: htmlContent }}
+                        />
+                      </div>
                     </div>
                   )}
 
                   {/* Text Content */}
                   {fileType === 'text' && textContent && (
-                    <div 
-                      className={cn(
-                        "bg-card rounded-lg shadow-lg overflow-hidden w-full max-w-[800px]",
-                        isAnnotating && "select-text cursor-text"
+                    <div className="w-full max-w-[800px]">
+                      {/* Highlights for text docs */}
+                      {annotations.length > 0 && (
+                        <ScriptHighlightOverlay 
+                          annotations={annotations}
+                          onRemove={removeAnnotation}
+                        />
                       )}
-                      style={{ fontSize: `${zoom}%` }}
-                    >
-                      <div className="p-8">
-                        <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-card-foreground">
-                          {textContent}
-                        </pre>
+                      <div 
+                        className={cn(
+                          "bg-card rounded-lg shadow-lg overflow-hidden",
+                          isAnnotating && "select-text cursor-text"
+                        )}
+                        style={{ fontSize: `${zoom}%` }}
+                      >
+                        <div className="p-8">
+                          <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-card-foreground">
+                            {textContent}
+                          </pre>
+                        </div>
                       </div>
                     </div>
                   )}

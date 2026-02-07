@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { Play, Pause, Settings, ChevronUp, ChevronDown } from 'lucide-react';
+import { Play, Pause, ChevronUp, ChevronDown, FlipHorizontal2 } from 'lucide-react';
 
 interface PrompterMessage {
   type: 'navigate' | 'zoom' | 'scroll' | 'init' | 'cue-fired' | 'auto-scroll-settings';
@@ -19,7 +18,6 @@ interface PrompterMessage {
 }
 
 const Prompter: React.FC = () => {
-  const [searchParams] = useSearchParams();
   const [pageImages, setPageImages] = useState<string[]>([]);
   const [htmlContent, setHtmlContent] = useState<string | null>(null);
   const [textContent, setTextContent] = useState<string | null>(null);
@@ -34,8 +32,11 @@ const Prompter: React.FC = () => {
   const [isAutoScrolling, setIsAutoScrolling] = useState(false);
   const [autoScrollSpeed, setAutoScrollSpeed] = useState(30); // pixels per second
   const [showControls, setShowControls] = useState(true);
-  const autoScrollRef = useRef<number | null>(null);
-  const lastTimeRef = useRef<number>(0);
+  const [isMirrored, setIsMirrored] = useState(false);
+  
+  const scrollPositionRef = useRef(0);
+  const animationFrameRef = useRef<number | null>(null);
+  const lastTimestampRef = useRef<number | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
   // Listen for messages from parent window
@@ -97,53 +98,63 @@ const Prompter: React.FC = () => {
     }
   };
 
-  // Auto-scroll animation loop
-  const animateScroll = useCallback((timestamp: number) => {
-    if (!lastTimeRef.current) {
-      lastTimeRef.current = timestamp;
+  // Auto-scroll animation using requestAnimationFrame
+  const animate = useCallback((timestamp: number) => {
+    if (lastTimestampRef.current === null) {
+      lastTimestampRef.current = timestamp;
     }
 
-    const deltaTime = timestamp - lastTimeRef.current;
-    lastTimeRef.current = timestamp;
+    const deltaTime = timestamp - lastTimestampRef.current;
+    lastTimestampRef.current = timestamp;
 
-    // Calculate scroll amount based on speed (pixels per second)
-    const scrollAmount = (autoScrollSpeed * deltaTime) / 1000;
+    // Calculate scroll amount: speed (px/sec) * time (sec)
+    const scrollDelta = (autoScrollSpeed * deltaTime) / 1000;
+    scrollPositionRef.current += scrollDelta;
     
-    window.scrollBy({
-      top: scrollAmount,
-      behavior: 'auto'
-    });
+    window.scrollTo(0, scrollPositionRef.current);
 
-    // Check if we've reached the bottom
+    // Check if at bottom
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-    if (window.scrollY >= maxScroll - 10) {
+    if (scrollPositionRef.current >= maxScroll) {
       setIsAutoScrolling(false);
       return;
     }
 
-    if (isAutoScrolling) {
-      autoScrollRef.current = requestAnimationFrame(animateScroll);
-    }
-  }, [autoScrollSpeed, isAutoScrolling]);
+    // Continue animation
+    animationFrameRef.current = requestAnimationFrame(animate);
+  }, [autoScrollSpeed]);
 
   // Start/stop auto-scroll
   useEffect(() => {
     if (isAutoScrolling) {
-      lastTimeRef.current = 0;
-      autoScrollRef.current = requestAnimationFrame(animateScroll);
+      // Initialize scroll position
+      scrollPositionRef.current = window.scrollY;
+      lastTimestampRef.current = null;
+      animationFrameRef.current = requestAnimationFrame(animate);
     } else {
-      if (autoScrollRef.current) {
-        cancelAnimationFrame(autoScrollRef.current);
-        autoScrollRef.current = null;
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
     }
 
     return () => {
-      if (autoScrollRef.current) {
-        cancelAnimationFrame(autoScrollRef.current);
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isAutoScrolling, animateScroll]);
+  }, [isAutoScrolling, animate]);
+
+  // Update animation when speed changes while scrolling
+  useEffect(() => {
+    if (isAutoScrolling && animationFrameRef.current !== null) {
+      // Cancel current animation and restart with new speed
+      cancelAnimationFrame(animationFrameRef.current);
+      scrollPositionRef.current = window.scrollY;
+      lastTimestampRef.current = null;
+      animationFrameRef.current = requestAnimationFrame(animate);
+    }
+  }, [autoScrollSpeed, isAutoScrolling, animate]);
 
   const toggleAutoScroll = () => {
     setIsAutoScrolling(prev => !prev);
@@ -151,6 +162,10 @@ const Prompter: React.FC = () => {
 
   const adjustSpeed = (delta: number) => {
     setAutoScrollSpeed(prev => Math.max(10, Math.min(200, prev + delta)));
+  };
+
+  const toggleMirror = () => {
+    setIsMirrored(prev => !prev);
   };
 
   // Keyboard navigation
@@ -207,6 +222,10 @@ const Prompter: React.FC = () => {
       if (e.key === 'h' || e.key === 'H') {
         setShowControls(prev => !prev);
       }
+      // M for mirror mode
+      if (e.key === 'm' || e.key === 'M') {
+        toggleMirror();
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -225,14 +244,25 @@ const Prompter: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-black" ref={contentRef}>
+    <div 
+      className="min-h-screen bg-black" 
+      ref={contentRef}
+      style={{ transform: isMirrored ? 'scaleX(-1)' : 'none' }}
+    >
       {/* Header */}
       <div className={cn(
         "fixed top-0 left-0 right-0 bg-black/90 backdrop-blur border-b border-white/10 px-4 py-2 z-50 transition-opacity duration-300",
         showControls ? "opacity-100" : "opacity-0 pointer-events-none"
-      )}>
+      )}
+      style={{ transform: isMirrored ? 'scaleX(-1)' : 'none' }}
+      >
         <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <span className="text-white/60 text-sm font-medium tracking-wider">PROMPTER</span>
+          <div className="flex items-center gap-2">
+            <span className="text-white/60 text-sm font-medium tracking-wider">PROMPTER</span>
+            {isMirrored && (
+              <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">MIRROR</span>
+            )}
+          </div>
           <span className="text-white/80 text-sm truncate max-w-[200px]">{fileName}</span>
           <div className="flex items-center gap-4">
             {fileType === 'pdf' && (
@@ -295,10 +325,27 @@ const Prompter: React.FC = () => {
       </div>
 
       {/* Auto-scroll Controls */}
-      <div className={cn(
-        "fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 transition-opacity duration-300",
-        showControls ? "opacity-100" : "opacity-0 pointer-events-none"
-      )}>
+      <div 
+        className={cn(
+          "fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 transition-opacity duration-300",
+          showControls ? "opacity-100" : "opacity-0 pointer-events-none"
+        )}
+        style={{ transform: isMirrored ? 'translateX(50%) scaleX(-1)' : 'translateX(-50%)' }}
+      >
+        {/* Mirror toggle */}
+        <button
+          onClick={toggleMirror}
+          className={cn(
+            "p-3 rounded-full transition-colors",
+            isMirrored 
+              ? "bg-blue-500 hover:bg-blue-600" 
+              : "bg-white/10 hover:bg-white/20"
+          )}
+          title="Mirror Mode (M)"
+        >
+          <FlipHorizontal2 className="h-5 w-5 text-white" />
+        </button>
+
         {/* Speed control */}
         <div className="bg-black/90 backdrop-blur px-3 py-2 rounded-full flex items-center gap-2">
           <button 
@@ -338,7 +385,7 @@ const Prompter: React.FC = () => {
         {/* Keyboard hints */}
         <div className="bg-black/90 backdrop-blur px-4 py-2 rounded-full">
           <span className="text-white/50 text-xs">
-            P Auto • ↑↓ Nav • +/- Zoom • H Hide
+            P Auto • M Mirror • ↑↓ Nav • [/] Speed • H Hide
           </span>
         </div>
       </div>
