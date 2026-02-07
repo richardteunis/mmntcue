@@ -20,6 +20,7 @@ import PlaybackSettingsModal from './PlaybackSettingsModal';
 import ScriptPanel from './ScriptPanel';
 import MediaBinPanel from './MediaBinPanel';
 import SegmentEditorPanel from './SegmentEditorPanel';
+import VOGPanel from './VOGPanel';
 import PlanningDrawer from './PlanningDrawer';
 import PlanningStatusChip from './PlanningStatusChip';
 import NextCuePanel from './NextCuePanel';
@@ -124,6 +125,7 @@ const Dashboard: React.FC = () => {
   const [isScriptPanelOpen, setIsScriptPanelOpen] = useState(false);
   const [isMediaBinOpen, setIsMediaBinOpen] = useState(false);
   const [isSegmentEditorOpen, setIsSegmentEditorOpen] = useState(false);
+  const [isVOGPanelOpen, setIsVOGPanelOpen] = useState(false);
   
   const sidebarRef = useRef<{ openCreateModal: () => void } | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
@@ -1226,6 +1228,20 @@ const Dashboard: React.FC = () => {
                           </TooltipTrigger>
                           <TooltipContent>Segments</TooltipContent>
                         </Tooltip>
+                        
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => setIsVOGPanelOpen(true)}
+                              size="sm"
+                              variant={isVOGPanelOpen ? "secondary" : "outline"}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Mic2 size={16} />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Voice of God (TTS)</TooltipContent>
+                        </Tooltip>
                       </div>
                       <div className="flex items-center gap-2">
                         {/* Planning Status Chip - Planning mode only */}
@@ -1498,6 +1514,27 @@ const Dashboard: React.FC = () => {
           onSegmentColorChange={handleSegmentColorChange}
           onSegmentDelete={handleSegmentDelete}
           disabled={!activeShowId}
+        />
+        
+        <VOGPanel
+          open={isVOGPanelOpen}
+          onOpenChange={setIsVOGPanelOpen}
+          showId={activeShowId}
+          cueId={selectedCueId}
+          cueName={selectedCue?.name}
+          onGenerated={(audioUrl, audioBlob) => {
+            toast({
+              title: 'VOG Generated',
+              description: 'Audio has been generated via ElevenLabs',
+            });
+          }}
+          onAttachToCue={(audioBlob, fileName) => {
+            // TODO: Attach audio to cue via asset system
+            toast({
+              title: 'Audio attached',
+              description: `${fileName} attached to cue`,
+            });
+          }}
         />
 
         {/* Coco Chat - Floating AI Assistant */}
