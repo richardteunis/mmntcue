@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -7,15 +7,22 @@ import {
   FileText, 
   ChevronUp, 
   ChevronDown, 
-  Maximize2, 
+  Maximize2,
+  Minimize2,
   ZoomIn,
   ZoomOut,
   Search,
   Trash2,
   Upload,
-  File
+  File,
+  Loader2,
+  X
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
 
 interface ScriptPanelProps {
   open: boolean;
@@ -26,7 +33,7 @@ interface ScriptPanelProps {
 interface UploadedDoc {
   name: string;
   type: string;
-  content: string;
+  file: File;
   size: number;
 }
 
@@ -38,11 +45,98 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
   const [zoom, setZoom] = useState(100);
   const [uploadedDoc, setUploadedDoc] = useState<UploadedDoc | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  const [textContent, setTextContent] = useState<string | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 10, 200));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 10, 50));
+  const handleZoomIn = () => setZoom(prev => Math.min(prev + 25, 300));
+  const handleZoomOut = () => setZoom(prev => Math.max(prev - 25, 25));
+
+  // Render PDF page
+  const renderPage = useCallback(async (pageNum: number) => {
+    if (!pdfDoc || !canvasRef.current) return;
+
+    try {
+      const page = await pdfDoc.getPage(pageNum);
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+
+      const scale = zoom / 100;
+      const viewport = page.getViewport({ scale: scale * 1.5 });
+
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+
+      await page.render({
+        canvasContext: context,
+        viewport: viewport,
+      }).promise;
+    } catch (error) {
+      console.error('Error rendering PDF page:', error);
+    }
+  }, [pdfDoc, zoom]);
+
+  // Load PDF when document changes
+  useEffect(() => {
+    if (!uploadedDoc || uploadedDoc.type !== 'application/pdf') return;
+
+    const loadPdf = async () => {
+      setIsLoading(true);
+      try {
+        const arrayBuffer = await uploadedDoc.file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        setPdfDoc(pdf);
+        setTotalPages(pdf.numPages);
+        setCurrentPage(1);
+        setTextContent(null);
+      } catch (error) {
+        console.error('Error loading PDF:', error);
+        toast({
+          title: 'Error loading PDF',
+          description: 'Failed to load the PDF document',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPdf();
+  }, [uploadedDoc, toast]);
+
+  // Render page when current page or zoom changes
+  useEffect(() => {
+    if (pdfDoc) {
+      renderPage(currentPage);
+    }
+  }, [currentPage, zoom, pdfDoc, renderPage]);
+
+  // Load text file content
+  useEffect(() => {
+    if (!uploadedDoc) return;
+    
+    const textTypes = ['text/plain', 'text/markdown'];
+    const isTextFile = textTypes.includes(uploadedDoc.type) || 
+                       uploadedDoc.name.endsWith('.md') || 
+                       uploadedDoc.name.endsWith('.txt');
+    
+    if (isTextFile) {
+      uploadedDoc.file.text().then(content => {
+        setTextContent(content);
+        setPdfDoc(null);
+        setTotalPages(0);
+      });
+    }
+  }, [uploadedDoc]);
 
   const handleFileUpload = useCallback(async (file: File) => {
     const validTypes = [
@@ -53,7 +147,11 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
       'text/markdown'
     ];
 
-    if (!validTypes.includes(file.type) && !file.name.endsWith('.md')) {
+    const isValid = validTypes.includes(file.type) || 
+                    file.name.endsWith('.md') || 
+                    file.name.endsWith('.txt');
+
+    if (!isValid) {
       toast({
         title: 'Invalid file type',
         description: 'Please upload a PDF, Word document, or text file',
@@ -62,43 +160,26 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
+    if (file.size > 50 * 1024 * 1024) {
       toast({
         title: 'File too large',
-        description: 'Maximum file size is 10MB',
+        description: 'Maximum file size is 50MB',
         variant: 'destructive',
       });
       return;
     }
 
-    try {
-      let content = '';
-      
-      if (file.type === 'text/plain' || file.type === 'text/markdown' || file.name.endsWith('.md')) {
-        content = await file.text();
-      } else {
-        // For PDFs and Word docs, show placeholder - would need parsing library
-        content = `[Document: ${file.name}]\n\nPDF and Word document preview requires additional processing.\n\nFile Size: ${(file.size / 1024).toFixed(1)} KB`;
-      }
+    setUploadedDoc({
+      name: file.name,
+      type: file.type,
+      file: file,
+      size: file.size,
+    });
 
-      setUploadedDoc({
-        name: file.name,
-        type: file.type,
-        content,
-        size: file.size,
-      });
-
-      toast({
-        title: 'Document uploaded',
-        description: `${file.name} has been loaded`,
-      });
-    } catch (error) {
-      toast({
-        title: 'Upload failed',
-        description: 'Failed to read the document',
-        variant: 'destructive',
-      });
-    }
+    toast({
+      title: 'Document uploaded',
+      description: `${file.name} has been loaded`,
+    });
   }, [toast]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -119,220 +200,227 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
 
   const handleClear = () => {
     setUploadedDoc(null);
+    setPdfDoc(null);
+    setTextContent(null);
+    setCurrentPage(1);
+    setTotalPages(0);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
-  // Mock script content for demo
-  const defaultContent = `
-# Konvention Schedule
+  const handlePageUp = () => {
+    if (currentPage > 1) {
+      setCurrentPage(prev => prev - 1);
+    }
+  };
 
----
+  const handlePageDown = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(prev => prev + 1);
+    }
+  };
 
-## Thursday Evening
-
-**7:15 to 10:00**
-
-| Time | Description |
-|------|-------------|
-| Video Content: | Year In Review & Kona Nostalgia |
-| Main Stage Needs: | Podium |
-| Game Squad Needs: | |
-
-### Sponsors of the Day:
-- **Snack**: Sunny Sky & Samsara
-- **Notebook**: Decal Impressions
-- **Dinner**: Cornerstone Insurance & Veritiv
-
----
-
-## Agenda
-
-**Doors COULD open at 7:00**
-
-| Time | Event |
-|------|-------|
-| 7:15 to 8:00 | Doors Open, Coffee and Kona Served |
-| 8:00 to 8:10 | Welcome Susan Fichner |
-| 8:10 to 8:20 | First Game - Game Squad (House of Cards) |
-| 8:20 to 8:35 | Year in Review Video |
-| 8:35 to 9:00 | Opening Comments - Tony Lamb (Founder & CEO) |
-| 9:00 to 9:05 | Introduction of Darrell Joyce - Tony |
-| 9:05 to 9:50 | Darrell Joyce |
-| 9:50 to 10:00 | Susan returns to stage to dismiss |
-`;
+  const isPdf = uploadedDoc?.type === 'application/pdf';
+  const isWordDoc = uploadedDoc?.type === 'application/msword' || 
+                    uploadedDoc?.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent 
         side="right" 
-        className="w-[480px] sm:max-w-[480px] p-0 flex flex-col"
+        className={cn(
+          "p-0 flex flex-col border-l border-border",
+          isFullscreen ? "w-full sm:max-w-full" : "w-[560px] sm:max-w-[560px]"
+        )}
       >
         {/* Header */}
-        <SheetHeader className="px-4 py-3 border-b border-border">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-primary" />
-              <SheetTitle className="text-base">Script</SheetTitle>
-            </div>
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                <Search className="h-3.5 w-3.5" />
-              </Button>
-              <span className="text-xs text-muted-foreground px-2">{zoom}%</span>
-              <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleZoomOut}>
-                <ZoomOut className="h-3.5 w-3.5" />
-              </Button>
-              <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleZoomIn}>
-                <ZoomIn className="h-3.5 w-3.5" />
-              </Button>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                <Maximize2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" />
+            <span className="text-base font-semibold">Script</span>
           </div>
-        </SheetHeader>
-
-        {/* Upload Area */}
-        <div 
-          className={cn(
-            "mx-4 mt-3 border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer",
-            isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
-          )}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            accept=".pdf,.doc,.docx,.txt,.md"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFileUpload(file);
-            }}
-          />
-          <div className="flex flex-col items-center gap-2 text-center">
-            <Upload className="h-6 w-6 text-muted-foreground" />
-            <div className="text-sm">
-              <span className="text-primary font-medium">Click to upload</span>
-              <span className="text-muted-foreground"> or drag and drop</span>
-            </div>
-            <p className="text-xs text-muted-foreground">PDF, Word, TXT, MD (max 10MB)</p>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleZoomOut}>
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <span className="text-sm text-muted-foreground min-w-[48px] text-center font-mono">
+              {zoom}%
+            </span>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleZoomIn}>
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+            <div className="w-px h-4 bg-border mx-1" />
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 w-8 p-0"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 w-8 p-0"
+              onClick={() => onOpenChange(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
-        {/* Document indicator */}
+        {/* Navigation Bar - Only show when document is loaded */}
         {uploadedDoc && (
-          <div className="mx-4 mt-2 flex items-center gap-2 p-2 bg-muted/50 rounded-md">
-            <File className="h-4 w-4 text-primary" />
-            <span className="text-sm flex-1 truncate">{uploadedDoc.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {(uploadedDoc.size / 1024).toFixed(1)} KB
-            </span>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleClear}>
-              <Trash2 className="h-3.5 w-3.5" />
+          <div className="flex items-center justify-center gap-4 px-4 py-2 border-b border-border bg-muted/30">
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 gap-1"
+                onClick={handlePageUp}
+                disabled={!isPdf || currentPage <= 1}
+              >
+                <ChevronUp className="h-4 w-4" />
+                Up
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 gap-1"
+                onClick={handlePageDown}
+                disabled={!isPdf || currentPage >= totalPages}
+              >
+                <ChevronDown className="h-4 w-4" />
+                Down
+              </Button>
+            </div>
+            {isPdf && totalPages > 0 && (
+              <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+            )}
+            <div className="w-px h-4 bg-border" />
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 text-muted-foreground hover:text-destructive"
+              onClick={handleClear}
+            >
+              Clear
             </Button>
           </div>
         )}
 
-        {/* Content */}
-        <ScrollArea className="flex-1 mt-3">
-          <div 
-            className="p-6 prose prose-sm dark:prose-invert max-w-none"
-            style={{ fontSize: `${zoom}%` }}
-          >
-            {uploadedDoc ? (
-              <pre className="whitespace-pre-wrap font-sans text-sm">{uploadedDoc.content}</pre>
-            ) : (
-              <div className="space-y-4">
-                <h1 className="text-xl font-bold border-b pb-2">Konvention Schedule</h1>
-                
-                <section>
-                  <h2 className="text-lg font-semibold">Thursday Evening</h2>
-                  <p className="text-sm text-muted-foreground">7:15 to 10:00</p>
-                  
-                  <div className="mt-3 space-y-2 text-sm">
-                    <div className="flex gap-4">
-                      <span className="text-muted-foreground w-32">Video Content:</span>
-                      <span>Year In Review & Kona Nostalgia</span>
-                    </div>
-                    <div className="flex gap-4">
-                      <span className="text-muted-foreground w-32">Main Stage Needs:</span>
-                      <span>Podium</span>
-                    </div>
+        {/* Content Area */}
+        <div className="flex-1 overflow-hidden" ref={containerRef}>
+          {!uploadedDoc ? (
+            /* Upload Area - Show when no document */
+            <div 
+              className={cn(
+                "h-full flex flex-col items-center justify-center p-8 transition-colors",
+                isDragging ? "bg-primary/5" : "bg-background"
+              )}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+            >
+              <div 
+                className={cn(
+                  "w-full max-w-sm border-2 border-dashed rounded-xl p-8 transition-colors cursor-pointer",
+                  isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                )}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.txt,.md"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileUpload(file);
+                  }}
+                />
+                <div className="flex flex-col items-center gap-4 text-center">
+                  <div className="p-4 rounded-full bg-muted">
+                    <Upload className="h-8 w-8 text-muted-foreground" />
                   </div>
-                </section>
-
-                <section>
-                  <h3 className="text-base font-medium">Sponsors of the Day:</h3>
-                  <ul className="list-disc list-inside text-sm space-y-1 mt-2">
-                    <li><strong>Snack</strong>: Sunny Sky & Samsara</li>
-                    <li><strong>Notebook</strong>: Decal Impressions</li>
-                    <li><strong>Dinner</strong>: Cornerstone Insurance & Veritiv</li>
-                  </ul>
-                </section>
-
-                <section>
-                  <h2 className="text-lg font-semibold">Agenda</h2>
-                  <p className="text-sm font-medium text-runway-warning">Doors COULD open at 7:00</p>
-                  
-                  <div className="mt-3 border rounded-md overflow-hidden">
-                    <table className="w-full text-sm">
-                      <tbody>
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground w-28">7:15 to 8:00</td>
-                          <td className="px-3 py-2">Doors Open, Coffee and Kona Served</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">8:00 to 8:10</td>
-                          <td className="px-3 py-2">Welcome Susan Fichner</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">8:10 to 8:20</td>
-                          <td className="px-3 py-2">First Game - Game Squad</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">8:20 to 8:35</td>
-                          <td className="px-3 py-2">
-                            <span className="text-primary">Year in Review Video</span>
-                          </td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">8:35 to 9:00</td>
-                          <td className="px-3 py-2">
-                            Opening Comments - <strong className="text-primary">Tony Lamb</strong>
-                          </td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="px-3 py-2 text-muted-foreground">9:00 to 9:50</td>
-                          <td className="px-3 py-2">Darrell Joyce</td>
-                        </tr>
-                        <tr>
-                          <td className="px-3 py-2 text-muted-foreground">9:50 to 10:00</td>
-                          <td className="px-3 py-2">Susan returns to dismiss</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                  <div>
+                    <p className="text-base font-medium">
+                      <span className="text-primary">Click to upload</span>
+                      <span className="text-muted-foreground"> or drag and drop</span>
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      PDF, Word, TXT, MD (max 50MB)
+                    </p>
                   </div>
-                </section>
+                </div>
               </div>
-            )}
-          </div>
-        </ScrollArea>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/30">
-          <span className="text-xs text-muted-foreground">
-            {uploadedDoc ? uploadedDoc.name : 'Sample script'}
-          </span>
-          {uploadedDoc && (
-            <Button variant="ghost" size="sm" className="text-xs h-7" onClick={handleClear}>
-              <Trash2 className="h-3 w-3 mr-1" />
-              Clear
-            </Button>
-          )}
+            </div>
+          ) : isLoading ? (
+            /* Loading State */
+            <div className="h-full flex flex-col items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="mt-4 text-sm text-muted-foreground">Loading document...</p>
+            </div>
+          ) : isPdf ? (
+            /* PDF Viewer */
+            <ScrollArea className="h-full">
+              <div className="flex justify-center p-4 bg-muted/20 min-h-full">
+                <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+                  <canvas ref={canvasRef} className="block" />
+                </div>
+              </div>
+            </ScrollArea>
+          ) : textContent ? (
+            /* Text/Markdown Viewer */
+            <ScrollArea className="h-full">
+              <div className="p-6 bg-muted/20 min-h-full">
+                <div 
+                  className="bg-white rounded-lg shadow-lg p-8 prose prose-sm dark:prose-invert max-w-none"
+                  style={{ fontSize: `${zoom}%` }}
+                >
+                  <pre className="whitespace-pre-wrap font-sans text-foreground">{textContent}</pre>
+                </div>
+              </div>
+            </ScrollArea>
+          ) : isWordDoc ? (
+            /* Word Doc Placeholder */
+            <div className="h-full flex flex-col items-center justify-center p-8">
+              <div className="bg-white rounded-lg shadow-lg p-8 text-center max-w-sm">
+                <File className="h-12 w-12 text-primary mx-auto mb-4" />
+                <h3 className="font-semibold text-lg mb-2">{uploadedDoc.name}</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Word document preview requires conversion. 
+                  For best results, please convert to PDF before uploading.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  File Size: {(uploadedDoc.size / 1024).toFixed(1)} KB
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
+
+        {/* Footer - Document info */}
+        {uploadedDoc && (
+          <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/30">
+            <div className="flex items-center gap-2">
+              <File className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                {uploadedDoc.name}
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {(uploadedDoc.size / 1024).toFixed(1)} KB
+            </span>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );
