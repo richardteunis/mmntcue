@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -75,9 +75,10 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
   const [editName, setEditName] = useState('');
   const [editDuration, setEditDuration] = useState('');
   
-  // Drag and drop state
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  // Mouse-based drag and drop state
+  const [dragging, setDragging] = useState<{ id: string; startY: number; startIndex: number } | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const handleCreateSegment = useCallback(() => {
     if (!newSegmentName.trim()) return;
@@ -102,46 +103,53 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
     setEditingId(null);
   };
 
-  // Drag handlers
-  const handleDragStart = useCallback((e: React.DragEvent, segmentId: string) => {
-    if (disabled) return;
-    setDraggedId(segmentId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('application/x-segment-id', segmentId);
-    e.dataTransfer.setData('text/plain', segmentId);
-  }, [disabled]);
-
-  const handleDragEnd = useCallback(() => {
-    setDraggedId(null);
-    setDragOverIndex(null);
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+  // Mouse-based drag handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent, segmentId: string, index: number) => {
+    if (disabled || editingId) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (dragOverIndex !== index) {
-      setDragOverIndex(index);
-    }
-  }, [dragOverIndex]);
+    setDragging({ id: segmentId, startY: e.clientY, startIndex: index });
+  }, [disabled, editingId]);
 
-  const handleDrop = useCallback((e: React.DragEvent, targetIndex: number) => {
-    e.preventDefault();
-    const segmentId = e.dataTransfer.getData('application/x-segment-id') || e.dataTransfer.getData('text/plain');
-    if (!segmentId || !onSegmentReorder) {
-      setDragOverIndex(null);
-      setDraggedId(null);
-      return;
-    }
+  // Effect to handle mouse move and mouse up
+  useEffect(() => {
+    if (!dragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      
+      const items = containerRef.current.querySelectorAll('[data-segment-item]');
+      let newDropIndex = segments.length;
+      
+      for (let i = 0; i < items.length; i++) {
+        const rect = items[i].getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (e.clientY < midY) {
+          newDropIndex = i;
+          break;
+        }
+      }
+      
+      setDropIndex(newDropIndex);
+    };
+
+    const handleMouseUp = () => {
+      if (dropIndex !== null && dropIndex !== dragging.startIndex && dropIndex !== dragging.startIndex + 1) {
+        const adjustedIndex = dropIndex > dragging.startIndex ? dropIndex - 1 : dropIndex;
+        console.log('Mouse drag complete:', { segmentId: dragging.id, adjustedIndex });
+        onSegmentReorder?.(dragging.id, adjustedIndex);
+      }
+      setDragging(null);
+      setDropIndex(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
     
-    const sourceIndex = segments.findIndex(s => s.id === segmentId);
-    if (sourceIndex !== -1 && sourceIndex !== targetIndex && sourceIndex !== targetIndex - 1) {
-      const adjustedIndex = targetIndex > sourceIndex ? targetIndex - 1 : targetIndex;
-      onSegmentReorder(segmentId, adjustedIndex);
-    }
-    
-    setDraggedId(null);
-    setDragOverIndex(null);
-  }, [segments, onSegmentReorder]);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [dragging, dropIndex, segments.length, onSegmentReorder]);
 
   const totalDuration = segments.reduce((sum, s) => sum + s.targetDuration, 0);
 
@@ -202,7 +210,10 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
 
         {/* Segments List */}
         <ScrollArea className="flex-1">
-          <div className="p-2 space-y-1">
+          <div 
+            ref={containerRef}
+            className="p-2 space-y-1"
+          >
             {segments.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
                 <LayoutList className="h-8 w-8 mb-3 opacity-50" />
@@ -211,27 +222,25 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
               </div>
             ) : (
               segments.map((segment, index) => (
-                <div key={segment.id}>
+                <div key={segment.id} data-segment-item>
                   {/* Drop indicator */}
-                  {dragOverIndex === index && draggedId !== segment.id && (
+                  {dropIndex === index && dragging?.id !== segment.id && (
                     <div className="h-1 bg-primary rounded-full mx-2 my-0.5" />
                   )}
                   <div
-                    draggable={!disabled && editingId !== segment.id}
-                    onDragStart={(e) => handleDragStart(e, segment.id)}
-                    onDragEnd={handleDragEnd}
-                    onDragOver={(e) => handleDragOver(e, index)}
-                    onDrop={(e) => handleDrop(e, index)}
                     className={cn(
                       "group flex items-center gap-2 p-2 rounded-lg border border-border/50",
                       "hover:border-border hover:bg-muted/30 transition-colors",
                       editingId === segment.id && "ring-2 ring-primary/50",
-                      draggedId === segment.id && "opacity-50",
-                      !disabled && editingId !== segment.id && "cursor-grab active:cursor-grabbing"
+                      dragging?.id === segment.id && "opacity-50 ring-2 ring-primary",
+                      !disabled && editingId !== segment.id && "select-none"
                     )}
                   >
                     {/* Drag handle */}
-                    <div className="text-muted-foreground group-hover:text-foreground">
+                    <div 
+                      className="cursor-grab active:cursor-grabbing text-muted-foreground group-hover:text-foreground"
+                      onMouseDown={(e) => handleMouseDown(e, segment.id, index)}
+                    >
                       <GripVertical className="h-4 w-4" />
                     </div>
 
@@ -328,7 +337,8 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
                     </div>
                   )}
                 </div>
-                {index === segments.length - 1 && dragOverIndex === segments.length && (
+                {/* Drop indicator after last item */}
+                {index === segments.length - 1 && dropIndex === segments.length && (
                   <div className="h-1 bg-primary rounded-full mx-2 my-0.5" />
                 )}
                 </div>
