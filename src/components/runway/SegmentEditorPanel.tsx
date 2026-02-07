@@ -301,10 +301,9 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
                       </Button>
                     </div>
                   ) : (
-                    <div 
+                  <div 
                       className="flex-1 min-w-0 cursor-pointer"
-                      onClick={() => onSegmentClick?.(segment.id)}
-                      onDoubleClick={() => handleStartEdit(segment)}
+                      onClick={() => handleStartEdit(segment)}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium truncate">{segment.name}</span>
