@@ -447,6 +447,11 @@ const Dashboard: React.FC = () => {
   const handleSegmentDurationUpdate = useCallback(async (segmentId: string, newDuration: number) => {
     await updateDbSegment(segmentId, { target_duration: newDuration });
   }, [updateDbSegment]);
+
+  // Handle segment name update from SegmentRail
+  const handleSegmentNameUpdate = useCallback(async (segmentId: string, name: string) => {
+    await updateDbSegment(segmentId, { name });
+  }, [updateDbSegment]);
   
   // Handle cue selection - also updates the show state to track current position
   const handleCueSelect = useCallback((cueId: string | null, cue: TimelineCue | null) => {
@@ -1314,6 +1319,8 @@ const Dashboard: React.FC = () => {
                         segments={showSegments}
                         onSegmentClick={handleSegmentClick}
                         onSegmentUpdate={handleSegmentDurationUpdate}
+                        onSegmentCreate={handleSegmentCreate}
+                        onSegmentNameUpdate={handleSegmentNameUpdate}
                       />
                     ) : (
                       <Timeline 

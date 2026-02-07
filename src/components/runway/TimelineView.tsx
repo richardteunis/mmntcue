@@ -70,6 +70,8 @@ export interface TimelineViewProps {
   segments?: Segment[];
   onSegmentClick?: (segmentId: string) => void;
   onSegmentUpdate?: (segmentId: string, newDuration: number) => void;
+  onSegmentCreate?: (name: string, duration: number) => void;
+  onSegmentNameUpdate?: (segmentId: string, name: string) => void;
 }
 
 const DEFAULT_TRACKS: TimelineTrack[] = [
@@ -143,6 +145,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   segments = [],
   onSegmentClick,
   onSegmentUpdate,
+  onSegmentCreate,
+  onSegmentNameUpdate,
 }) => {
   const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
   const [dropTargetTrack, setDropTargetTrack] = useState<string | null>(null);
@@ -882,18 +886,6 @@ const TimelineView: React.FC<TimelineViewProps> = ({
         </div>
       </div>
 
-      {/* Segment Rail - Shows macro-level show structure */}
-      {segments.length > 0 && (
-        <SegmentRail
-          segments={segments}
-          cues={segmentRailCues}
-          pixelsPerSecond={pixelsPerSecond}
-          trackLabelWidth={trackLabelWidth}
-          onSegmentClick={onSegmentClick}
-          onSegmentUpdate={onSegmentUpdate}
-        />
-      )}
-
       {/* Timeline Grid */}
       <div 
         ref={(el) => {
@@ -911,11 +903,19 @@ const TimelineView: React.FC<TimelineViewProps> = ({
         style={{ cursor: panMode ? (isPanning ? 'grabbing' : 'grab') : 'default' }}
       >
         <div className="flex min-h-full">
-          {/* Track Labels */}
+          {/* Track Labels (sticky left sidebar) */}
           <div 
             className="flex-shrink-0 bg-card border-r border-border sticky left-0 z-20 relative"
             style={{ width: trackLabelWidth }}
           >
+            {/* Segment Label Row */}
+            {segments.length > 0 && (
+              <div className="h-10 border-b border-border bg-muted/20 flex items-center justify-center">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Segments</span>
+              </div>
+            )}
+            
+            {/* Time Ruler Label */}
             <div className="h-10 border-b border-border bg-muted/30 flex items-center justify-center">
               <span className="text-xs font-medium text-muted-foreground">Tracks</span>
             </div>
@@ -975,6 +975,22 @@ const TimelineView: React.FC<TimelineViewProps> = ({
             style={{ minWidth: timelineWidth, cursor: isBoxSelecting ? 'crosshair' : 'default' }}
             onMouseDown={handleTimelineMouseDown}
           >
+            {/* Segment Rail - Now inside scrollable area */}
+            {segments.length > 0 && (
+              <div className="border-b border-border bg-muted/20 relative" style={{ height: 40 }}>
+                <SegmentRail
+                  segments={segments}
+                  cues={segmentRailCues}
+                  pixelsPerSecond={pixelsPerSecond}
+                  timelineWidth={timelineWidth}
+                  onSegmentClick={onSegmentClick}
+                  onSegmentUpdate={onSegmentUpdate}
+                  onSegmentCreate={onSegmentCreate}
+                  onSegmentNameUpdate={onSegmentNameUpdate}
+                />
+              </div>
+            )}
+
             {/* Time Ruler */}
             <div 
               ref={rulerRef}
@@ -1203,10 +1219,13 @@ const TimelineView: React.FC<TimelineViewProps> = ({
             {/* Playhead */}
             <div 
               className={cn(
-                "absolute top-0 bottom-0 w-0.5 bg-primary z-30 cursor-ew-resize",
+                "absolute bottom-0 w-0.5 bg-primary z-30 cursor-ew-resize",
                 isDraggingPlayhead && "bg-primary/80"
               )}
-              style={{ left: currentTime * pixelsPerSecond }}
+              style={{ 
+                left: currentTime * pixelsPerSecond,
+                top: segments.length > 0 ? 40 : 0, // Account for segment rail height
+              }}
               onMouseDown={handlePlayheadMouseDown}
             >
               <div 
