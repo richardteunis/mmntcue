@@ -10,8 +10,8 @@ import Auth from "./pages/Auth";
 import JoinShow from "./pages/JoinShow";
 import Settings from "./pages/Settings";
 import Onboarding from "./pages/Onboarding";
+import Prompter from "./pages/Prompter";
 import NotFound from "./pages/NotFound";
-
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -29,6 +29,7 @@ const App = () => (
               <Route path="/join" element={<JoinShow />} />
               <Route path="/onboarding" element={<Onboarding />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/prompter" element={<Prompter />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
