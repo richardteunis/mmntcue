@@ -157,8 +157,13 @@ export function useSegments(showId: string | null) {
 
   // Reorder segment and move its cues
   const reorderSegment = useCallback(async (segmentId: string, newIndex: number) => {
+    console.log('useSegments.reorderSegment called:', { segmentId, newIndex });
+    
     const segment = segments.find(s => s.id === segmentId);
-    if (!segment) return;
+    if (!segment) {
+      console.log('Segment not found:', segmentId);
+      return;
+    }
 
     const filtered = segments.filter(s => s.id !== segmentId);
     const reordered = [
@@ -166,6 +171,8 @@ export function useSegments(showId: string | null) {
       segment,
       ...filtered.slice(newIndex)
     ];
+    
+    console.log('Reordered segments:', reordered.map(s => s.name));
 
     // Calculate new start times for all segments
     let accumulatedTime = 0;
