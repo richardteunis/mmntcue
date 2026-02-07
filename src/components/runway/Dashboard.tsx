@@ -62,7 +62,7 @@ const DEFAULT_TRACKS: Track[] = [
 ];
 
 // Convert database Cue to TimelineCue for Timeline component
-const cueToTimelineCue = (cue: Cue): TimelineCue => ({
+const cueToTimelineCue = (cue: Cue, segmentColor?: string | null): TimelineCue => ({
   id: cue.id,
   name: cue.name,
   type: cue.type,
@@ -74,7 +74,9 @@ const cueToTimelineCue = (cue: Cue): TimelineCue => ({
   effects: cue.effects,
   autoFollow: cue.auto_follow,
   color: cue.color,
-  track: cue.track
+  track: cue.track,
+  segmentId: cue.segment_id,
+  segmentColor: segmentColor,
 });
 
 // Convert TimelineCue to database Cue format
@@ -90,7 +92,8 @@ const timelineCueToCue = (timelineCue: TimelineCue, orderIndex: number): Omit<Cu
   notes: timelineCue.notes || null,
   effects: timelineCue.effects || [],
   auto_follow: timelineCue.autoFollow || false,
-  order_index: orderIndex
+  order_index: orderIndex,
+  segment_id: timelineCue.segmentId || null,
 });
 
 const Dashboard: React.FC = () => {
@@ -346,8 +349,21 @@ const Dashboard: React.FC = () => {
     }
   }, [showInfo?.eventDate, showInfo?.showTime]);
 
-  // Convert database cues to timeline cues (already sorted by start_time from hook)
-  const timelineCues = cues.map(cueToTimelineCue);
+  // Create a map of segment IDs to colors for quick lookup
+  const segmentColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    dbSegments.forEach(seg => {
+      if (seg.color) {
+        map.set(seg.id, seg.color);
+      }
+    });
+    return map;
+  }, [dbSegments]);
+
+  // Convert database cues to timeline cues with segment colors
+  const timelineCues = useMemo(() => {
+    return cues.map(cue => cueToTimelineCue(cue, cue.segment_id ? segmentColorMap.get(cue.segment_id) : null));
+  }, [cues, segmentColorMap]);
 
   // Calculate segment stats based on database segments and cues
   const segmentsWithStats = useMemo(() => {
@@ -1321,6 +1337,7 @@ const Dashboard: React.FC = () => {
                         onSegmentUpdate={handleSegmentDurationUpdate}
                         onSegmentCreate={handleSegmentCreate}
                         onSegmentNameUpdate={handleSegmentNameUpdate}
+                        onSegmentReorder={handleSegmentReorder}
                       />
                     ) : (
                       <Timeline 
@@ -1387,6 +1404,7 @@ const Dashboard: React.FC = () => {
           editingCue={editingCue}
           tracks={tracks.map(t => t.label)}
           nextStartTime={getNextStartTime()}
+          segments={dbSegments.map(s => ({ id: s.id, name: s.name, color: s.color }))}
         />
 
         {/* Add Track Modal */}

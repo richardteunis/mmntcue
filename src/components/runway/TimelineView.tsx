@@ -28,6 +28,8 @@ export interface TimelineCue {
   autoFollow?: boolean;
   color?: string;
   track?: string;
+  segmentId?: string | null;
+  segmentColor?: string | null;
 }
 
 export interface TimelineTrack {
@@ -72,6 +74,7 @@ export interface TimelineViewProps {
   onSegmentUpdate?: (segmentId: string, newDuration: number) => void;
   onSegmentCreate?: (name: string, duration: number) => void;
   onSegmentNameUpdate?: (segmentId: string, name: string) => void;
+  onSegmentReorder?: (segmentId: string, newIndex: number) => void;
 }
 
 const DEFAULT_TRACKS: TimelineTrack[] = [
@@ -147,6 +150,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   onSegmentUpdate,
   onSegmentCreate,
   onSegmentNameUpdate,
+  onSegmentReorder,
 }) => {
   const [dropTargetCueId, setDropTargetCueId] = useState<string | null>(null);
   const [dropTargetTrack, setDropTargetTrack] = useState<string | null>(null);
@@ -987,6 +991,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   onSegmentUpdate={onSegmentUpdate}
                   onSegmentCreate={onSegmentCreate}
                   onSegmentNameUpdate={onSegmentNameUpdate}
+                  onSegmentReorder={onSegmentReorder}
                 />
               </div>
             )}
@@ -1081,7 +1086,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   const isNextCue = nextCueId === cue.id;
                   const isFired = cueStatus === 'fired' || cueStatus === 'skipped';
                   
-                  const cueColor = cue.color && cue.color.startsWith('#') ? cue.color : track.color;
+                  // Color priority: custom cue color > segment color > track color
+                  const cueColor = (cue.color && cue.color.startsWith('#')) 
+                    ? cue.color 
+                    : (cue.segmentColor || track.color);
                   
                   return (
                     <Tooltip key={cue.id}>
@@ -1099,7 +1107,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                             isDragging && "opacity-50",
                             // Status-based styling
                             isFired && "opacity-50 grayscale",
-                            isNextCue && !isFired && "ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse"
+                            isNextCue && !isFired && "ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse",
+                            // Segment indicator
+                            cue.segmentId && "ring-1 ring-offset-1"
                           )}
                           style={{ 
                             left: startX, 

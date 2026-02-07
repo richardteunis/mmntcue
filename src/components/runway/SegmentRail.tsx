@@ -11,6 +11,7 @@ import {
   Check,
   X,
   Plus,
+  GripVertical,
 } from 'lucide-react';
 
 // Segment definition
@@ -39,6 +40,7 @@ interface SegmentRailProps {
   onSegmentUpdate?: (segmentId: string, newDuration: number) => void;
   onSegmentCreate?: (name: string, duration: number) => void;
   onSegmentNameUpdate?: (segmentId: string, name: string) => void;
+  onSegmentReorder?: (segmentId: string, newIndex: number) => void;
   className?: string;
   timelineWidth: number;
 }
@@ -77,6 +79,7 @@ const SegmentRail: React.FC<SegmentRailProps> = ({
   onSegmentUpdate,
   onSegmentCreate,
   onSegmentNameUpdate,
+  onSegmentReorder,
   className,
   timelineWidth,
 }) => {
@@ -84,6 +87,8 @@ const SegmentRail: React.FC<SegmentRailProps> = ({
   const [editMode, setEditMode] = useState<'name' | 'duration' | null>(null);
   const [editValue, setEditValue] = useState('');
   const [resizingSegment, setResizingSegment] = useState<{ id: string; startX: number; originalDuration: number } | null>(null);
+  const [draggingSegment, setDraggingSegment] = useState<{ id: string; startX: number; originalIndex: number } | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Calculate segment stats
@@ -198,6 +203,65 @@ const SegmentRail: React.FC<SegmentRailProps> = ({
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [resizingSegment, pixelsPerSecond, onSegmentUpdate]);
+
+  // Handle drag reorder
+  const handleDragStart = useCallback((e: React.MouseEvent, segmentId: string, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingSegment({ id: segmentId, startX: e.clientX, originalIndex: index });
+    document.body.style.cursor = 'grabbing';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  // Drag reorder effect
+  useEffect(() => {
+    if (!draggingSegment || !onSegmentReorder) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const x = e.clientX - containerRect.left;
+      
+      // Find which segment the mouse is over
+      let targetIndex = 0;
+      let accumulatedX = 0;
+      
+      for (let i = 0; i < segments.length; i++) {
+        const segWidth = (segments[i].endTime - segments[i].startTime) * pixelsPerSecond;
+        const midPoint = accumulatedX + segWidth / 2;
+        
+        if (x > midPoint) {
+          targetIndex = i + 1;
+        }
+        accumulatedX += segWidth;
+      }
+      
+      setDropTargetIndex(targetIndex !== draggingSegment.originalIndex ? targetIndex : null);
+    };
+
+    const handleMouseUp = () => {
+      if (dropTargetIndex !== null && dropTargetIndex !== draggingSegment.originalIndex) {
+        // Adjust target index if moving forward
+        const adjustedIndex = dropTargetIndex > draggingSegment.originalIndex 
+          ? dropTargetIndex - 1 
+          : dropTargetIndex;
+        onSegmentReorder(draggingSegment.id, adjustedIndex);
+      }
+      
+      setDraggingSegment(null);
+      setDropTargetIndex(null);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [draggingSegment, dropTargetIndex, segments, pixelsPerSecond, onSegmentReorder]);
 
   const getStatusIcon = (status: SegmentStatus) => {
     switch (status) {
@@ -315,8 +379,9 @@ const SegmentRail: React.FC<SegmentRailProps> = ({
                     className={cn(
                       "absolute top-1 bottom-1 rounded-md border cursor-pointer transition-all group",
                       "hover:brightness-110 hover:shadow-sm",
-                      "flex items-center justify-center gap-1.5 px-2 overflow-hidden",
-                      getStatusBg(segment.status)
+                      "flex items-center gap-1.5 px-1 overflow-hidden",
+                      getStatusBg(segment.status),
+                      draggingSegment?.id === segment.id && "opacity-50 ring-2 ring-primary"
                     )}
                     style={{
                       left,
@@ -326,9 +391,20 @@ const SegmentRail: React.FC<SegmentRailProps> = ({
                     }}
                     onClick={() => onSegmentClick?.(segment.id)}
                   >
+                    {/* Drag handle */}
+                    {onSegmentReorder && (
+                      <div
+                        className="flex-shrink-0 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity hover:text-foreground"
+                        onMouseDown={(e) => handleDragStart(e, segment.id, index)}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                    )}
+                    
                     {getStatusIcon(segment.status)}
                     <span 
-                      className="text-xs font-medium truncate cursor-text hover:underline"
+                      className="text-xs font-medium truncate cursor-text hover:underline flex-1"
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         handleStartEditName(segment.id, segment.name);
