@@ -29,11 +29,6 @@ interface ScriptPanelProps {
   showId?: string | null;
 }
 
-interface PageContent {
-  pageNumber: number;
-  text: string;
-}
-
 const ScriptPanel: React.FC<ScriptPanelProps> = ({
   open,
   onOpenChange,
@@ -46,7 +41,8 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
-  const [pages, setPages] = useState<PageContent[]>([]);
+  const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  const [pageImages, setPageImages] = useState<string[]>([]);
   const [htmlContent, setHtmlContent] = useState<string | null>(null);
   const [textContent, setTextContent] = useState<string | null>(null);
   const [fileType, setFileType] = useState<'pdf' | 'word' | 'text' | null>(null);
@@ -59,60 +55,56 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 25, 200));
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 25, 50));
 
-  // Extract text from PDF
-  const extractPdfText = async (file: File) => {
+  // Render all PDF pages to images
+  const renderPdfPages = useCallback(async (pdf: pdfjsLib.PDFDocumentProxy) => {
+    const images: string[] = [];
+    const scale = 2; // Higher resolution for crisp rendering
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale });
+      
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      
+      if (!context) continue;
+      
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      
+      await page.render({
+        canvasContext: context,
+        viewport: viewport,
+      }).promise;
+      
+      images.push(canvas.toDataURL('image/png'));
+    }
+    
+    return images;
+  }, []);
+
+  // Load PDF
+  const loadPdf = async (file: File) => {
     setIsLoading(true);
     try {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       
-      const extractedPages: PageContent[] = [];
-      
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        
-        // Group text items by their vertical position (y coordinate)
-        const lines: { y: number; items: any[] }[] = [];
-        
-        textContent.items.forEach((item: any) => {
-          if ('str' in item && item.str.trim()) {
-            const y = Math.round(item.transform[5]);
-            let line = lines.find(l => Math.abs(l.y - y) < 5);
-            if (!line) {
-              line = { y, items: [] };
-              lines.push(line);
-            }
-            line.items.push(item);
-          }
-        });
-        
-        // Sort lines by y position (top to bottom)
-        lines.sort((a, b) => b.y - a.y);
-        
-        // Sort items within each line by x position (left to right)
-        const pageText = lines.map(line => {
-          line.items.sort((a, b) => a.transform[4] - b.transform[4]);
-          return line.items.map((item: any) => item.str).join(' ');
-        }).join('\n');
-        
-        extractedPages.push({
-          pageNumber: i,
-          text: pageText
-        });
-      }
-      
-      setPages(extractedPages);
+      setPdfDoc(pdf);
       setTotalPages(pdf.numPages);
       setCurrentPage(1);
       setFileType('pdf');
       setHtmlContent(null);
       setTextContent(null);
+      
+      // Render all pages
+      const images = await renderPdfPages(pdf);
+      setPageImages(images);
     } catch (error) {
-      console.error('Error extracting PDF text:', error);
+      console.error('Error loading PDF:', error);
       toast({
         title: 'Error loading PDF',
-        description: 'Failed to extract text from the document',
+        description: 'Failed to load the document',
         variant: 'destructive',
       });
     } finally {
@@ -128,14 +120,11 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
       const result = await mammoth.convertToHtml({ arrayBuffer });
       
       setHtmlContent(result.value);
-      setPages([]);
+      setPageImages([]);
+      setPdfDoc(null);
       setTotalPages(0);
       setFileType('word');
       setTextContent(null);
-      
-      if (result.messages.length > 0) {
-        console.log('Mammoth messages:', result.messages);
-      }
     } catch (error) {
       console.error('Error converting Word document:', error);
       toast({
@@ -154,7 +143,8 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     try {
       const text = await file.text();
       setTextContent(text);
-      setPages([]);
+      setPageImages([]);
+      setPdfDoc(null);
       setTotalPages(0);
       setFileType('text');
       setHtmlContent(null);
@@ -203,7 +193,7 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     setFileSize(file.size);
 
     if (isPdf) {
-      await extractPdfText(file);
+      await loadPdf(file);
     } else if (isWord) {
       await convertWordDoc(file);
     } else {
@@ -214,7 +204,7 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
       title: 'Document loaded',
       description: `${file.name} is ready to view`,
     });
-  }, [toast]);
+  }, [toast, renderPdfPages]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -235,7 +225,8 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
   const handleClear = () => {
     setFileName(null);
     setFileSize(0);
-    setPages([]);
+    setPageImages([]);
+    setPdfDoc(null);
     setHtmlContent(null);
     setTextContent(null);
     setFileType(null);
@@ -268,7 +259,7 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
 
   // Track scroll position to update current page
   useEffect(() => {
-    if (fileType !== 'pdf' || pages.length === 0) return;
+    if (fileType !== 'pdf' || pageImages.length === 0) return;
 
     const handleScroll = () => {
       const container = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
@@ -291,9 +282,9 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     const container = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
     container?.addEventListener('scroll', handleScroll);
     return () => container?.removeEventListener('scroll', handleScroll);
-  }, [fileType, pages]);
+  }, [fileType, pageImages]);
 
-  const hasContent = fileName && (pages.length > 0 || htmlContent || textContent);
+  const hasContent = fileName && (pageImages.length > 0 || htmlContent || textContent);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -386,7 +377,7 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
         )}
 
         {/* Content Area */}
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden bg-muted/30">
           {!fileName ? (
             /* Upload Area */
             <div 
@@ -435,37 +426,35 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
             /* Loading State */
             <div className="h-full flex flex-col items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="mt-4 text-sm text-muted-foreground">Processing document...</p>
+              <p className="mt-4 text-sm text-muted-foreground">Loading document...</p>
             </div>
           ) : (
             /* Document Content */
             <ScrollArea className="h-full" ref={scrollAreaRef}>
-              <div className="p-6">
-                <div 
-                  className="bg-card text-card-foreground rounded-lg shadow-lg mx-auto max-w-[800px]"
-                  style={{ fontSize: `${zoom}%` }}
-                >
-                  {/* PDF Content - Page by Page */}
-                  {fileType === 'pdf' && pages.map((page, index) => (
-                    <div 
-                      key={page.pageNumber}
-                      ref={el => pageRefs.current[index] = el}
-                      className={cn(
-                        "p-8 min-h-[600px]",
-                        index > 0 && "border-t-4 border-dashed border-border"
-                      )}
-                    >
-                      <div className="text-xs text-muted-foreground mb-4 font-sans">
-                        Page {page.pageNumber}
-                      </div>
-                      <div className="whitespace-pre-wrap leading-relaxed font-serif text-base text-card-foreground">
-                        {page.text || <span className="text-muted-foreground italic">No text content on this page</span>}
-                      </div>
-                    </div>
-                  ))}
+              <div className="p-4 flex flex-col items-center gap-4">
+                {/* PDF Pages */}
+                {fileType === 'pdf' && pageImages.map((imgSrc, index) => (
+                  <div 
+                    key={index}
+                    ref={el => pageRefs.current[index] = el}
+                    className="bg-card rounded-lg shadow-lg overflow-hidden"
+                    style={{ width: `${zoom}%`, maxWidth: '100%' }}
+                  >
+                    <img 
+                      src={imgSrc} 
+                      alt={`Page ${index + 1}`}
+                      className="w-full h-auto block"
+                      draggable={false}
+                    />
+                  </div>
+                ))}
 
-                  {/* Word Document Content */}
-                  {fileType === 'word' && htmlContent && (
+                {/* Word Document Content */}
+                {fileType === 'word' && htmlContent && (
+                  <div 
+                    className="bg-card rounded-lg shadow-lg overflow-hidden w-full max-w-[800px]"
+                    style={{ fontSize: `${zoom}%` }}
+                  >
                     <div 
                       className="p-8 prose prose-sm max-w-none dark:prose-invert
                         prose-headings:font-bold
@@ -473,17 +462,22 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
                         prose-a:text-primary"
                       dangerouslySetInnerHTML={{ __html: htmlContent }}
                     />
-                  )}
+                  </div>
+                )}
 
-                  {/* Text Content */}
-                  {fileType === 'text' && textContent && (
+                {/* Text Content */}
+                {fileType === 'text' && textContent && (
+                  <div 
+                    className="bg-card rounded-lg shadow-lg overflow-hidden w-full max-w-[800px]"
+                    style={{ fontSize: `${zoom}%` }}
+                  >
                     <div className="p-8">
                       <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-card-foreground">
                         {textContent}
                       </pre>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </ScrollArea>
           )}
