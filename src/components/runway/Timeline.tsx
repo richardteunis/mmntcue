@@ -69,6 +69,8 @@ export interface TimelineCue {
   autoFollow?: boolean;
   color?: string;
   track?: string;
+  segmentId?: string | null;
+  segmentColor?: string | null;
 }
 
 // Segment info for table display

@@ -11,7 +11,8 @@ import {
   PlusCircle, 
   Save, 
   X, 
-  Clock
+  Clock,
+  LayoutList
 } from 'lucide-react';
 import {
   Form,
@@ -28,6 +29,12 @@ import { TimelineCue } from './Timeline';
 import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 
+interface SegmentOption {
+  id: string;
+  name: string;
+  color?: string | null;
+}
+
 interface AddEditCuePanelProps {
   isOpen: boolean;
   onClose: () => void;
@@ -36,6 +43,7 @@ interface AddEditCuePanelProps {
   tracks: string[];
   defaultTrack?: string;
   nextStartTime?: string;
+  segments?: SegmentOption[];
 }
 
 const DEFAULT_CUE: TimelineCue = {
@@ -60,7 +68,8 @@ const AddEditCuePanel: React.FC<AddEditCuePanelProps> = ({
   editingCue,
   tracks,
   defaultTrack = 'Audio Main',
-  nextStartTime = '00:00:00'
+  nextStartTime = '00:00:00',
+  segments = []
 }) => {
   const { toast } = useToast();
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
@@ -243,6 +252,40 @@ const AddEditCuePanel: React.FC<AddEditCuePanelProps> = ({
                   </FormItem>
                 )}
               />
+
+              {/* Segment Selection */}
+              {segments.length > 0 && (
+                <FormField
+                  control={form.control}
+                  name="segmentId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <LayoutList className="h-4 w-4" />
+                        Segment
+                      </FormLabel>
+                      <FormControl>
+                        <select 
+                          value={field.value || ''}
+                          onChange={(e) => field.onChange(e.target.value || null)}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <option value="">No segment (use track color)</option>
+                          {segments.map((segment) => (
+                            <option key={segment.id} value={segment.id}>
+                              {segment.name}
+                            </option>
+                          ))}
+                        </select>
+                      </FormControl>
+                      <FormDescription>
+                        Assign to a segment for automatic color-coding
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               
               <FormField
                 control={form.control}
