@@ -7,8 +7,6 @@ import {
   FileText, 
   ChevronUp, 
   ChevronDown, 
-  ChevronLeft,
-  ChevronRight,
   Maximize2,
   Minimize2,
   ZoomIn,
@@ -30,6 +28,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useScriptAnnotations } from '@/hooks/useScriptAnnotations';
+import ScriptAnnotationToolbar from './ScriptAnnotationToolbar';
+import { Cue } from '@/types/cue';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
@@ -38,11 +39,17 @@ interface ScriptPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   showId?: string | null;
+  cues?: Cue[];
+  currentCueId?: string | null;
+  onCueFired?: (cueId: string) => void;
 }
 
 const ScriptPanel: React.FC<ScriptPanelProps> = ({
   open,
   onOpenChange,
+  showId,
+  cues = [],
+  currentCueId,
 }) => {
   const [zoom, setZoom] = useState(100);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -65,6 +72,27 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const { toast } = useToast();
 
+  // Script annotations
+  const {
+    annotations,
+    cuePageLinks,
+    selectedColor,
+    isAnnotating,
+    highlightColors,
+    setSelectedColor,
+    setIsAnnotating,
+    addAnnotation,
+    getAnnotationsForPage,
+    linkCueToPage,
+    unlinkCue,
+    getPageForCue,
+    getCueForPage,
+    clearAllAnnotations,
+  } = useScriptAnnotations(showId);
+
+  // Get linked cue for current page
+  const linkedCueForCurrentPage = getCueForPage(currentPage);
+
   const handleZoomIn = () => {
     const newZoom = Math.min(zoom + 25, 200);
     setZoom(newZoom);
@@ -76,6 +104,22 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     setZoom(newZoom);
     prompterWindow?.postMessage({ type: 'zoom', zoom: newZoom + 50 }, '*');
   };
+
+  // Watch for cue changes and auto-advance prompter
+  useEffect(() => {
+    if (currentCueId && prompterWindow) {
+      prompterWindow.postMessage({ 
+        type: 'cue-fired', 
+        cueId: currentCueId 
+      }, '*');
+      
+      // Also navigate locally if we have a link
+      const linkedPage = getPageForCue(currentCueId);
+      if (linkedPage) {
+        scrollToPage(linkedPage);
+      }
+    }
+  }, [currentCueId, prompterWindow, getPageForCue]);
 
   // Render PDF pages to images
   const renderPdfPages = useCallback(async (pdf: pdfjsLib.PDFDocumentProxy) => {
@@ -332,6 +376,27 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     printWindow.print();
   };
 
+  // Handle linking cue to page
+  const handleLinkCue = (cueId: string) => {
+    const cue = cues.find(c => c.id === cueId);
+    linkCueToPage(cueId, currentPage, cue?.name);
+    toast({
+      title: 'Page linked to cue',
+      description: `Page ${currentPage} → ${cue?.name || 'Cue'}`,
+    });
+  };
+
+  const handleUnlinkCurrentPage = () => {
+    const link = getCueForPage(currentPage);
+    if (link) {
+      unlinkCue(link.cueId);
+      toast({
+        title: 'Link removed',
+        description: `Page ${currentPage} unlinked`,
+      });
+    }
+  };
+
   // Open prompter window
   const openPrompter = () => {
     const width = 1200;
@@ -351,7 +416,7 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
       // Listen for ready message
       const handleMessage = (event: MessageEvent) => {
         if (event.data.type === 'prompter-ready') {
-          // Send initial data
+          // Send initial data including cue-page links
           newWindow.postMessage({
             type: 'init',
             pageImages,
@@ -359,6 +424,7 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
             textContent,
             fileType,
             fileName,
+            cuePageLinks,
           }, '*');
         }
         if (event.data.type === 'page-change') {
@@ -434,12 +500,30 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open, currentPage, totalPages]);
 
+  // Handle text selection for highlighting
+  const handleTextSelection = useCallback(() => {
+    if (!isAnnotating) return;
+    
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim()) {
+      const text = selection.toString().trim();
+      addAnnotation(currentPage, text);
+      selection.removeAllRanges();
+      toast({
+        title: 'Text highlighted',
+        description: text.length > 30 ? text.substring(0, 30) + '...' : text,
+      });
+    }
+  }, [isAnnotating, currentPage, addAnnotation, toast]);
+
   const hasContent = fileName && (pageImages.length > 0 || htmlContent || textContent);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent 
         side="right" 
+        hideOverlay={true}
+        hideCloseButton={true}
         className={cn(
           "p-0 flex flex-col border-l border-border",
           isFullscreen ? "w-full sm:max-w-full" : "w-[600px] sm:max-w-[600px]"
@@ -452,6 +536,27 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
             <span className="text-base font-semibold">Script</span>
           </div>
           <div className="flex items-center gap-1">
+            {/* Annotation tools */}
+            {hasContent && (
+              <>
+                <ScriptAnnotationToolbar 
+                  isAnnotating={isAnnotating}
+                  onToggleAnnotating={() => setIsAnnotating(!isAnnotating)}
+                  selectedColor={selectedColor}
+                  onColorChange={setSelectedColor}
+                  highlightColors={highlightColors}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  cues={cues}
+                  linkedCueId={linkedCueForCurrentPage?.cueId}
+                  onLinkCue={handleLinkCue}
+                  onUnlinkCue={handleUnlinkCurrentPage}
+                  annotationCount={annotations.length}
+                  onClearAnnotations={clearAllAnnotations}
+                />
+                <div className="w-px h-4 bg-border mx-1" />
+              </>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleZoomOut}>
@@ -572,6 +677,14 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
                 </span>
               </>
             )}
+            {linkedCueForCurrentPage && (
+              <>
+                <div className="w-px h-4 bg-border" />
+                <span className="text-xs text-primary">
+                  🔗 {cues.find(c => c.id === linkedCueForCurrentPage.cueId)?.name || 'Linked'}
+                </span>
+              </>
+            )}
             <div className="w-px h-4 bg-border" />
             <Button 
               variant="ghost" 
@@ -584,34 +697,51 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
           </div>
         )}
 
+        {/* Annotation Mode Indicator */}
+        {isAnnotating && (
+          <div 
+            className="px-4 py-2 text-xs font-medium text-center shrink-0"
+            style={{ backgroundColor: selectedColor + '40' }}
+          >
+            Highlight mode active — Select text to highlight
+          </div>
+        )}
+
         {/* Content Area */}
-        <div className="flex-1 min-h-0 overflow-hidden bg-muted/30 flex">
+        <div 
+          className="flex-1 min-h-0 overflow-hidden bg-muted/30 flex"
+          onMouseUp={handleTextSelection}
+        >
           {/* Thumbnail Sidebar */}
           {hasContent && fileType === 'pdf' && showThumbnails && thumbnails.length > 0 && (
             <div className="w-24 border-r border-border bg-background shrink-0">
               <ScrollArea className="h-full">
                 <div className="p-2 space-y-2">
-                  {thumbnails.map((thumb, index) => (
-                    <button
-                      key={index}
-                      onClick={() => scrollToPage(index + 1)}
-                      className={cn(
-                        "w-full rounded overflow-hidden border-2 transition-colors",
-                        currentPage === index + 1 
-                          ? "border-primary" 
-                          : "border-transparent hover:border-primary/50"
-                      )}
-                    >
-                      <img 
-                        src={thumb} 
-                        alt={`Page ${index + 1}`}
-                        className="w-full h-auto"
-                      />
-                      <div className="text-xs text-muted-foreground py-1">
-                        {index + 1}
-                      </div>
-                    </button>
-                  ))}
+                  {thumbnails.map((thumb, index) => {
+                    const pageLink = getCueForPage(index + 1);
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => scrollToPage(index + 1)}
+                        className={cn(
+                          "w-full rounded overflow-hidden border-2 transition-colors relative",
+                          currentPage === index + 1 
+                            ? "border-primary" 
+                            : "border-transparent hover:border-primary/50"
+                        )}
+                      >
+                        <img 
+                          src={thumb} 
+                          alt={`Page ${index + 1}`}
+                          className="w-full h-auto"
+                        />
+                        <div className="text-xs text-muted-foreground py-1 flex items-center justify-center gap-1">
+                          {pageLink && <span className="text-primary">🔗</span>}
+                          {index + 1}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </ScrollArea>
             </div>
@@ -693,7 +823,10 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
                   {/* Word Document Content */}
                   {fileType === 'word' && htmlContent && (
                     <div 
-                      className="bg-card rounded-lg shadow-lg overflow-hidden w-full max-w-[800px]"
+                      className={cn(
+                        "bg-card rounded-lg shadow-lg overflow-hidden w-full max-w-[800px]",
+                        isAnnotating && "select-text cursor-text"
+                      )}
                       style={{ fontSize: `${zoom}%` }}
                     >
                       <div 
@@ -709,7 +842,10 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
                   {/* Text Content */}
                   {fileType === 'text' && textContent && (
                     <div 
-                      className="bg-card rounded-lg shadow-lg overflow-hidden w-full max-w-[800px]"
+                      className={cn(
+                        "bg-card rounded-lg shadow-lg overflow-hidden w-full max-w-[800px]",
+                        isAnnotating && "select-text cursor-text"
+                      )}
                       style={{ fontSize: `${zoom}%` }}
                     >
                       <div className="p-8">
@@ -735,6 +871,9 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
               </span>
               {prompterWindow && (
                 <span className="text-xs text-primary">• Prompter Active</span>
+              )}
+              {annotations.length > 0 && (
+                <span className="text-xs text-muted-foreground">• {annotations.length} highlights</span>
               )}
             </div>
             <span className="text-xs text-muted-foreground">
