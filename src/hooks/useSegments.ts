@@ -155,104 +155,6 @@ export function useSegments(showId: string | null) {
     }
   }, [segments, toast]);
 
-  // Reorder segment and move its cues
-  const reorderSegment = useCallback(async (segmentId: string, newIndex: number) => {
-    console.log('useSegments.reorderSegment called:', { segmentId, newIndex });
-    
-    const segment = segments.find(s => s.id === segmentId);
-    if (!segment) {
-      console.log('Segment not found:', segmentId);
-      return;
-    }
-
-    const filtered = segments.filter(s => s.id !== segmentId);
-    const reordered = [
-      ...filtered.slice(0, newIndex),
-      segment,
-      ...filtered.slice(newIndex)
-    ];
-    
-    console.log('Reordered segments:', reordered.map(s => s.name));
-
-    // Calculate new start times for all segments
-    let accumulatedTime = 0;
-    const segmentsWithNewTimes = reordered.map((s, i) => {
-      const newStartTime = accumulatedTime;
-      accumulatedTime += s.target_duration;
-      return { ...s, order_index: i, start_time: newStartTime };
-    });
-
-    // Optimistic update for segments
-    setSegments(segmentsWithNewTimes);
-
-    try {
-      // First, fetch all cues that belong to any segment in this show
-      const { data: cuesData, error: cuesError } = await supabase
-        .from('cues')
-        .select('id, segment_id, start_time')
-        .in('segment_id', segments.map(s => s.id));
-
-      if (cuesError) throw cuesError;
-
-      // Build a map of old segment start times
-      const oldStartTimes = new Map<string, number>();
-      segments.forEach(s => {
-        oldStartTimes.set(s.id, s.start_time || 0);
-      });
-
-      // Build a map of new segment start times
-      const newStartTimes = new Map<string, number>();
-      segmentsWithNewTimes.forEach(s => {
-        newStartTimes.set(s.id, s.start_time);
-      });
-
-      // Update segments order and start times
-      for (const seg of segmentsWithNewTimes) {
-        await supabase
-          .from('show_segments')
-          .update({ order_index: seg.order_index, start_time: seg.start_time })
-          .eq('id', seg.id);
-      }
-
-      // Update cue start times based on segment movement
-      if (cuesData && cuesData.length > 0) {
-        for (const cue of cuesData) {
-          if (!cue.segment_id) continue;
-          
-          const oldSegmentStart = oldStartTimes.get(cue.segment_id) || 0;
-          const newSegmentStart = newStartTimes.get(cue.segment_id);
-          
-          if (newSegmentStart === undefined) continue;
-          
-          // Calculate cue's offset within its segment
-          const cueStartSeconds = timeStringToSeconds(cue.start_time);
-          const offsetWithinSegment = cueStartSeconds - oldSegmentStart;
-          
-          // Calculate new absolute start time
-          const newCueStartSeconds = newSegmentStart + offsetWithinSegment;
-          const newStartTimeStr = secondsToTimeString(newCueStartSeconds);
-          
-          if (cue.start_time !== newStartTimeStr) {
-            await supabase
-              .from('cues')
-              .update({ start_time: newStartTimeStr })
-              .eq('id', cue.id);
-          }
-        }
-      }
-
-    } catch (error: any) {
-      console.error('Error reordering segments:', error);
-      toast({
-        title: 'Error reordering segments',
-        description: error.message,
-        variant: 'destructive',
-      });
-      // Revert on error
-      fetchSegments();
-    }
-  }, [segments, toast, fetchSegments]);
-
   // Helper to convert time string to seconds
   const timeStringToSeconds = (timeString: string): number => {
     const parts = timeString.split(':').map(Number);
@@ -271,6 +173,167 @@ export function useSegments(showId: string | null) {
     const seconds = Math.floor(totalSeconds % 60);
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
+
+  // Find which segment a cue belongs to based on its start_time
+  const findCueSegment = (cueStartSeconds: number, segmentList: Segment[]): Segment | null => {
+    for (let i = segmentList.length - 1; i >= 0; i--) {
+      const seg = segmentList[i];
+      const segStart = seg.start_time || 0;
+      if (cueStartSeconds >= segStart) {
+        return seg;
+      }
+    }
+    return segmentList[0] || null;
+  };
+
+  // Reorder segment and move its cues
+  const reorderSegment = useCallback(async (segmentId: string, newIndex: number) => {
+    console.log('useSegments.reorderSegment called:', { segmentId, newIndex });
+    
+    const segment = segments.find(s => s.id === segmentId);
+    if (!segment) {
+      console.log('Segment not found:', segmentId);
+      return;
+    }
+
+    const currentIndex = segments.findIndex(s => s.id === segmentId);
+    if (currentIndex === newIndex) {
+      console.log('Same position, no reorder needed');
+      return;
+    }
+
+    // Build old segment time ranges before reorder
+    const oldSegmentRanges = segments.map((s, i) => {
+      const startTime = s.start_time || 0;
+      const endTime = startTime + s.target_duration;
+      return { id: s.id, startTime, endTime, index: i };
+    });
+
+    // Create new order
+    const filtered = segments.filter(s => s.id !== segmentId);
+    const reordered = [
+      ...filtered.slice(0, newIndex),
+      segment,
+      ...filtered.slice(newIndex)
+    ];
+    
+    console.log('Reordered segments:', reordered.map(s => s.name));
+
+    // Calculate new start times for all segments
+    let accumulatedTime = 0;
+    const segmentsWithNewTimes = reordered.map((s, i) => {
+      const newStartTime = accumulatedTime;
+      accumulatedTime += s.target_duration;
+      return { ...s, order_index: i, start_time: newStartTime };
+    });
+
+    // Build new segment time ranges
+    const newSegmentRanges = segmentsWithNewTimes.map((s, i) => {
+      const startTime = s.start_time;
+      const endTime = startTime + s.target_duration;
+      return { id: s.id, startTime, endTime, index: i };
+    });
+
+    // Optimistic update for segments
+    setSegments(segmentsWithNewTimes);
+
+    try {
+      // Fetch all cues for this show
+      const showIdFromSegment = segment.show_id;
+      const { data: cuesData, error: cuesError } = await supabase
+        .from('cues')
+        .select('id, start_time, show_id')
+        .eq('show_id', showIdFromSegment);
+
+      if (cuesError) {
+        console.error('Error fetching cues:', cuesError);
+        throw cuesError;
+      }
+
+      console.log('Fetched cues:', cuesData?.length || 0);
+
+      // Update segments order and start times first
+      for (const seg of segmentsWithNewTimes) {
+        await supabase
+          .from('show_segments')
+          .update({ order_index: seg.order_index, start_time: seg.start_time })
+          .eq('id', seg.id);
+      }
+
+      // Now update cue start times based on which segment they were in
+      if (cuesData && cuesData.length > 0) {
+        const cueUpdates: { id: string; newStartTime: string }[] = [];
+
+        for (const cue of cuesData) {
+          const cueStartSeconds = timeStringToSeconds(cue.start_time);
+          
+          // Find which segment this cue was in (by old time ranges)
+          let oldSegmentId: string | null = null;
+          for (let i = oldSegmentRanges.length - 1; i >= 0; i--) {
+            const range = oldSegmentRanges[i];
+            if (cueStartSeconds >= range.startTime && cueStartSeconds < range.endTime) {
+              oldSegmentId = range.id;
+              break;
+            }
+          }
+          // If no segment found, assign to first segment if cue is before all segments
+          if (!oldSegmentId && oldSegmentRanges.length > 0) {
+            if (cueStartSeconds < oldSegmentRanges[0].startTime) {
+              oldSegmentId = oldSegmentRanges[0].id;
+            } else {
+              // Cue is after all segments, assign to last
+              oldSegmentId = oldSegmentRanges[oldSegmentRanges.length - 1].id;
+            }
+          }
+
+          if (!oldSegmentId) continue;
+
+          // Find the old and new positions for this segment
+          const oldRange = oldSegmentRanges.find(r => r.id === oldSegmentId);
+          const newRange = newSegmentRanges.find(r => r.id === oldSegmentId);
+
+          if (!oldRange || !newRange) continue;
+
+          // Calculate offset within the segment
+          const offsetWithinSegment = cueStartSeconds - oldRange.startTime;
+          
+          // Calculate new absolute start time
+          const newCueStartSeconds = newRange.startTime + offsetWithinSegment;
+          const newStartTimeStr = secondsToTimeString(newCueStartSeconds);
+
+          if (cue.start_time !== newStartTimeStr) {
+            cueUpdates.push({ id: cue.id, newStartTime: newStartTimeStr });
+          }
+        }
+
+        console.log('Cue updates to apply:', cueUpdates.length);
+
+        // Apply cue updates
+        for (const update of cueUpdates) {
+          await supabase
+            .from('cues')
+            .update({ start_time: update.newStartTime })
+            .eq('id', update.id);
+        }
+      }
+
+      toast({
+        title: 'Segments reordered',
+        description: 'Cues have been moved with their segments',
+      });
+
+    } catch (error: any) {
+      console.error('Error reordering segments:', error);
+      toast({
+        title: 'Error reordering segments',
+        description: error.message,
+        variant: 'destructive',
+      });
+      // Revert on error
+      fetchSegments();
+    }
+  }, [segments, toast, fetchSegments]);
+
 
   // Initial fetch
   useEffect(() => {
