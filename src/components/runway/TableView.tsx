@@ -334,7 +334,7 @@ const TableView: React.FC<TableViewProps> = ({
       </div>
 
       {/* Toolbar */}
-      <div className="px-4 py-2 border-b border-border flex items-center gap-3 bg-card/80">
+      <div className="px-4 py-2 border-b border-border flex items-center gap-3 bg-card">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -373,9 +373,9 @@ const TableView: React.FC<TableViewProps> = ({
                 <Collapsible key={segment.id} open={!isCollapsed} onOpenChange={() => toggleSegment(segment.id)}>
                   {/* Segment Header Row */}
                   <div className={cn(
-                    "flex items-center gap-3 px-4 py-3 bg-muted/30 sticky top-0 z-10",
-                    status === 'over' && "bg-runway-error/5",
-                    status === 'under' && "bg-runway-teal/5"
+                    "flex items-center gap-3 px-4 py-3 bg-muted sticky top-0 z-10 border-b border-border",
+                    status === 'over' && "bg-destructive/10",
+                    status === 'under' && "bg-primary/10"
                   )}>
                     <CollapsibleTrigger asChild>
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
@@ -459,13 +459,13 @@ const TableView: React.FC<TableViewProps> = ({
                     ) : (
                       <Table>
                         <TableHeader>
-                          <TableRow className="hover:bg-transparent">
-                            <TableHead className="w-[50px] text-center text-xs">#</TableHead>
-                            <TableHead className="text-xs">Cue Name</TableHead>
-                            <TableHead className="w-[80px] text-xs">Duration</TableHead>
-                            <TableHead className="w-[60px] text-xs">Type</TableHead>
-                            {!goMode && <TableHead className="text-xs">Notes</TableHead>}
-                            {!goMode && <TableHead className="w-[100px] text-right text-xs">Actions</TableHead>}
+                          <TableRow className="hover:bg-transparent bg-card">
+                            <TableHead className="w-[50px] text-center text-xs bg-card">#</TableHead>
+                            <TableHead className="text-xs bg-card">Cue Name</TableHead>
+                            <TableHead className="w-[80px] text-xs bg-card">Duration</TableHead>
+                            <TableHead className="w-[60px] text-xs bg-card">Type</TableHead>
+                            {!goMode && <TableHead className="text-xs bg-card">Notes</TableHead>}
+                            {!goMode && <TableHead className="w-[100px] text-right text-xs bg-card">Actions</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -617,7 +617,7 @@ const TableView: React.FC<TableViewProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-2 border-t border-border bg-card/80 flex items-center gap-6 text-xs">
+      <div className="px-4 py-2 border-t border-border bg-card flex items-center gap-6 text-xs">
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Segments:</span>
           <span className="font-mono font-medium text-foreground">{segments.length}</span>
