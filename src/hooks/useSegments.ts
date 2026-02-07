@@ -155,7 +155,7 @@ export function useSegments(showId: string | null) {
     }
   }, [segments, toast]);
 
-  // Reorder segment
+  // Reorder segment and move its cues
   const reorderSegment = useCallback(async (segmentId: string, newIndex: number) => {
     const segment = segments.find(s => s.id === segmentId);
     if (!segment) return;
@@ -167,17 +167,73 @@ export function useSegments(showId: string | null) {
       ...filtered.slice(newIndex)
     ];
 
-    // Optimistic update
-    setSegments(reordered.map((s, i) => ({ ...s, order_index: i })));
+    // Calculate new start times for all segments
+    let accumulatedTime = 0;
+    const segmentsWithNewTimes = reordered.map((s, i) => {
+      const newStartTime = accumulatedTime;
+      accumulatedTime += s.target_duration;
+      return { ...s, order_index: i, start_time: newStartTime };
+    });
+
+    // Optimistic update for segments
+    setSegments(segmentsWithNewTimes);
 
     try {
-      // Update all order_index values
-      for (let i = 0; i < reordered.length; i++) {
+      // First, fetch all cues that belong to any segment in this show
+      const { data: cuesData, error: cuesError } = await supabase
+        .from('cues')
+        .select('id, segment_id, start_time')
+        .in('segment_id', segments.map(s => s.id));
+
+      if (cuesError) throw cuesError;
+
+      // Build a map of old segment start times
+      const oldStartTimes = new Map<string, number>();
+      segments.forEach(s => {
+        oldStartTimes.set(s.id, s.start_time || 0);
+      });
+
+      // Build a map of new segment start times
+      const newStartTimes = new Map<string, number>();
+      segmentsWithNewTimes.forEach(s => {
+        newStartTimes.set(s.id, s.start_time);
+      });
+
+      // Update segments order and start times
+      for (const seg of segmentsWithNewTimes) {
         await supabase
           .from('show_segments')
-          .update({ order_index: i })
-          .eq('id', reordered[i].id);
+          .update({ order_index: seg.order_index, start_time: seg.start_time })
+          .eq('id', seg.id);
       }
+
+      // Update cue start times based on segment movement
+      if (cuesData && cuesData.length > 0) {
+        for (const cue of cuesData) {
+          if (!cue.segment_id) continue;
+          
+          const oldSegmentStart = oldStartTimes.get(cue.segment_id) || 0;
+          const newSegmentStart = newStartTimes.get(cue.segment_id);
+          
+          if (newSegmentStart === undefined) continue;
+          
+          // Calculate cue's offset within its segment
+          const cueStartSeconds = timeStringToSeconds(cue.start_time);
+          const offsetWithinSegment = cueStartSeconds - oldSegmentStart;
+          
+          // Calculate new absolute start time
+          const newCueStartSeconds = newSegmentStart + offsetWithinSegment;
+          const newStartTimeStr = secondsToTimeString(newCueStartSeconds);
+          
+          if (cue.start_time !== newStartTimeStr) {
+            await supabase
+              .from('cues')
+              .update({ start_time: newStartTimeStr })
+              .eq('id', cue.id);
+          }
+        }
+      }
+
     } catch (error: any) {
       console.error('Error reordering segments:', error);
       toast({
@@ -189,6 +245,25 @@ export function useSegments(showId: string | null) {
       fetchSegments();
     }
   }, [segments, toast, fetchSegments]);
+
+  // Helper to convert time string to seconds
+  const timeStringToSeconds = (timeString: string): number => {
+    const parts = timeString.split(':').map(Number);
+    if (parts.length === 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    } else if (parts.length === 2) {
+      return parts[0] * 60 + parts[1];
+    }
+    return 0;
+  };
+
+  // Helper to convert seconds to time string
+  const secondsToTimeString = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   // Initial fetch
   useEffect(() => {
