@@ -372,11 +372,16 @@ const TableView: React.FC<TableViewProps> = ({
               return (
                 <Collapsible key={segment.id} open={!isCollapsed} onOpenChange={() => toggleSegment(segment.id)}>
                   {/* Segment Header Row */}
-                  <div className={cn(
-                    "flex items-center gap-3 px-4 py-3 bg-muted sticky top-0 z-10 border-b border-border",
-                    status === 'over' && "bg-destructive/10",
-                    status === 'under' && "bg-primary/10"
-                  )}>
+                  <div 
+                    className="flex items-center gap-3 px-4 py-3 sticky top-0 z-20 border-b border-border"
+                    style={{
+                      backgroundColor: status === 'over' 
+                        ? 'hsl(0 30% 18%)' 
+                        : status === 'under' 
+                          ? 'hsl(200 30% 18%)' 
+                          : 'hsl(var(--muted))'
+                    }}
+                  >
                     <CollapsibleTrigger asChild>
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
                         {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
