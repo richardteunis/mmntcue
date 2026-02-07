@@ -74,6 +74,10 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDuration, setEditDuration] = useState('');
+  
+  // Drag and drop state
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const handleCreateSegment = useCallback(() => {
     if (!newSegmentName.trim()) return;
@@ -97,6 +101,47 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
     onSegmentUpdate?.(editingId, editName, seconds);
     setEditingId(null);
   };
+
+  // Drag handlers
+  const handleDragStart = useCallback((e: React.DragEvent, segmentId: string) => {
+    if (disabled) return;
+    setDraggedId(segmentId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/x-segment-id', segmentId);
+    e.dataTransfer.setData('text/plain', segmentId);
+  }, [disabled]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedId(null);
+    setDragOverIndex(null);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  }, [dragOverIndex]);
+
+  const handleDrop = useCallback((e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    const segmentId = e.dataTransfer.getData('application/x-segment-id') || e.dataTransfer.getData('text/plain');
+    if (!segmentId || !onSegmentReorder) {
+      setDragOverIndex(null);
+      setDraggedId(null);
+      return;
+    }
+    
+    const sourceIndex = segments.findIndex(s => s.id === segmentId);
+    if (sourceIndex !== -1 && sourceIndex !== targetIndex && sourceIndex !== targetIndex - 1) {
+      const adjustedIndex = targetIndex > sourceIndex ? targetIndex - 1 : targetIndex;
+      onSegmentReorder(segmentId, adjustedIndex);
+    }
+    
+    setDraggedId(null);
+    setDragOverIndex(null);
+  }, [segments, onSegmentReorder]);
 
   const totalDuration = segments.reduce((sum, s) => sum + s.targetDuration, 0);
 
@@ -166,18 +211,29 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
               </div>
             ) : (
               segments.map((segment, index) => (
-                <div
-                  key={segment.id}
-                  className={cn(
-                    "group flex items-center gap-2 p-2 rounded-lg border border-border/50",
-                    "hover:border-border hover:bg-muted/30 transition-colors",
-                    editingId === segment.id && "ring-2 ring-primary/50"
+                <div key={segment.id}>
+                  {/* Drop indicator */}
+                  {dragOverIndex === index && draggedId !== segment.id && (
+                    <div className="h-1 bg-primary rounded-full mx-2 my-0.5" />
                   )}
-                >
-                  {/* Drag handle */}
-                  <div className="cursor-grab text-muted-foreground hover:text-foreground">
-                    <GripVertical className="h-4 w-4" />
-                  </div>
+                  <div
+                    draggable={!disabled && editingId !== segment.id}
+                    onDragStart={(e) => handleDragStart(e, segment.id)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDrop={(e) => handleDrop(e, index)}
+                    className={cn(
+                      "group flex items-center gap-2 p-2 rounded-lg border border-border/50",
+                      "hover:border-border hover:bg-muted/30 transition-colors",
+                      editingId === segment.id && "ring-2 ring-primary/50",
+                      draggedId === segment.id && "opacity-50",
+                      !disabled && editingId !== segment.id && "cursor-grab active:cursor-grabbing"
+                    )}
+                  >
+                    {/* Drag handle */}
+                    <div className="text-muted-foreground group-hover:text-foreground">
+                      <GripVertical className="h-4 w-4" />
+                    </div>
 
                   {/* Color indicator */}
                   <Popover>
@@ -271,6 +327,10 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
                       </Button>
                     </div>
                   )}
+                </div>
+                {index === segments.length - 1 && dragOverIndex === segments.length && (
+                  <div className="h-1 bg-primary rounded-full mx-2 my-0.5" />
+                )}
                 </div>
               ))
             )}
