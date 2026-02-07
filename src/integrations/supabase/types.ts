@@ -1071,6 +1071,98 @@ export type Database = {
           },
         ]
       }
+      script_annotations: {
+        Row: {
+          color: string
+          created_at: string
+          created_by: string | null
+          end_offset: number | null
+          id: string
+          note: string | null
+          page_number: number
+          show_id: string
+          start_offset: number | null
+          text: string
+          updated_at: string
+        }
+        Insert: {
+          color: string
+          created_at?: string
+          created_by?: string | null
+          end_offset?: number | null
+          id?: string
+          note?: string | null
+          page_number: number
+          show_id: string
+          start_offset?: number | null
+          text: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          end_offset?: number | null
+          id?: string
+          note?: string | null
+          page_number?: number
+          show_id?: string
+          start_offset?: number | null
+          text?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "script_annotations_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      script_cue_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          cue_id: string
+          id: string
+          page_number: number
+          show_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          cue_id: string
+          id?: string
+          page_number: number
+          show_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          cue_id?: string
+          id?: string
+          page_number?: number
+          show_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "script_cue_links_cue_id_fkey"
+            columns: ["cue_id"]
+            isOneToOne: false
+            referencedRelation: "cues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "script_cue_links_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       show_assets: {
         Row: {
           added_by: string | null
