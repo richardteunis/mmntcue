@@ -114,28 +114,36 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
   useEffect(() => {
     if (!dragging) return;
 
+    let rafId: number | null = null;
+    
     const handleMouseMove = (e: MouseEvent) => {
-      if (!containerRef.current) return;
+      // Use requestAnimationFrame for smoother updates
+      if (rafId) cancelAnimationFrame(rafId);
       
-      const items = containerRef.current.querySelectorAll('[data-segment-item]');
-      let newDropIndex = segments.length;
-      
-      for (let i = 0; i < items.length; i++) {
-        const rect = items[i].getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        if (e.clientY < midY) {
-          newDropIndex = i;
-          break;
+      rafId = requestAnimationFrame(() => {
+        if (!containerRef.current) return;
+        
+        const items = containerRef.current.querySelectorAll('[data-segment-item]');
+        let newDropIndex = segments.length;
+        
+        for (let i = 0; i < items.length; i++) {
+          const rect = items[i].getBoundingClientRect();
+          const midY = rect.top + rect.height / 2;
+          if (e.clientY < midY) {
+            newDropIndex = i;
+            break;
+          }
         }
-      }
-      
-      setDropIndex(newDropIndex);
+        
+        setDropIndex(newDropIndex);
+      });
     };
 
     const handleMouseUp = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      
       if (dropIndex !== null && dropIndex !== dragging.startIndex && dropIndex !== dragging.startIndex + 1) {
         const adjustedIndex = dropIndex > dragging.startIndex ? dropIndex - 1 : dropIndex;
-        console.log('Mouse drag complete:', { segmentId: dragging.id, adjustedIndex });
         onSegmentReorder?.(dragging.id, adjustedIndex);
       }
       setDragging(null);
@@ -146,6 +154,7 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
     document.addEventListener('mouseup', handleMouseUp);
     
     return () => {
+      if (rafId) cancelAnimationFrame(rafId);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };

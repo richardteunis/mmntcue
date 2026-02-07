@@ -252,13 +252,14 @@ export function useSegments(showId: string | null) {
 
       console.log('Fetched cues:', cuesData?.length || 0);
 
-      // Update segments order and start times first
-      for (const seg of segmentsWithNewTimes) {
-        await supabase
+      // Update segments order and start times in parallel for speed
+      const segmentUpdatePromises = segmentsWithNewTimes.map(seg =>
+        supabase
           .from('show_segments')
           .update({ order_index: seg.order_index, start_time: seg.start_time })
-          .eq('id', seg.id);
-      }
+          .eq('id', seg.id)
+      );
+      await Promise.all(segmentUpdatePromises);
 
       // Now update cue start times based on which segment they were in
       if (cuesData && cuesData.length > 0) {
@@ -308,12 +309,15 @@ export function useSegments(showId: string | null) {
 
         console.log('Cue updates to apply:', cueUpdates.length);
 
-        // Apply cue updates
-        for (const update of cueUpdates) {
-          await supabase
-            .from('cues')
-            .update({ start_time: update.newStartTime })
-            .eq('id', update.id);
+        // Apply cue updates in parallel for speed
+        if (cueUpdates.length > 0) {
+          const cueUpdatePromises = cueUpdates.map(update =>
+            supabase
+              .from('cues')
+              .update({ start_time: update.newStartTime })
+              .eq('id', update.id)
+          );
+          await Promise.all(cueUpdatePromises);
         }
       }
 
