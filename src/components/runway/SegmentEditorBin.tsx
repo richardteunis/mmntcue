@@ -10,8 +10,6 @@ import {
   Pencil,
   X,
   Check,
-  ArrowUp,
-  ArrowDown,
   GripVertical,
 } from 'lucide-react';
 import {
@@ -88,6 +86,10 @@ const SegmentEditorBin: React.FC<SegmentEditorBinProps> = ({
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const [editSegmentName, setEditSegmentName] = useState('');
   const [editSegmentDuration, setEditSegmentDuration] = useState('');
+  
+  // Drag and drop state
+  const [draggedSegmentId, setDraggedSegmentId] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const handleCreateSegment = useCallback(() => {
     if (!newSegmentName.trim()) return;
@@ -126,6 +128,54 @@ const SegmentEditorBin: React.FC<SegmentEditorBinProps> = ({
     
     onSegmentReorder?.(segmentId, newIndex);
   }, [segments, onSegmentReorder]);
+
+  // Drag and drop handlers
+  const handleDragStart = useCallback((e: React.DragEvent, segmentId: string) => {
+    if (disabled) return;
+    setDraggedSegmentId(segmentId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', segmentId);
+    // Add a slight delay to show the dragging state
+    setTimeout(() => {
+      const element = e.target as HTMLElement;
+      element.style.opacity = '0.5';
+    }, 0);
+  }, [disabled]);
+
+  const handleDragEnd = useCallback((e: React.DragEvent) => {
+    const element = e.target as HTMLElement;
+    element.style.opacity = '1';
+    setDraggedSegmentId(null);
+    setDragOverIndex(null);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  }, [dragOverIndex]);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverIndex(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (!draggedSegmentId) return;
+    
+    const sourceIndex = segments.findIndex(s => s.id === draggedSegmentId);
+    if (sourceIndex === -1 || sourceIndex === targetIndex) {
+      setDraggedSegmentId(null);
+      setDragOverIndex(null);
+      return;
+    }
+    
+    onSegmentReorder?.(draggedSegmentId, targetIndex);
+    setDraggedSegmentId(null);
+    setDragOverIndex(null);
+  }, [draggedSegmentId, segments, onSegmentReorder]);
 
   return (
     <div className="flex flex-col h-full bg-card/50 rounded-lg border border-border">
@@ -233,40 +283,55 @@ const SegmentEditorBin: React.FC<SegmentEditorBinProps> = ({
 
           {/* Segment list */}
           {segments.map((segment, index) => (
-            <div
-              key={segment.id}
-              className={cn(
-                "flex items-center gap-1.5 p-1.5 rounded-md border transition-colors group",
-                editingSegmentId === segment.id
-                  ? "border-primary bg-primary/5"
-                  : "border-border/50 hover:bg-muted/50 cursor-pointer"
+            <div key={segment.id}>
+              {/* Drop indicator before this segment */}
+              {dragOverIndex === index && draggedSegmentId !== segment.id && (
+                <div className="h-0.5 bg-primary rounded-full mx-1 my-0.5" />
               )}
-            >
-              {/* Color indicator with picker */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    className="w-2 h-8 rounded-sm cursor-pointer hover:ring-2 hover:ring-primary transition-all flex-shrink-0"
-                    style={{ backgroundColor: segment.color || '#6B7280' }}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-2" align="start">
-                  <div className="grid grid-cols-5 gap-1">
-                    {SEGMENT_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        className={cn(
-                          "w-5 h-5 rounded cursor-pointer hover:scale-110 transition-transform border-2",
-                          segment.color === color ? "border-foreground" : "border-transparent"
-                        )}
-                        style={{ backgroundColor: color }}
-                        onClick={() => onSegmentColorChange?.(segment.id, color)}
-                      />
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <div
+                draggable={!disabled && editingSegmentId !== segment.id}
+                onDragStart={(e) => handleDragStart(e, segment.id)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                className={cn(
+                  "flex items-center gap-1.5 p-1.5 rounded-md border transition-colors group",
+                  editingSegmentId === segment.id
+                    ? "border-primary bg-primary/5"
+                    : "border-border/50 hover:bg-muted/50",
+                  draggedSegmentId === segment.id && "opacity-50",
+                  !disabled && editingSegmentId !== segment.id && "cursor-grab active:cursor-grabbing"
+                )}
+              >
+                {/* Drag handle */}
+                <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0 opacity-50 group-hover:opacity-100" />
+                
+                {/* Color indicator with picker */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      className="w-2 h-8 rounded-sm cursor-pointer hover:ring-2 hover:ring-primary transition-all flex-shrink-0"
+                      style={{ backgroundColor: segment.color || '#6B7280' }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-2" align="start">
+                    <div className="grid grid-cols-5 gap-1">
+                      {SEGMENT_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          className={cn(
+                            "w-5 h-5 rounded cursor-pointer hover:scale-110 transition-transform border-2",
+                            segment.color === color ? "border-foreground" : "border-transparent"
+                          )}
+                          style={{ backgroundColor: color }}
+                          onClick={() => onSegmentColorChange?.(segment.id, color)}
+                        />
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
               {editingSegmentId === segment.id ? (
                 <>
@@ -316,30 +381,6 @@ const SegmentEditorBin: React.FC<SegmentEditorBinProps> = ({
                       variant="ghost"
                       size="sm"
                       className="h-5 w-5 p-0"
-                      disabled={index === 0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMoveSegment(segment.id, 'up');
-                      }}
-                    >
-                      <ArrowUp className="h-2.5 w-2.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0"
-                      disabled={index === segments.length - 1}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMoveSegment(segment.id, 'down');
-                      }}
-                    >
-                      <ArrowDown className="h-2.5 w-2.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleStartEdit(segment);
@@ -361,8 +402,23 @@ const SegmentEditorBin: React.FC<SegmentEditorBinProps> = ({
                   </div>
                 </>
               )}
+              </div>
+              {/* Drop indicator after last segment */}
+              {index === segments.length - 1 && dragOverIndex === segments.length && (
+                <div className="h-0.5 bg-primary rounded-full mx-1 my-0.5" />
+              )}
             </div>
           ))}
+          
+          {/* Drop zone for dropping at the end */}
+          {segments.length > 0 && (
+            <div
+              className="h-4 rounded"
+              onDragOver={(e) => handleDragOver(e, segments.length)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, segments.length)}
+            />
+          )}
         </div>
       </div>
     </div>
