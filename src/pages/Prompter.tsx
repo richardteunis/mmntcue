@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { Play, Pause, Settings, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface PrompterMessage {
-  type: 'navigate' | 'zoom' | 'scroll' | 'init';
+  type: 'navigate' | 'zoom' | 'scroll' | 'init' | 'cue-fired' | 'auto-scroll-settings';
   page?: number;
   zoom?: number;
   scrollPosition?: number;
@@ -12,6 +13,9 @@ interface PrompterMessage {
   textContent?: string;
   fileType?: 'pdf' | 'word' | 'text';
   fileName?: string;
+  cueId?: string;
+  cuePageLinks?: { cueId: string; pageNumber: number }[];
+  autoScrollSpeed?: number;
 }
 
 const Prompter: React.FC = () => {
@@ -24,6 +28,15 @@ const Prompter: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(150);
   const [isConnected, setIsConnected] = useState(false);
+  const [cuePageLinks, setCuePageLinks] = useState<{ cueId: string; pageNumber: number }[]>([]);
+  
+  // Auto-scroll state
+  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+  const [autoScrollSpeed, setAutoScrollSpeed] = useState(30); // pixels per second
+  const [showControls, setShowControls] = useState(true);
+  const autoScrollRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(0);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   // Listen for messages from parent window
   useEffect(() => {
@@ -36,6 +49,7 @@ const Prompter: React.FC = () => {
         if (data.textContent) setTextContent(data.textContent);
         if (data.fileType) setFileType(data.fileType);
         if (data.fileName) setFileName(data.fileName);
+        if (data.cuePageLinks) setCuePageLinks(data.cuePageLinks);
         setIsConnected(true);
       }
       
@@ -51,6 +65,19 @@ const Prompter: React.FC = () => {
       if (data.type === 'scroll' && data.scrollPosition !== undefined) {
         window.scrollTo({ top: data.scrollPosition, behavior: 'smooth' });
       }
+
+      // Handle cue fired - auto-advance to linked page
+      if (data.type === 'cue-fired' && data.cueId) {
+        const link = cuePageLinks.find(l => l.cueId === data.cueId);
+        if (link) {
+          setCurrentPage(link.pageNumber);
+          scrollToPage(link.pageNumber);
+        }
+      }
+
+      if (data.type === 'auto-scroll-settings' && data.autoScrollSpeed !== undefined) {
+        setAutoScrollSpeed(data.autoScrollSpeed);
+      }
     };
 
     window.addEventListener('message', handleMessage);
@@ -61,7 +88,7 @@ const Prompter: React.FC = () => {
     }
 
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [cuePageLinks]);
 
   const scrollToPage = (pageNum: number) => {
     const pageElement = document.getElementById(`prompter-page-${pageNum}`);
@@ -70,16 +97,82 @@ const Prompter: React.FC = () => {
     }
   };
 
+  // Auto-scroll animation loop
+  const animateScroll = useCallback((timestamp: number) => {
+    if (!lastTimeRef.current) {
+      lastTimeRef.current = timestamp;
+    }
+
+    const deltaTime = timestamp - lastTimeRef.current;
+    lastTimeRef.current = timestamp;
+
+    // Calculate scroll amount based on speed (pixels per second)
+    const scrollAmount = (autoScrollSpeed * deltaTime) / 1000;
+    
+    window.scrollBy({
+      top: scrollAmount,
+      behavior: 'auto'
+    });
+
+    // Check if we've reached the bottom
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    if (window.scrollY >= maxScroll - 10) {
+      setIsAutoScrolling(false);
+      return;
+    }
+
+    if (isAutoScrolling) {
+      autoScrollRef.current = requestAnimationFrame(animateScroll);
+    }
+  }, [autoScrollSpeed, isAutoScrolling]);
+
+  // Start/stop auto-scroll
+  useEffect(() => {
+    if (isAutoScrolling) {
+      lastTimeRef.current = 0;
+      autoScrollRef.current = requestAnimationFrame(animateScroll);
+    } else {
+      if (autoScrollRef.current) {
+        cancelAnimationFrame(autoScrollRef.current);
+        autoScrollRef.current = null;
+      }
+    }
+
+    return () => {
+      if (autoScrollRef.current) {
+        cancelAnimationFrame(autoScrollRef.current);
+      }
+    };
+  }, [isAutoScrolling, animateScroll]);
+
+  const toggleAutoScroll = () => {
+    setIsAutoScrolling(prev => !prev);
+  };
+
+  const adjustSpeed = (delta: number) => {
+    setAutoScrollSpeed(prev => Math.max(10, Math.min(200, prev + delta)));
+  };
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+      // Space toggles auto-scroll when not in input
+      if (e.key === ' ' && !isAutoScrolling) {
         e.preventDefault();
-        if (currentPage < pageImages.length) {
+        if (fileType === 'pdf' && currentPage < pageImages.length) {
           const newPage = currentPage + 1;
           setCurrentPage(newPage);
           scrollToPage(newPage);
-          // Notify parent
+          window.opener?.postMessage({ type: 'page-change', page: newPage }, '*');
+        }
+      }
+      
+      if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault();
+        if (fileType === 'pdf' && currentPage < pageImages.length) {
+          const newPage = currentPage + 1;
+          setCurrentPage(newPage);
+          scrollToPage(newPage);
           window.opener?.postMessage({ type: 'page-change', page: newPage }, '*');
         }
       }
@@ -98,30 +191,49 @@ const Prompter: React.FC = () => {
       if (e.key === '-') {
         setZoom(prev => Math.max(prev - 25, 50));
       }
+      // P for play/pause auto-scroll
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        toggleAutoScroll();
+      }
+      // [ and ] for speed
+      if (e.key === '[') {
+        adjustSpeed(-10);
+      }
+      if (e.key === ']') {
+        adjustSpeed(10);
+      }
+      // H to hide/show controls
+      if (e.key === 'h' || e.key === 'H') {
+        setShowControls(prev => !prev);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentPage, pageImages.length]);
+  }, [currentPage, pageImages.length, fileType, isAutoScrolling]);
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-foreground text-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white text-center">
           <div className="animate-pulse text-2xl mb-4">Connecting to Script Panel...</div>
-          <p className="text-muted-foreground">Open the Script panel in the main window to connect</p>
+          <p className="text-white/60">Open the Script panel in the main window to connect</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-black" ref={contentRef}>
       {/* Header */}
-      <div className="fixed top-0 left-0 right-0 bg-black/90 backdrop-blur border-b border-white/10 px-4 py-2 z-50">
+      <div className={cn(
+        "fixed top-0 left-0 right-0 bg-black/90 backdrop-blur border-b border-white/10 px-4 py-2 z-50 transition-opacity duration-300",
+        showControls ? "opacity-100" : "opacity-0 pointer-events-none"
+      )}>
         <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <span className="text-white/60 text-sm font-medium">PROMPTER</span>
-          <span className="text-white/80 text-sm">{fileName}</span>
+          <span className="text-white/60 text-sm font-medium tracking-wider">PROMPTER</span>
+          <span className="text-white/80 text-sm truncate max-w-[200px]">{fileName}</span>
           <div className="flex items-center gap-4">
             {fileType === 'pdf' && (
               <span className="text-white/60 text-sm">
@@ -134,7 +246,7 @@ const Prompter: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div className="pt-16 pb-8">
+      <div className={cn("pb-24", showControls ? "pt-16" : "pt-4")}>
         <div className="flex flex-col items-center gap-8 px-4">
           {/* PDF Pages */}
           {fileType === 'pdf' && pageImages.map((imgSrc, index) => (
@@ -182,12 +294,59 @@ const Prompter: React.FC = () => {
         </div>
       </div>
 
-      {/* Keyboard hint */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur px-4 py-2 rounded-full">
-        <span className="text-white/50 text-xs">
-          ↑↓ Navigate • +/- Zoom • Space Next Page
-        </span>
+      {/* Auto-scroll Controls */}
+      <div className={cn(
+        "fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 transition-opacity duration-300",
+        showControls ? "opacity-100" : "opacity-0 pointer-events-none"
+      )}>
+        {/* Speed control */}
+        <div className="bg-black/90 backdrop-blur px-3 py-2 rounded-full flex items-center gap-2">
+          <button 
+            onClick={() => adjustSpeed(-10)}
+            className="text-white/60 hover:text-white p-1"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </button>
+          <span className="text-white/80 text-sm min-w-[60px] text-center">
+            {autoScrollSpeed} px/s
+          </span>
+          <button 
+            onClick={() => adjustSpeed(10)}
+            className="text-white/60 hover:text-white p-1"
+          >
+            <ChevronUp className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Play/Pause */}
+        <button
+          onClick={toggleAutoScroll}
+          className={cn(
+            "p-4 rounded-full transition-colors",
+            isAutoScrolling 
+              ? "bg-red-500 hover:bg-red-600" 
+              : "bg-green-500 hover:bg-green-600"
+          )}
+        >
+          {isAutoScrolling ? (
+            <Pause className="h-6 w-6 text-white" />
+          ) : (
+            <Play className="h-6 w-6 text-white" />
+          )}
+        </button>
+
+        {/* Keyboard hints */}
+        <div className="bg-black/90 backdrop-blur px-4 py-2 rounded-full">
+          <span className="text-white/50 text-xs">
+            P Auto • ↑↓ Nav • +/- Zoom • H Hide
+          </span>
+        </div>
       </div>
+
+      {/* Auto-scroll indicator when controls hidden */}
+      {!showControls && isAutoScrolling && (
+        <div className="fixed top-4 right-4 w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+      )}
     </div>
   );
 };
