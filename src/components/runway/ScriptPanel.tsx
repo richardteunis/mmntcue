@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { 
@@ -11,8 +11,6 @@ import {
   Minimize2,
   ZoomIn,
   ZoomOut,
-  Search,
-  Trash2,
   Upload,
   File,
   Loader2,
@@ -20,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import * as pdfjsLib from 'pdfjs-dist';
+import mammoth from 'mammoth';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
@@ -30,128 +29,159 @@ interface ScriptPanelProps {
   showId?: string | null;
 }
 
-interface UploadedDoc {
-  name: string;
-  type: string;
-  file: File;
-  size: number;
+interface PageContent {
+  pageNumber: number;
+  text: string;
 }
 
 const ScriptPanel: React.FC<ScriptPanelProps> = ({
   open,
   onOpenChange,
-  showId,
 }) => {
   const [zoom, setZoom] = useState(100);
-  const [uploadedDoc, setUploadedDoc] = useState<UploadedDoc | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [fileSize, setFileSize] = useState<number>(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
-  const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  const [pages, setPages] = useState<PageContent[]>([]);
+  const [htmlContent, setHtmlContent] = useState<string | null>(null);
   const [textContent, setTextContent] = useState<string | null>(null);
+  const [fileType, setFileType] = useState<'pdf' | 'word' | 'text' | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const { toast } = useToast();
 
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 25, 300));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 25, 25));
+  const handleZoomIn = () => setZoom(prev => Math.min(prev + 25, 200));
+  const handleZoomOut = () => setZoom(prev => Math.max(prev - 25, 50));
 
-  // Render PDF page
-  const renderPage = useCallback(async (pageNum: number) => {
-    if (!pdfDoc || !canvasRef.current) return;
-
+  // Extract text from PDF
+  const extractPdfText = async (file: File) => {
+    setIsLoading(true);
     try {
-      const page = await pdfDoc.getPage(pageNum);
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      if (!context) return;
-
-      const scale = zoom / 100;
-      const viewport = page.getViewport({ scale: scale * 1.5 });
-
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      await page.render({
-        canvasContext: context,
-        viewport: viewport,
-      }).promise;
-    } catch (error) {
-      console.error('Error rendering PDF page:', error);
-    }
-  }, [pdfDoc, zoom]);
-
-  // Load PDF when document changes
-  useEffect(() => {
-    if (!uploadedDoc || uploadedDoc.type !== 'application/pdf') return;
-
-    const loadPdf = async () => {
-      setIsLoading(true);
-      try {
-        const arrayBuffer = await uploadedDoc.file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        setPdfDoc(pdf);
-        setTotalPages(pdf.numPages);
-        setCurrentPage(1);
-        setTextContent(null);
-      } catch (error) {
-        console.error('Error loading PDF:', error);
-        toast({
-          title: 'Error loading PDF',
-          description: 'Failed to load the PDF document',
-          variant: 'destructive',
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      
+      const extractedPages: PageContent[] = [];
+      
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        
+        // Group text items by their vertical position (y coordinate)
+        const lines: { y: number; items: any[] }[] = [];
+        
+        textContent.items.forEach((item: any) => {
+          if ('str' in item && item.str.trim()) {
+            const y = Math.round(item.transform[5]);
+            let line = lines.find(l => Math.abs(l.y - y) < 5);
+            if (!line) {
+              line = { y, items: [] };
+              lines.push(line);
+            }
+            line.items.push(item);
+          }
         });
-      } finally {
-        setIsLoading(false);
+        
+        // Sort lines by y position (top to bottom)
+        lines.sort((a, b) => b.y - a.y);
+        
+        // Sort items within each line by x position (left to right)
+        const pageText = lines.map(line => {
+          line.items.sort((a, b) => a.transform[4] - b.transform[4]);
+          return line.items.map((item: any) => item.str).join(' ');
+        }).join('\n');
+        
+        extractedPages.push({
+          pageNumber: i,
+          text: pageText
+        });
       }
-    };
-
-    loadPdf();
-  }, [uploadedDoc, toast]);
-
-  // Render page when current page or zoom changes
-  useEffect(() => {
-    if (pdfDoc) {
-      renderPage(currentPage);
-    }
-  }, [currentPage, zoom, pdfDoc, renderPage]);
-
-  // Load text file content
-  useEffect(() => {
-    if (!uploadedDoc) return;
-    
-    const textTypes = ['text/plain', 'text/markdown'];
-    const isTextFile = textTypes.includes(uploadedDoc.type) || 
-                       uploadedDoc.name.endsWith('.md') || 
-                       uploadedDoc.name.endsWith('.txt');
-    
-    if (isTextFile) {
-      uploadedDoc.file.text().then(content => {
-        setTextContent(content);
-        setPdfDoc(null);
-        setTotalPages(0);
+      
+      setPages(extractedPages);
+      setTotalPages(pdf.numPages);
+      setCurrentPage(1);
+      setFileType('pdf');
+      setHtmlContent(null);
+      setTextContent(null);
+    } catch (error) {
+      console.error('Error extracting PDF text:', error);
+      toast({
+        title: 'Error loading PDF',
+        description: 'Failed to extract text from the document',
+        variant: 'destructive',
       });
+    } finally {
+      setIsLoading(false);
     }
-  }, [uploadedDoc]);
+  };
+
+  // Convert Word doc to HTML
+  const convertWordDoc = async (file: File) => {
+    setIsLoading(true);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+      
+      setHtmlContent(result.value);
+      setPages([]);
+      setTotalPages(0);
+      setFileType('word');
+      setTextContent(null);
+      
+      if (result.messages.length > 0) {
+        console.log('Mammoth messages:', result.messages);
+      }
+    } catch (error) {
+      console.error('Error converting Word document:', error);
+      toast({
+        title: 'Error loading document',
+        description: 'Failed to convert the Word document',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load text file
+  const loadTextFile = async (file: File) => {
+    setIsLoading(true);
+    try {
+      const text = await file.text();
+      setTextContent(text);
+      setPages([]);
+      setTotalPages(0);
+      setFileType('text');
+      setHtmlContent(null);
+    } catch (error) {
+      console.error('Error loading text file:', error);
+      toast({
+        title: 'Error loading file',
+        description: 'Failed to read the text file',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleFileUpload = useCallback(async (file: File) => {
-    const validTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
-      'text/markdown'
-    ];
+    const isPdf = file.type === 'application/pdf';
+    const isWord = file.type === 'application/msword' || 
+                   file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                   file.name.endsWith('.doc') ||
+                   file.name.endsWith('.docx');
+    const isText = file.type === 'text/plain' || 
+                   file.type === 'text/markdown' ||
+                   file.name.endsWith('.txt') ||
+                   file.name.endsWith('.md');
 
-    const isValid = validTypes.includes(file.type) || 
-                    file.name.endsWith('.md') || 
-                    file.name.endsWith('.txt');
-
-    if (!isValid) {
+    if (!isPdf && !isWord && !isText) {
       toast({
         title: 'Invalid file type',
         description: 'Please upload a PDF, Word document, or text file',
@@ -169,16 +199,20 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
       return;
     }
 
-    setUploadedDoc({
-      name: file.name,
-      type: file.type,
-      file: file,
-      size: file.size,
-    });
+    setFileName(file.name);
+    setFileSize(file.size);
+
+    if (isPdf) {
+      await extractPdfText(file);
+    } else if (isWord) {
+      await convertWordDoc(file);
+    } else {
+      await loadTextFile(file);
+    }
 
     toast({
-      title: 'Document uploaded',
-      description: `${file.name} has been loaded`,
+      title: 'Document loaded',
+      description: `${file.name} is ready to view`,
     });
   }, [toast]);
 
@@ -199,9 +233,12 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
   }, []);
 
   const handleClear = () => {
-    setUploadedDoc(null);
-    setPdfDoc(null);
+    setFileName(null);
+    setFileSize(0);
+    setPages([]);
+    setHtmlContent(null);
     setTextContent(null);
+    setFileType(null);
     setCurrentPage(1);
     setTotalPages(0);
     if (fileInputRef.current) {
@@ -209,21 +246,54 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     }
   };
 
+  const scrollToPage = (pageNum: number) => {
+    const pageElement = pageRefs.current[pageNum - 1];
+    if (pageElement) {
+      pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setCurrentPage(pageNum);
+    }
+  };
+
   const handlePageUp = () => {
     if (currentPage > 1) {
-      setCurrentPage(prev => prev - 1);
+      scrollToPage(currentPage - 1);
     }
   };
 
   const handlePageDown = () => {
     if (currentPage < totalPages) {
-      setCurrentPage(prev => prev + 1);
+      scrollToPage(currentPage + 1);
     }
   };
 
-  const isPdf = uploadedDoc?.type === 'application/pdf';
-  const isWordDoc = uploadedDoc?.type === 'application/msword' || 
-                    uploadedDoc?.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  // Track scroll position to update current page
+  useEffect(() => {
+    if (fileType !== 'pdf' || pages.length === 0) return;
+
+    const handleScroll = () => {
+      const container = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
+      
+      for (let i = 0; i < pageRefs.current.length; i++) {
+        const pageEl = pageRefs.current[i];
+        if (pageEl) {
+          const rect = pageEl.getBoundingClientRect();
+          if (rect.top <= containerRect.top + 100 && rect.bottom > containerRect.top + 100) {
+            setCurrentPage(i + 1);
+            break;
+          }
+        }
+      }
+    };
+
+    const container = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    container?.addEventListener('scroll', handleScroll);
+    return () => container?.removeEventListener('scroll', handleScroll);
+  }, [fileType, pages]);
+
+  const hasContent = fileName && (pages.length > 0 || htmlContent || textContent);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -231,11 +301,11 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
         side="right" 
         className={cn(
           "p-0 flex flex-col border-l border-border",
-          isFullscreen ? "w-full sm:max-w-full" : "w-[560px] sm:max-w-[560px]"
+          isFullscreen ? "w-full sm:max-w-full" : "w-[600px] sm:max-w-[600px]"
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background shrink-0">
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-primary" />
             <span className="text-base font-semibold">Script</span>
@@ -257,11 +327,7 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
               className="h-8 w-8 p-0"
               onClick={() => setIsFullscreen(!isFullscreen)}
             >
-              {isFullscreen ? (
-                <Minimize2 className="h-4 w-4" />
-              ) : (
-                <Maximize2 className="h-4 w-4" />
-              )}
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </Button>
             <Button 
               variant="ghost" 
@@ -274,16 +340,16 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
           </div>
         </div>
 
-        {/* Navigation Bar - Only show when document is loaded */}
-        {uploadedDoc && (
-          <div className="flex items-center justify-center gap-4 px-4 py-2 border-b border-border bg-muted/30">
+        {/* Navigation Bar */}
+        {hasContent && (
+          <div className="flex items-center justify-center gap-4 px-4 py-2 border-b border-border bg-muted/50 shrink-0">
             <div className="flex items-center gap-2">
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-8 gap-1"
+                className="h-8 gap-1.5"
                 onClick={handlePageUp}
-                disabled={!isPdf || currentPage <= 1}
+                disabled={fileType !== 'pdf' || currentPage <= 1}
               >
                 <ChevronUp className="h-4 w-4" />
                 Up
@@ -291,18 +357,21 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-8 gap-1"
+                className="h-8 gap-1.5"
                 onClick={handlePageDown}
-                disabled={!isPdf || currentPage >= totalPages}
+                disabled={fileType !== 'pdf' || currentPage >= totalPages}
               >
                 <ChevronDown className="h-4 w-4" />
                 Down
               </Button>
             </div>
-            {isPdf && totalPages > 0 && (
-              <span className="text-sm text-muted-foreground">
-                Page {currentPage} of {totalPages}
-              </span>
+            {fileType === 'pdf' && totalPages > 0 && (
+              <>
+                <div className="w-px h-4 bg-border" />
+                <span className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </span>
+              </>
             )}
             <div className="w-px h-4 bg-border" />
             <Button 
@@ -317,9 +386,9 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
         )}
 
         {/* Content Area */}
-        <div className="flex-1 overflow-hidden" ref={containerRef}>
-          {!uploadedDoc ? (
-            /* Upload Area - Show when no document */
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {!fileName ? (
+            /* Upload Area */
             <div 
               className={cn(
                 "h-full flex flex-col items-center justify-center p-8 transition-colors",
@@ -356,7 +425,7 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
                       <span className="text-muted-foreground"> or drag and drop</span>
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      PDF, Word, TXT, MD (max 50MB)
+                      PDF, Word (.doc, .docx), TXT, MD
                     </p>
                   </div>
                 </div>
@@ -366,58 +435,71 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
             /* Loading State */
             <div className="h-full flex flex-col items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="mt-4 text-sm text-muted-foreground">Loading document...</p>
+              <p className="mt-4 text-sm text-muted-foreground">Processing document...</p>
             </div>
-          ) : isPdf ? (
-            /* PDF Viewer */
-            <ScrollArea className="h-full">
-              <div className="flex justify-center p-4 bg-muted/20 min-h-full">
-                <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-                  <canvas ref={canvasRef} className="block" />
-                </div>
-              </div>
-            </ScrollArea>
-          ) : textContent ? (
-            /* Text/Markdown Viewer */
-            <ScrollArea className="h-full">
-              <div className="p-6 bg-muted/20 min-h-full">
+          ) : (
+            /* Document Content */
+            <ScrollArea className="h-full" ref={scrollAreaRef}>
+              <div className="p-6">
                 <div 
-                  className="bg-white rounded-lg shadow-lg p-8 prose prose-sm dark:prose-invert max-w-none"
+                  className="bg-card text-card-foreground rounded-lg shadow-lg mx-auto max-w-[800px]"
                   style={{ fontSize: `${zoom}%` }}
                 >
-                  <pre className="whitespace-pre-wrap font-sans text-foreground">{textContent}</pre>
+                  {/* PDF Content - Page by Page */}
+                  {fileType === 'pdf' && pages.map((page, index) => (
+                    <div 
+                      key={page.pageNumber}
+                      ref={el => pageRefs.current[index] = el}
+                      className={cn(
+                        "p-8 min-h-[600px]",
+                        index > 0 && "border-t-4 border-dashed border-border"
+                      )}
+                    >
+                      <div className="text-xs text-muted-foreground mb-4 font-sans">
+                        Page {page.pageNumber}
+                      </div>
+                      <div className="whitespace-pre-wrap leading-relaxed font-serif text-base text-card-foreground">
+                        {page.text || <span className="text-muted-foreground italic">No text content on this page</span>}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Word Document Content */}
+                  {fileType === 'word' && htmlContent && (
+                    <div 
+                      className="p-8 prose prose-sm max-w-none dark:prose-invert
+                        prose-headings:font-bold
+                        prose-p:leading-relaxed
+                        prose-a:text-primary"
+                      dangerouslySetInnerHTML={{ __html: htmlContent }}
+                    />
+                  )}
+
+                  {/* Text Content */}
+                  {fileType === 'text' && textContent && (
+                    <div className="p-8">
+                      <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-card-foreground">
+                        {textContent}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               </div>
             </ScrollArea>
-          ) : isWordDoc ? (
-            /* Word Doc Placeholder */
-            <div className="h-full flex flex-col items-center justify-center p-8">
-              <div className="bg-white rounded-lg shadow-lg p-8 text-center max-w-sm">
-                <File className="h-12 w-12 text-primary mx-auto mb-4" />
-                <h3 className="font-semibold text-lg mb-2">{uploadedDoc.name}</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Word document preview requires conversion. 
-                  For best results, please convert to PDF before uploading.
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  File Size: {(uploadedDoc.size / 1024).toFixed(1)} KB
-                </p>
-              </div>
-            </div>
-          ) : null}
+          )}
         </div>
 
-        {/* Footer - Document info */}
-        {uploadedDoc && (
-          <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/30">
+        {/* Footer */}
+        {fileName && (
+          <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/30 shrink-0">
             <div className="flex items-center gap-2">
               <File className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                {uploadedDoc.name}
+              <span className="text-xs text-muted-foreground truncate max-w-[280px]">
+                {fileName}
               </span>
             </div>
             <span className="text-xs text-muted-foreground">
-              {(uploadedDoc.size / 1024).toFixed(1)} KB
+              {(fileSize / 1024).toFixed(1)} KB
             </span>
           </div>
         )}
