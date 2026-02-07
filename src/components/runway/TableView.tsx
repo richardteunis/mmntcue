@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Cue } from '@/types/cue';
 import { Segment } from '@/hooks/useSegments';
 import { Button } from '@/components/ui/button';
@@ -138,20 +138,26 @@ const CUE_TYPE_LABELS: Record<string, string> = {
   stage: 'Stage',
 };
 
-// Helper to darken a hex color for header backgrounds
-const darkenColor = (hex: string, amount: number = 0.6): string => {
+// Helper to create a tinted background color that works in light/dark mode
+const getTintedBackground = (hex: string, isDark: boolean): string => {
   // Remove # if present
   const color = hex.replace('#', '');
   const r = parseInt(color.substring(0, 2), 16);
   const g = parseInt(color.substring(2, 4), 16);
   const b = parseInt(color.substring(4, 6), 16);
   
-  // Darken by multiplying
-  const newR = Math.round(r * amount);
-  const newG = Math.round(g * amount);
-  const newB = Math.round(b * amount);
-  
-  return `rgb(${newR}, ${newG}, ${newB})`;
+  if (isDark) {
+    // In dark mode: darken the color for a rich background
+    const factor = 0.35;
+    return `rgb(${Math.round(r * factor)}, ${Math.round(g * factor)}, ${Math.round(b * factor)})`;
+  } else {
+    // In light mode: lighten the color (mix with white at 85%)
+    const factor = 0.15;
+    const newR = Math.round(r * factor + 255 * (1 - factor));
+    const newG = Math.round(g * factor + 255 * (1 - factor));
+    const newB = Math.round(b * factor + 255 * (1 - factor));
+    return `rgb(${newR}, ${newG}, ${newB})`;
+  }
 };
 
 const TableView: React.FC<TableViewProps> = ({
@@ -175,6 +181,20 @@ const TableView: React.FC<TableViewProps> = ({
   const [durationInput, setDurationInput] = useState('');
   const [collapsedSegments, setCollapsedSegments] = useState<Set<string>>(new Set());
   const [goMode, setGoMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
+
+  // Detect dark mode from document class
+  useEffect(() => {
+    const checkDarkMode = () => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    };
+    checkDarkMode();
+    
+    // Watch for class changes
+    const observer = new MutationObserver(checkDarkMode);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   // Sort segments by order_index and calculate cumulative start times
   const segmentsWithTiming = useMemo(() => {
@@ -403,7 +423,7 @@ const TableView: React.FC<TableViewProps> = ({
                   <div 
                     className="flex items-center gap-3 px-4 py-3 sticky top-0 z-20 border-b border-border"
                     style={{
-                      backgroundColor: darkenColor(segment.color || '#6366f1', 0.35)
+                      backgroundColor: getTintedBackground(segment.color || '#6366f1', isDarkMode)
                     }}
                   >
                     <CollapsibleTrigger asChild>

@@ -428,50 +428,59 @@ const PlanningDrawer: React.FC<PlanningDrawerProps> = ({
                     
                     {editingSegmentId === segment.id ? (
                       <>
-                        <Input
-                          value={editSegmentName}
-                          onChange={(e) => setEditSegmentName(e.target.value)}
-                          className="h-7 text-xs flex-1"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveEdit();
-                            if (e.key === 'Escape') handleCancelEdit();
-                          }}
-                        />
-                        <Input
-                          value={editSegmentDuration}
-                          onChange={(e) => setEditSegmentDuration(e.target.value)}
-                          placeholder="MM:SS"
-                          className="h-7 text-xs w-20"
-                        />
-                        <Button
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={handleSaveEdit}
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0"
-                          onClick={handleCancelEdit}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+                          <Input
+                            value={editSegmentName}
+                            onChange={(e) => setEditSegmentName(e.target.value)}
+                            className="h-7 text-xs"
+                            placeholder="Segment name..."
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit();
+                              if (e.key === 'Escape') handleCancelEdit();
+                            }}
+                          />
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            <Input
+                              value={editSegmentDuration}
+                              onChange={(e) => setEditSegmentDuration(e.target.value)}
+                              placeholder="MM:SS"
+                              className="h-6 text-xs w-20 font-mono"
+                            />
+                            <span className="text-[10px] text-muted-foreground">target duration</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <Button
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={handleSaveEdit}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={handleCancelEdit}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </>
                     ) : (
                       <>
                         <div 
-                          className="flex-1 min-w-0"
-                          onClick={() => onSegmentClick?.(segment.id)}
+                          className="flex-1 min-w-0 cursor-pointer"
+                          onClick={() => handleStartEdit(segment)}
                         >
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm truncate">{segment.name}</span>
                             {getStatusIcon(segment.status)}
                           </div>
                           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                            <span className="flex items-center gap-1">
+                            <span className="flex items-center gap-1 font-mono">
                               <Clock className="h-3 w-3" />
                               {formatDuration(segment.actualDuration)} / {formatDuration(segment.targetDuration)}
                             </span>
@@ -479,20 +488,20 @@ const PlanningDrawer: React.FC<PlanningDrawerProps> = ({
                           </div>
                         </div>
                         
-                        {/* Action buttons */}
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* Action buttons - always visible */}
+                        <div className="flex items-center gap-1">
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 w-7 p-0"
+                                className="h-7 w-7 p-0 opacity-60 hover:opacity-100"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleStartEdit(segment);
                                 }}
                               >
-                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                <Pencil className="h-3.5 w-3.5" />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Edit segment</TooltipContent>
@@ -502,13 +511,13 @@ const PlanningDrawer: React.FC<PlanningDrawerProps> = ({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 w-7 p-0"
+                                className="h-7 w-7 p-0 text-destructive/60 hover:text-destructive hover:opacity-100"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onSegmentDelete?.(segment.id);
                                 }}
                               >
-                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Delete segment</TooltipContent>
