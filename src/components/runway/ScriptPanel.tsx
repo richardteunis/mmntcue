@@ -7,6 +7,8 @@ import {
   FileText, 
   ChevronUp, 
   ChevronDown, 
+  ChevronLeft,
+  ChevronRight,
   Maximize2,
   Minimize2,
   ZoomIn,
@@ -14,11 +16,20 @@ import {
   Upload,
   File,
   Loader2,
-  X
+  X,
+  Printer,
+  ExternalLink,
+  PanelLeftClose,
+  PanelLeft
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
@@ -41,46 +52,65 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
-  const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [pageImages, setPageImages] = useState<string[]>([]);
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
   const [htmlContent, setHtmlContent] = useState<string | null>(null);
   const [textContent, setTextContent] = useState<string | null>(null);
   const [fileType, setFileType] = useState<'pdf' | 'word' | 'text' | null>(null);
+  const [showThumbnails, setShowThumbnails] = useState(true);
+  const [prompterWindow, setPrompterWindow] = useState<Window | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const { toast } = useToast();
 
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 25, 200));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 25, 50));
+  const handleZoomIn = () => {
+    const newZoom = Math.min(zoom + 25, 200);
+    setZoom(newZoom);
+    prompterWindow?.postMessage({ type: 'zoom', zoom: newZoom + 50 }, '*');
+  };
+  
+  const handleZoomOut = () => {
+    const newZoom = Math.max(zoom - 25, 50);
+    setZoom(newZoom);
+    prompterWindow?.postMessage({ type: 'zoom', zoom: newZoom + 50 }, '*');
+  };
 
-  // Render all PDF pages to images
+  // Render PDF pages to images
   const renderPdfPages = useCallback(async (pdf: pdfjsLib.PDFDocumentProxy) => {
     const images: string[] = [];
-    const scale = 2; // Higher resolution for crisp rendering
+    const thumbs: string[] = [];
+    const scale = 2;
+    const thumbScale = 0.3;
     
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale });
       
+      // Full resolution
+      const viewport = page.getViewport({ scale });
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
+      if (context) {
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: context, viewport }).promise;
+        images.push(canvas.toDataURL('image/png'));
+      }
       
-      if (!context) continue;
-      
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      
-      await page.render({
-        canvasContext: context,
-        viewport: viewport,
-      }).promise;
-      
-      images.push(canvas.toDataURL('image/png'));
+      // Thumbnail
+      const thumbViewport = page.getViewport({ scale: thumbScale });
+      const thumbCanvas = document.createElement('canvas');
+      const thumbContext = thumbCanvas.getContext('2d');
+      if (thumbContext) {
+        thumbCanvas.width = thumbViewport.width;
+        thumbCanvas.height = thumbViewport.height;
+        await page.render({ canvasContext: thumbContext, viewport: thumbViewport }).promise;
+        thumbs.push(thumbCanvas.toDataURL('image/jpeg', 0.6));
+      }
     }
     
-    return images;
+    return { images, thumbs };
   }, []);
 
   // Load PDF
@@ -90,16 +120,15 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       
-      setPdfDoc(pdf);
       setTotalPages(pdf.numPages);
       setCurrentPage(1);
       setFileType('pdf');
       setHtmlContent(null);
       setTextContent(null);
       
-      // Render all pages
-      const images = await renderPdfPages(pdf);
+      const { images, thumbs } = await renderPdfPages(pdf);
       setPageImages(images);
+      setThumbnails(thumbs);
     } catch (error) {
       console.error('Error loading PDF:', error);
       toast({
@@ -121,7 +150,7 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
       
       setHtmlContent(result.value);
       setPageImages([]);
-      setPdfDoc(null);
+      setThumbnails([]);
       setTotalPages(0);
       setFileType('word');
       setTextContent(null);
@@ -144,7 +173,7 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
       const text = await file.text();
       setTextContent(text);
       setPageImages([]);
-      setPdfDoc(null);
+      setThumbnails([]);
       setTotalPages(0);
       setFileType('text');
       setHtmlContent(null);
@@ -226,7 +255,7 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     setFileName(null);
     setFileSize(0);
     setPageImages([]);
-    setPdfDoc(null);
+    setThumbnails([]);
     setHtmlContent(null);
     setTextContent(null);
     setFileType(null);
@@ -242,6 +271,7 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     if (pageElement) {
       pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
       setCurrentPage(pageNum);
+      prompterWindow?.postMessage({ type: 'navigate', page: pageNum }, '*');
     }
   };
 
@@ -254,6 +284,105 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
   const handlePageDown = () => {
     if (currentPage < totalPages) {
       scrollToPage(currentPage + 1);
+    }
+  };
+
+  // Print functionality
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({
+        title: 'Print blocked',
+        description: 'Please allow popups to print',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    let content = '';
+    
+    if (fileType === 'pdf') {
+      content = pageImages.map((img, i) => 
+        `<div style="page-break-after: always; text-align: center;">
+          <img src="${img}" style="max-width: 100%; max-height: 100vh;" />
+        </div>`
+      ).join('');
+    } else if (fileType === 'word' && htmlContent) {
+      content = `<div style="padding: 40px;">${htmlContent}</div>`;
+    } else if (fileType === 'text' && textContent) {
+      content = `<pre style="padding: 40px; white-space: pre-wrap; font-family: sans-serif;">${textContent}</pre>`;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${fileName || 'Document'}</title>
+          <style>
+            @media print {
+              body { margin: 0; }
+              @page { margin: 0.5in; }
+            }
+          </style>
+        </head>
+        <body>${content}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
+  // Open prompter window
+  const openPrompter = () => {
+    const width = 1200;
+    const height = 800;
+    const left = (screen.width - width) / 2;
+    const top = (screen.height - height) / 2;
+    
+    const newWindow = window.open(
+      '/prompter',
+      'Prompter',
+      `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
+    );
+    
+    if (newWindow) {
+      setPrompterWindow(newWindow);
+      
+      // Listen for ready message
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data.type === 'prompter-ready') {
+          // Send initial data
+          newWindow.postMessage({
+            type: 'init',
+            pageImages,
+            htmlContent,
+            textContent,
+            fileType,
+            fileName,
+          }, '*');
+        }
+        if (event.data.type === 'page-change') {
+          setCurrentPage(event.data.page);
+          scrollToPage(event.data.page);
+        }
+      };
+      
+      window.addEventListener('message', handleMessage);
+      
+      // Clean up on close
+      const checkClosed = setInterval(() => {
+        if (newWindow.closed) {
+          setPrompterWindow(null);
+          window.removeEventListener('message', handleMessage);
+          clearInterval(checkClosed);
+        }
+      }, 1000);
+    } else {
+      toast({
+        title: 'Popup blocked',
+        description: 'Please allow popups to open the prompter',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -272,7 +401,9 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
         if (pageEl) {
           const rect = pageEl.getBoundingClientRect();
           if (rect.top <= containerRect.top + 100 && rect.bottom > containerRect.top + 100) {
-            setCurrentPage(i + 1);
+            if (currentPage !== i + 1) {
+              setCurrentPage(i + 1);
+            }
             break;
           }
         }
@@ -282,7 +413,26 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
     const container = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
     container?.addEventListener('scroll', handleScroll);
     return () => container?.removeEventListener('scroll', handleScroll);
-  }, [fileType, pageImages]);
+  }, [fileType, pageImages, currentPage]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'PageDown' || (e.key === 'ArrowDown' && e.ctrlKey)) {
+        e.preventDefault();
+        handlePageDown();
+      }
+      if (e.key === 'PageUp' || (e.key === 'ArrowUp' && e.ctrlKey)) {
+        e.preventDefault();
+        handlePageUp();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, currentPage, totalPages]);
 
   const hasContent = fileName && (pageImages.length > 0 || htmlContent || textContent);
 
@@ -302,24 +452,67 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
             <span className="text-base font-semibold">Script</span>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleZoomOut}>
-              <ZoomOut className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleZoomOut}>
+                  <ZoomOut className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Zoom Out</TooltipContent>
+            </Tooltip>
             <span className="text-sm text-muted-foreground min-w-[48px] text-center font-mono">
               {zoom}%
             </span>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleZoomIn}>
-              <ZoomIn className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleZoomIn}>
+                  <ZoomIn className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Zoom In</TooltipContent>
+            </Tooltip>
             <div className="w-px h-4 bg-border mx-1" />
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-8 w-8 p-0"
-              onClick={() => setIsFullscreen(!isFullscreen)}
-            >
-              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </Button>
+            {hasContent && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handlePrint}>
+                      <Printer className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Print</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className={cn("h-8 w-8 p-0", prompterWindow && "text-primary")}
+                      onClick={openPrompter}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {prompterWindow ? 'Prompter Open' : 'Open Prompter'}
+                  </TooltipContent>
+                </Tooltip>
+                <div className="w-px h-4 bg-border mx-1" />
+              </>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0"
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                >
+                  {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</TooltipContent>
+            </Tooltip>
             <Button 
               variant="ghost" 
               size="sm" 
@@ -334,6 +527,21 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
         {/* Navigation Bar */}
         {hasContent && (
           <div className="flex items-center justify-center gap-4 px-4 py-2 border-b border-border bg-muted/50 shrink-0">
+            {fileType === 'pdf' && thumbnails.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 w-8 p-0"
+                    onClick={() => setShowThumbnails(!showThumbnails)}
+                  >
+                    {showThumbnails ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{showThumbnails ? 'Hide Thumbnails' : 'Show Thumbnails'}</TooltipContent>
+              </Tooltip>
+            )}
             <div className="flex items-center gap-2">
               <Button 
                 variant="ghost" 
@@ -377,110 +585,144 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
         )}
 
         {/* Content Area */}
-        <div className="flex-1 min-h-0 overflow-hidden bg-muted/30">
-          {!fileName ? (
-            /* Upload Area */
-            <div 
-              className={cn(
-                "h-full flex flex-col items-center justify-center p-8 transition-colors",
-                isDragging ? "bg-primary/5" : "bg-background"
-              )}
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-            >
+        <div className="flex-1 min-h-0 overflow-hidden bg-muted/30 flex">
+          {/* Thumbnail Sidebar */}
+          {hasContent && fileType === 'pdf' && showThumbnails && thumbnails.length > 0 && (
+            <div className="w-24 border-r border-border bg-background shrink-0">
+              <ScrollArea className="h-full">
+                <div className="p-2 space-y-2">
+                  {thumbnails.map((thumb, index) => (
+                    <button
+                      key={index}
+                      onClick={() => scrollToPage(index + 1)}
+                      className={cn(
+                        "w-full rounded overflow-hidden border-2 transition-colors",
+                        currentPage === index + 1 
+                          ? "border-primary" 
+                          : "border-transparent hover:border-primary/50"
+                      )}
+                    >
+                      <img 
+                        src={thumb} 
+                        alt={`Page ${index + 1}`}
+                        className="w-full h-auto"
+                      />
+                      <div className="text-xs text-muted-foreground py-1">
+                        {index + 1}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+
+          {/* Main Content */}
+          <div className="flex-1 min-w-0">
+            {!fileName ? (
+              /* Upload Area */
               <div 
                 className={cn(
-                  "w-full max-w-sm border-2 border-dashed rounded-xl p-8 transition-colors cursor-pointer",
-                  isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                  "h-full flex flex-col items-center justify-center p-8 transition-colors",
+                  isDragging ? "bg-primary/5" : "bg-background"
                 )}
-                onClick={() => fileInputRef.current?.click()}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
               >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept=".pdf,.doc,.docx,.txt,.md"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileUpload(file);
-                  }}
-                />
-                <div className="flex flex-col items-center gap-4 text-center">
-                  <div className="p-4 rounded-full bg-muted">
-                    <Upload className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-base font-medium">
-                      <span className="text-primary">Click to upload</span>
-                      <span className="text-muted-foreground"> or drag and drop</span>
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      PDF, Word (.doc, .docx), TXT, MD
-                    </p>
+                <div 
+                  className={cn(
+                    "w-full max-w-sm border-2 border-dashed rounded-xl p-8 transition-colors cursor-pointer",
+                    isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                  )}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.doc,.docx,.txt,.md"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFileUpload(file);
+                    }}
+                  />
+                  <div className="flex flex-col items-center gap-4 text-center">
+                    <div className="p-4 rounded-full bg-muted">
+                      <Upload className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-base font-medium">
+                        <span className="text-primary">Click to upload</span>
+                        <span className="text-muted-foreground"> or drag and drop</span>
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        PDF, Word (.doc, .docx), TXT, MD
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ) : isLoading ? (
-            /* Loading State */
-            <div className="h-full flex flex-col items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="mt-4 text-sm text-muted-foreground">Loading document...</p>
-            </div>
-          ) : (
-            /* Document Content */
-            <ScrollArea className="h-full" ref={scrollAreaRef}>
-              <div className="p-4 flex flex-col items-center gap-4">
-                {/* PDF Pages */}
-                {fileType === 'pdf' && pageImages.map((imgSrc, index) => (
-                  <div 
-                    key={index}
-                    ref={el => pageRefs.current[index] = el}
-                    className="bg-card rounded-lg shadow-lg overflow-hidden"
-                    style={{ width: `${zoom}%`, maxWidth: '100%' }}
-                  >
-                    <img 
-                      src={imgSrc} 
-                      alt={`Page ${index + 1}`}
-                      className="w-full h-auto block"
-                      draggable={false}
-                    />
-                  </div>
-                ))}
-
-                {/* Word Document Content */}
-                {fileType === 'word' && htmlContent && (
-                  <div 
-                    className="bg-card rounded-lg shadow-lg overflow-hidden w-full max-w-[800px]"
-                    style={{ fontSize: `${zoom}%` }}
-                  >
-                    <div 
-                      className="p-8 prose prose-sm max-w-none dark:prose-invert
-                        prose-headings:font-bold
-                        prose-p:leading-relaxed
-                        prose-a:text-primary"
-                      dangerouslySetInnerHTML={{ __html: htmlContent }}
-                    />
-                  </div>
-                )}
-
-                {/* Text Content */}
-                {fileType === 'text' && textContent && (
-                  <div 
-                    className="bg-card rounded-lg shadow-lg overflow-hidden w-full max-w-[800px]"
-                    style={{ fontSize: `${zoom}%` }}
-                  >
-                    <div className="p-8">
-                      <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-card-foreground">
-                        {textContent}
-                      </pre>
-                    </div>
-                  </div>
-                )}
+            ) : isLoading ? (
+              /* Loading State */
+              <div className="h-full flex flex-col items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="mt-4 text-sm text-muted-foreground">Loading document...</p>
               </div>
-            </ScrollArea>
-          )}
+            ) : (
+              /* Document Content */
+              <ScrollArea className="h-full" ref={scrollAreaRef}>
+                <div className="p-4 flex flex-col items-center gap-4">
+                  {/* PDF Pages */}
+                  {fileType === 'pdf' && pageImages.map((imgSrc, index) => (
+                    <div 
+                      key={index}
+                      ref={el => pageRefs.current[index] = el}
+                      className="bg-card rounded-lg shadow-lg overflow-hidden"
+                      style={{ width: `${zoom}%`, maxWidth: '100%' }}
+                    >
+                      <img 
+                        src={imgSrc} 
+                        alt={`Page ${index + 1}`}
+                        className="w-full h-auto block"
+                        draggable={false}
+                      />
+                    </div>
+                  ))}
+
+                  {/* Word Document Content */}
+                  {fileType === 'word' && htmlContent && (
+                    <div 
+                      className="bg-card rounded-lg shadow-lg overflow-hidden w-full max-w-[800px]"
+                      style={{ fontSize: `${zoom}%` }}
+                    >
+                      <div 
+                        className="p-8 prose prose-sm max-w-none dark:prose-invert
+                          prose-headings:font-bold
+                          prose-p:leading-relaxed
+                          prose-a:text-primary"
+                        dangerouslySetInnerHTML={{ __html: htmlContent }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Text Content */}
+                  {fileType === 'text' && textContent && (
+                    <div 
+                      className="bg-card rounded-lg shadow-lg overflow-hidden w-full max-w-[800px]"
+                      style={{ fontSize: `${zoom}%` }}
+                    >
+                      <div className="p-8">
+                        <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-card-foreground">
+                          {textContent}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -488,9 +730,12 @@ const ScriptPanel: React.FC<ScriptPanelProps> = ({
           <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/30 shrink-0">
             <div className="flex items-center gap-2">
               <File className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground truncate max-w-[280px]">
+              <span className="text-xs text-muted-foreground truncate max-w-[200px]">
                 {fileName}
               </span>
+              {prompterWindow && (
+                <span className="text-xs text-primary">• Prompter Active</span>
+              )}
             </div>
             <span className="text-xs text-muted-foreground">
               {(fileSize / 1024).toFixed(1)} KB
