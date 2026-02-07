@@ -172,67 +172,220 @@ export type Database = {
           },
         ]
       }
+      cue_templates: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          created_by: string | null
+          cue_type: Database["public"]["Enums"]["cue_type"] | null
+          default_duration: number | null
+          default_notes: string | null
+          icon: string | null
+          id: string
+          is_archived: boolean | null
+          name: string
+          updated_at: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          cue_type?: Database["public"]["Enums"]["cue_type"] | null
+          default_duration?: number | null
+          default_notes?: string | null
+          icon?: string | null
+          id?: string
+          is_archived?: boolean | null
+          name: string
+          updated_at?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          cue_type?: Database["public"]["Enums"]["cue_type"] | null
+          default_duration?: number | null
+          default_notes?: string | null
+          icon?: string | null
+          id?: string
+          is_archived?: boolean | null
+          name?: string
+          updated_at?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cue_templates_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cue_tracks: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          cue_count: number | null
+          id: string
+          name: string
+          order_index: number | null
+          show_id: string
+          type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          cue_count?: number | null
+          id?: string
+          name: string
+          order_index?: number | null
+          show_id: string
+          type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          cue_count?: number | null
+          id?: string
+          name?: string
+          order_index?: number | null
+          show_id?: string
+          type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cue_tracks_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cues: {
         Row: {
+          audio_url: string | null
           auto_follow: boolean | null
           color: string | null
           created_at: string
+          cue_type: Database["public"]["Enums"]["cue_type"] | null
+          description: string | null
+          display_name: string | null
           duration: string
           effects: string[] | null
+          fired_at: string | null
+          group_id: string | null
+          group_order: number | null
+          icon: string | null
           id: string
+          is_segment_marker: boolean | null
           name: string
           notes: string | null
           order_index: number
+          paused_at: string | null
           position: number
+          segment_id: string | null
           show_id: string
           start_time: string
+          status: string | null
+          template_id: string | null
           track: string
+          track_id: string | null
           type: string
           updated_at: string
           width: number
         }
         Insert: {
+          audio_url?: string | null
           auto_follow?: boolean | null
           color?: string | null
           created_at?: string
+          cue_type?: Database["public"]["Enums"]["cue_type"] | null
+          description?: string | null
+          display_name?: string | null
           duration?: string
           effects?: string[] | null
+          fired_at?: string | null
+          group_id?: string | null
+          group_order?: number | null
+          icon?: string | null
           id?: string
+          is_segment_marker?: boolean | null
           name: string
           notes?: string | null
           order_index?: number
+          paused_at?: string | null
           position?: number
+          segment_id?: string | null
           show_id: string
           start_time?: string
+          status?: string | null
+          template_id?: string | null
           track: string
+          track_id?: string | null
           type: string
           updated_at?: string
           width?: number
         }
         Update: {
+          audio_url?: string | null
           auto_follow?: boolean | null
           color?: string | null
           created_at?: string
+          cue_type?: Database["public"]["Enums"]["cue_type"] | null
+          description?: string | null
+          display_name?: string | null
           duration?: string
           effects?: string[] | null
+          fired_at?: string | null
+          group_id?: string | null
+          group_order?: number | null
+          icon?: string | null
           id?: string
+          is_segment_marker?: boolean | null
           name?: string
           notes?: string | null
           order_index?: number
+          paused_at?: string | null
           position?: number
+          segment_id?: string | null
           show_id?: string
           start_time?: string
+          status?: string | null
+          template_id?: string | null
           track?: string
+          track_id?: string | null
           type?: string
           updated_at?: string
           width?: number
         }
         Relationships: [
           {
+            foreignKeyName: "cues_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "show_segments"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cues_show_id_fkey"
             columns: ["show_id"]
             isOneToOne: false
             referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cues_track_id_fkey"
+            columns: ["track_id"]
+            isOneToOne: false
+            referencedRelation: "cue_tracks"
             referencedColumns: ["id"]
           },
         ]
@@ -1038,6 +1191,7 @@ export type Database = {
           name: string
           order_index: number
           show_id: string
+          start_time: number | null
           target_duration: number
           updated_at: string
         }
@@ -1048,6 +1202,7 @@ export type Database = {
           name: string
           order_index?: number
           show_id: string
+          start_time?: number | null
           target_duration?: number
           updated_at?: string
         }
@@ -1058,6 +1213,7 @@ export type Database = {
           name?: string
           order_index?: number
           show_id?: string
+          start_time?: number | null
           target_duration?: number
           updated_at?: string
         }
@@ -1117,6 +1273,7 @@ export type Database = {
           brand_color: string | null
           call_time: string | null
           created_at: string
+          cue_count: number | null
           custom_tracks: Json | null
           default_tracks: string[] | null
           description: string | null
@@ -1126,6 +1283,7 @@ export type Database = {
           event_start_date: string | null
           folder_id: string | null
           id: string
+          is_playing: boolean | null
           locked: boolean | null
           logo_url: string | null
           name: string
@@ -1134,6 +1292,7 @@ export type Database = {
           safety_mode: boolean | null
           secondary_color: string | null
           show_code: string
+          show_mode: string | null
           show_template: string | null
           show_time: string | null
           team_audio_lead: string | null
@@ -1145,6 +1304,7 @@ export type Database = {
           team_video_lead: string | null
           timecode_format: string | null
           timezone: string | null
+          total_duration: number | null
           updated_at: string
           user_id: string | null
           venue: string | null
@@ -1158,6 +1318,7 @@ export type Database = {
           brand_color?: string | null
           call_time?: string | null
           created_at?: string
+          cue_count?: number | null
           custom_tracks?: Json | null
           default_tracks?: string[] | null
           description?: string | null
@@ -1167,6 +1328,7 @@ export type Database = {
           event_start_date?: string | null
           folder_id?: string | null
           id?: string
+          is_playing?: boolean | null
           locked?: boolean | null
           logo_url?: string | null
           name: string
@@ -1175,6 +1337,7 @@ export type Database = {
           safety_mode?: boolean | null
           secondary_color?: string | null
           show_code: string
+          show_mode?: string | null
           show_template?: string | null
           show_time?: string | null
           team_audio_lead?: string | null
@@ -1186,6 +1349,7 @@ export type Database = {
           team_video_lead?: string | null
           timecode_format?: string | null
           timezone?: string | null
+          total_duration?: number | null
           updated_at?: string
           user_id?: string | null
           venue?: string | null
@@ -1199,6 +1363,7 @@ export type Database = {
           brand_color?: string | null
           call_time?: string | null
           created_at?: string
+          cue_count?: number | null
           custom_tracks?: Json | null
           default_tracks?: string[] | null
           description?: string | null
@@ -1208,6 +1373,7 @@ export type Database = {
           event_start_date?: string | null
           folder_id?: string | null
           id?: string
+          is_playing?: boolean | null
           locked?: boolean | null
           logo_url?: string | null
           name?: string
@@ -1216,6 +1382,7 @@ export type Database = {
           safety_mode?: boolean | null
           secondary_color?: string | null
           show_code?: string
+          show_mode?: string | null
           show_template?: string | null
           show_time?: string | null
           team_audio_lead?: string | null
@@ -1227,6 +1394,7 @@ export type Database = {
           team_video_lead?: string | null
           timecode_format?: string | null
           timezone?: string | null
+          total_duration?: number | null
           updated_at?: string
           user_id?: string | null
           venue?: string | null
@@ -1485,6 +1653,13 @@ export type Database = {
       }
     }
     Enums: {
+      cue_type:
+        | "vog"
+        | "audio"
+        | "lights"
+        | "video"
+        | "stage_action"
+        | "segment_marker"
       workspace_plan: "free" | "starter" | "professional" | "enterprise"
       workspace_role: "owner" | "admin" | "member"
     }
@@ -1614,6 +1789,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      cue_type: [
+        "vog",
+        "audio",
+        "lights",
+        "video",
+        "stage_action",
+        "segment_marker",
+      ],
       workspace_plan: ["free", "starter", "professional", "enterprise"],
       workspace_role: ["owner", "admin", "member"],
     },

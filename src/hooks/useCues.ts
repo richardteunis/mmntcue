@@ -197,7 +197,7 @@ export function useCues(showId: string | null) {
           start_time: startTime,
           show_id: showId,
           order_index: cues.length
-        })
+        } as any)
         .select()
         .single();
 
@@ -224,7 +224,7 @@ export function useCues(showId: string | null) {
     try {
       const { error } = await supabase
         .from('cues')
-        .update(updates)
+        .update(updates as any)
         .eq('id', id);
 
       if (error) throw error;
@@ -339,7 +339,7 @@ export function useCues(showId: string | null) {
       const updatePromises = cueIds.map(id =>
         supabase
           .from('cues')
-          .update(updates)
+          .update(updates as any)
           .eq('id', id)
           .then(({ error }) => {
             if (error) throw error;
@@ -391,6 +391,102 @@ export function useCues(showId: string | null) {
     }
   };
 
+  // Fire a cue (mark as fired with timestamp)
+  const fireCue = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('cues')
+        .update({ 
+          status: 'fired', 
+          fired_at: new Date().toISOString() 
+        } as any)
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error firing cue:', error);
+      toast({
+        title: 'Error firing cue',
+        description: 'Could not fire cue',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Skip a cue (mark as skipped)
+  const skipCue = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('cues')
+        .update({ status: 'skipped' } as any)
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error skipping cue:', error);
+      toast({
+        title: 'Error skipping cue',
+        description: 'Could not skip cue',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Reset a single cue's status to standby
+  const resetCueStatus = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('cues')
+        .update({ 
+          status: 'standby', 
+          fired_at: null,
+          paused_at: null 
+        } as any)
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error resetting cue status:', error);
+      toast({
+        title: 'Error resetting cue',
+        description: 'Could not reset cue status',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Reset all cues in show to standby
+  const resetAllCues = async () => {
+    if (!showId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('cues')
+        .update({ 
+          status: 'standby', 
+          fired_at: null,
+          paused_at: null 
+        } as any)
+        .eq('show_id', showId);
+
+      if (error) throw error;
+      
+      toast({
+        title: 'Show reset',
+        description: 'All cues have been reset to standby'
+      });
+      
+      await fetchCues();
+    } catch (error) {
+      console.error('Error resetting all cues:', error);
+      toast({
+        title: 'Error resetting show',
+        description: 'Could not reset all cues',
+        variant: 'destructive'
+      });
+    }
+  };
+
   return {
     cues,
     loading,
@@ -402,6 +498,11 @@ export function useCues(showId: string | null) {
     reorderCues,
     bulkUpdateCues,
     bulkDeleteCues,
+    // Live show control
+    fireCue,
+    skipCue,
+    resetCueStatus,
+    resetAllCues,
     refetch: fetchCues,
     getNextStartTime
   };

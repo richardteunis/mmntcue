@@ -45,6 +45,19 @@
     --sidebar-accent-foreground: 240 5.9% 90%;
     --sidebar-border: 263 28% 30%;
     --sidebar-ring: 252 95% 85%;
+    
+    /* Cue status colors */
+    --cue-standby: 210 40% 40%;
+    --cue-fired: 142 76% 36%;
+    --cue-skipped: 0 0% 50%;
+    
+    /* Cue type colors */
+    --cue-audio: 168 76% 36%;
+    --cue-video: 142 76% 36%;
+    --cue-lights: 45 93% 47%;
+    --cue-stage: 221 83% 53%;
+    --cue-vog: 262 83% 58%;
+    --cue-segment-marker: 0 0% 60%;
   }
 
   .dark {
@@ -86,6 +99,19 @@
     --sidebar-accent-foreground: 240 5.9% 90%;
     --sidebar-border: 263 28% 30%;
     --sidebar-ring: 252 95% 85%;
+    
+    /* Cue status colors */
+    --cue-standby: 210 40% 30%;
+    --cue-fired: 142 76% 36%;
+    --cue-skipped: 0 0% 50%;
+    
+    /* Cue type colors */
+    --cue-audio: 168 76% 36%;
+    --cue-video: 142 76% 36%;
+    --cue-lights: 45 93% 47%;
+    --cue-stage: 221 83% 53%;
+    --cue-vog: 262 83% 58%;
+    --cue-segment-marker: 0 0% 60%;
   }
 }
 

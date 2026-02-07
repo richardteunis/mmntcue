@@ -1,11 +1,25 @@
 import { Json } from '@/integrations/supabase/types';
 
+// Cue type enum matching database
+export type CueType = 'vog' | 'audio' | 'lights' | 'video' | 'stage_action' | 'segment_marker';
+
+// Cue status for live show control
+export type CueStatus = 'standby' | 'fired' | 'skipped';
+
+// Track type for organizing cues
+export type TrackType = 'audio' | 'video' | 'lights' | 'stage';
+
 export interface Cue {
   id: string;
   show_id: string;
   name: string;
+  display_name?: string | null;
+  description?: string | null;
   type: string;
   track: string;
+  track_id?: string | null;
+  segment_id?: string | null;
+  template_id?: string | null;
   start_time: string;
   duration: string;
   position: number;
@@ -15,6 +29,47 @@ export interface Cue {
   effects: string[];
   auto_follow: boolean;
   order_index: number;
+  // Live show control fields
+  status?: CueStatus | string;
+  cue_type?: CueType | string;
+  fired_at?: string | null;
+  paused_at?: string | null;
+  // Grouping fields
+  group_id?: string | null;
+  group_order?: number;
+  is_segment_marker?: boolean;
+  // Media fields
+  audio_url?: string | null;
+  icon?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Track for timeline organization
+export interface CueTrack {
+  id: string;
+  show_id: string;
+  name: string;
+  type: TrackType | string;
+  color: string;
+  cue_count: number;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Cue template for quick creation
+export interface CueTemplate {
+  id: string;
+  workspace_id?: string | null;
+  created_by?: string | null;
+  name: string;
+  cue_type: CueType | string;
+  default_duration: number;
+  default_notes?: string | null;
+  color?: string | null;
+  icon?: string | null;
+  is_archived: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -27,6 +82,9 @@ export interface Folder {
   created_at: string;
   updated_at: string;
 }
+
+// Show mode for operational states
+export type ShowMode = 'planning' | 'rehearsal' | 'live';
 
 export interface Show {
   id: string;
@@ -74,6 +132,11 @@ export interface Show {
   team_video_lead?: string | null;
   // Show Code
   show_code?: string;
+  // Live show control
+  show_mode?: ShowMode | string;
+  is_playing?: boolean;
+  total_duration?: number;
+  cue_count?: number;
 }
 
 export interface CueSuggestion {
