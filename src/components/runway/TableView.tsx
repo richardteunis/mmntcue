@@ -126,6 +126,34 @@ const TRACK_COLORS: Record<string, string> = {
   stage: 'bg-runway-warning',
 };
 
+// Display names for cue types
+const CUE_TYPE_LABELS: Record<string, string> = {
+  vog: 'VOG',
+  audio: 'Audio',
+  lights: 'Lights',
+  video: 'Video',
+  stage_action: 'Stage',
+  segment_marker: 'Marker',
+  lighting: 'Lights',
+  stage: 'Stage',
+};
+
+// Helper to darken a hex color for header backgrounds
+const darkenColor = (hex: string, amount: number = 0.6): string => {
+  // Remove # if present
+  const color = hex.replace('#', '');
+  const r = parseInt(color.substring(0, 2), 16);
+  const g = parseInt(color.substring(2, 4), 16);
+  const b = parseInt(color.substring(4, 6), 16);
+  
+  // Darken by multiplying
+  const newR = Math.round(r * amount);
+  const newG = Math.round(g * amount);
+  const newB = Math.round(b * amount);
+  
+  return `rgb(${newR}, ${newG}, ${newB})`;
+};
+
 const TableView: React.FC<TableViewProps> = ({
   cues,
   segments,
@@ -375,11 +403,7 @@ const TableView: React.FC<TableViewProps> = ({
                   <div 
                     className="flex items-center gap-3 px-4 py-3 sticky top-0 z-20 border-b border-border"
                     style={{
-                      backgroundColor: status === 'over' 
-                        ? 'hsl(0 30% 18%)' 
-                        : status === 'under' 
-                          ? 'hsl(200 30% 18%)' 
-                          : 'hsl(var(--muted))'
+                      backgroundColor: darkenColor(segment.color || '#6366f1', 0.35)
                     }}
                   >
                     <CollapsibleTrigger asChild>
@@ -479,7 +503,8 @@ const TableView: React.FC<TableViewProps> = ({
                               key={cue.id}
                               className={cn(
                                 "cursor-pointer transition-colors group",
-                                selectedCueId === cue.id && "bg-primary/10 border-l-2 border-l-primary"
+                                selectedCueId === cue.id && "bg-primary/10 border-l-2 border-l-primary",
+                                cueIndex % 2 === 1 && selectedCueId !== cue.id && "bg-muted/30"
                               )}
                               onClick={() => onCueSelect(cue.id, cue)}
                             >
@@ -497,10 +522,9 @@ const TableView: React.FC<TableViewProps> = ({
                                 </div>
                               </TableCell>
                               <TableCell className="py-2">
-                                <div className={cn(
-                                  "w-2 h-2 rounded-full",
-                                  TRACK_COLORS[cue.type] || 'bg-muted'
-                                )} />
+                                <span className="text-xs text-muted-foreground capitalize">
+                                  {CUE_TYPE_LABELS[cue.cue_type || cue.type] || cue.type}
+                                </span>
                               </TableCell>
                               {!goMode && (
                                 <TableCell className="py-2">
@@ -575,7 +599,8 @@ const TableView: React.FC<TableViewProps> = ({
                         key={cue.id}
                         className={cn(
                           "cursor-pointer transition-colors group",
-                          selectedCueId === cue.id && "bg-primary/10"
+                          selectedCueId === cue.id && "bg-primary/10",
+                          index % 2 === 1 && selectedCueId !== cue.id && "bg-muted/30"
                         )}
                         onClick={() => onCueSelect(cue.id, cue)}
                       >
@@ -589,7 +614,9 @@ const TableView: React.FC<TableViewProps> = ({
                           <div className="font-mono text-xs">{formatDuration(timeToSeconds(cue.duration))}</div>
                         </TableCell>
                         <TableCell className="w-[60px] py-2">
-                          <div className={cn("w-2 h-2 rounded-full", TRACK_COLORS[cue.type] || 'bg-muted')} />
+                          <span className="text-xs text-muted-foreground capitalize">
+                            {CUE_TYPE_LABELS[cue.cue_type || cue.type] || cue.type}
+                          </span>
                         </TableCell>
                         <TableCell className="py-2">
                           <div className="text-xs text-muted-foreground truncate max-w-[200px]">
