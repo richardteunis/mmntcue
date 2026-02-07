@@ -17,7 +17,9 @@ import AddTrackModal, { Track } from './AddTrackModal';
 import CollaboratorCursors from './CollaboratorCursors';
 import ViewPresenceIndicator from './ViewPresenceIndicator';
 import PlaybackSettingsModal from './PlaybackSettingsModal';
-import BottomControlSystem from './BottomControlSystem';
+import ScriptPanel from './ScriptPanel';
+import MediaBinPanel from './MediaBinPanel';
+import SegmentEditorPanel from './SegmentEditorPanel';
 import PlanningDrawer from './PlanningDrawer';
 import PlanningStatusChip from './PlanningStatusChip';
 import NextCuePanel from './NextCuePanel';
@@ -31,10 +33,11 @@ import ROSImportModal from './ROSImportModal';
 import VersionHistoryRail from './VersionHistoryRail';
 import CocoChat from './CocoChat';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings, Eye, EyeOff, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
+import { PlusCircle, Edit, Sparkles, Loader2, Trash2, CheckSquare, Pencil, Layers, Settings, Eye, EyeOff, ChevronLeft, ChevronRight, Upload, FileText, Package, Music, Mic2, LayoutList } from 'lucide-react';
 import { useCues, useAISuggestions } from '@/hooks/useCues';
 import { useRealtimePresence } from '@/hooks/useRealtimePresence';
 import { useCueAssets } from '@/hooks/useAssets';
@@ -116,6 +119,12 @@ const Dashboard: React.FC = () => {
   const [isPlaybackSettingsOpen, setIsPlaybackSettingsOpen] = useState(false);
   const [pendingAssetForCue, setPendingAssetForCue] = useState<{ asset: Asset; cueId: string } | null>(null);
   const [isROSImportOpen, setIsROSImportOpen] = useState(false);
+  
+  // Side panel states
+  const [isScriptPanelOpen, setIsScriptPanelOpen] = useState(false);
+  const [isMediaBinOpen, setIsMediaBinOpen] = useState(false);
+  const [isSegmentEditorOpen, setIsSegmentEditorOpen] = useState(false);
+  
   const sidebarRef = useRef<{ openCreateModal: () => void } | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -1171,6 +1180,52 @@ const Dashboard: React.FC = () => {
                         >
                           <Settings size={16} className="mr-1.5" /> Edit Show
                         </Button>
+                        
+                        {/* Panel Toggle Buttons - Divider */}
+                        <div className="w-px h-6 bg-border mx-1" />
+                        
+                        {/* Search / Zoom toggle group placeholder */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => setIsScriptPanelOpen(true)}
+                              size="sm"
+                              variant={isScriptPanelOpen ? "secondary" : "outline"}
+                              className="h-8 w-8 p-0"
+                            >
+                              <FileText size={16} />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Script / Document Viewer</TooltipContent>
+                        </Tooltip>
+                        
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => setIsMediaBinOpen(true)}
+                              size="sm"
+                              variant={isMediaBinOpen ? "secondary" : "outline"}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Music size={16} />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Media Bin</TooltipContent>
+                        </Tooltip>
+                        
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => setIsSegmentEditorOpen(true)}
+                              size="sm"
+                              variant={isSegmentEditorOpen ? "secondary" : "outline"}
+                              className="h-8 w-8 p-0"
+                            >
+                              <LayoutList size={16} />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Segments</TooltipContent>
+                        </Tooltip>
                       </div>
                       <div className="flex items-center gap-2">
                         {/* Planning Status Chip - Planning mode only */}
@@ -1268,109 +1323,6 @@ const Dashboard: React.FC = () => {
                         nextCueId={showState.nextCue?.id}
                         playbackState={playback}
                         segments={showSegments}
-                      />
-                    )}
-                    
-                    {/* Bottom Control System - In planning and rehearsal modes */}
-                    {(showMode === 'planning' || showMode === 'rehearsal') && (
-                      <BottomControlSystem
-                        showId={activeShowId}
-                        selectedCueId={selectedCueId}
-                        selectedCueName={selectedCue?.name}
-                        segments={segmentsWithStats}
-                        onSegmentClick={handleSegmentClick}
-                        onSegmentReorder={handleSegmentReorder}
-                        onSegmentCreate={handleSegmentCreate}
-                        onSegmentUpdate={handleSegmentUpdate}
-                        onSegmentColorChange={handleSegmentColorChange}
-                        onSegmentDelete={handleSegmentDelete}
-                        onAssetDragStart={(asset) => {
-                          // Asset drag handled via HTML5 drag API in MediaBin
-                        }}
-                        onAssetSelect={(asset) => {
-                          // When asset is clicked, attach to selected cue if one exists
-                          if (selectedCueId) {
-                            handleAssetDropOnCue(asset, selectedCueId);
-                          }
-                        }}
-                        onAddMedia={() => {
-                          // Toast prompting drag-drop or clicking existing assets
-                          toast({
-                            title: 'Add Media',
-                            description: 'Drag assets from the Media Bin onto cues, or click to attach to selected cue.',
-                          });
-                        }}
-                        onAddCue={async (type, name) => {
-                          const nextStartTime = getNextStartTime();
-                          const newCue = {
-                            name,
-                            type,
-                            track: type === 'video' ? 'Video' : type === 'audio' ? 'Audio' : type === 'lighting' ? 'Lights' : 'Stage',
-                            start_time: nextStartTime,
-                            duration: '00:00:30',
-                            position: cues.length * 100,
-                            width: 100,
-                            color: type === 'ops_note' ? 'bg-runway-warning' : 'bg-runway-teal',
-                            notes: null,
-                            effects: [],
-                            auto_follow: false,
-                            order_index: cues.length
-                          };
-                          await addCue(newCue, false);
-                        }}
-                        onAddMoment={(type, label) => {
-                          // Moments create special marker cues
-                          const nextStartTime = getNextStartTime();
-                          addCue({
-                            name: label,
-                            type: 'moment',
-                            track: 'Stage',
-                            start_time: nextStartTime,
-                            duration: '00:00:10',
-                            position: cues.length * 100,
-                            width: 50,
-                            color: type === 'transition' ? 'bg-runway-purple' : type === 'applause' ? 'bg-runway-highlight' : 'bg-runway-success',
-                            notes: `${type} moment`,
-                            effects: [],
-                            auto_follow: true,
-                            order_index: cues.length
-                          }, false);
-                        }}
-                        onAddBuffer={async () => {
-                          const nextStartTime = getNextStartTime();
-                          await addCue({
-                            name: 'Buffer',
-                            type: 'ops_note',
-                            track: 'Stage',
-                            start_time: nextStartTime,
-                            duration: '00:01:00',
-                            position: cues.length * 100,
-                            width: 100,
-                            color: 'bg-runway-warning',
-                            notes: null,
-                            effects: [],
-                            auto_follow: false,
-                            order_index: cues.length
-                          }, false);
-                        }}
-                        onSendOpsAlert={async () => {
-                          const nextStartTime = getNextStartTime();
-                          await addCue({
-                            name: 'Ops Alert',
-                            type: 'ops_note',
-                            track: 'Stage',
-                            start_time: nextStartTime,
-                            duration: '00:00:30',
-                            position: cues.length * 100,
-                            width: 100,
-                            color: 'bg-destructive',
-                            notes: null,
-                            effects: [],
-                            auto_follow: false,
-                            order_index: cues.length
-                          }, false);
-                        }}
-                        disabled={!activeShowId}
                       />
                     )}
                   </div>
@@ -1507,6 +1459,46 @@ const Dashboard: React.FC = () => {
             }}
           />
         )}
+
+        {/* Side Panels */}
+        <ScriptPanel
+          open={isScriptPanelOpen}
+          onOpenChange={setIsScriptPanelOpen}
+          showId={activeShowId}
+        />
+        
+        <MediaBinPanel
+          open={isMediaBinOpen}
+          onOpenChange={setIsMediaBinOpen}
+          showId={activeShowId}
+          onAssetDragStart={(asset) => {
+            // Asset drag handled via HTML5 drag API
+          }}
+          onAssetSelect={(asset) => {
+            if (selectedCueId) {
+              handleAssetDropOnCue(asset, selectedCueId);
+            }
+          }}
+          onAddMedia={() => {
+            toast({
+              title: 'Add Media',
+              description: 'Drag assets from the Media Bin onto cues, or click to attach to selected cue.',
+            });
+          }}
+        />
+        
+        <SegmentEditorPanel
+          open={isSegmentEditorOpen}
+          onOpenChange={setIsSegmentEditorOpen}
+          segments={segmentsWithStats}
+          onSegmentClick={handleSegmentClick}
+          onSegmentReorder={handleSegmentReorder}
+          onSegmentCreate={handleSegmentCreate}
+          onSegmentUpdate={handleSegmentUpdate}
+          onSegmentColorChange={handleSegmentColorChange}
+          onSegmentDelete={handleSegmentDelete}
+          disabled={!activeShowId}
+        />
 
         {/* Coco Chat - Floating AI Assistant */}
         {activeShowId && (
