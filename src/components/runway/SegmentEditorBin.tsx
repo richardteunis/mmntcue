@@ -332,69 +332,78 @@ const SegmentEditorBin: React.FC<SegmentEditorBinProps> = ({
 
               {editingSegmentId === segment.id ? (
                 <>
-                  <Input
-                    value={editSegmentName}
-                    onChange={(e) => setEditSegmentName(e.target.value)}
-                    className="h-6 text-xs flex-1 min-w-0"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveEdit();
-                      if (e.key === 'Escape') handleCancelEdit();
-                    }}
-                  />
-                  <Input
-                    value={editSegmentDuration}
-                    onChange={(e) => setEditSegmentDuration(e.target.value)}
-                    placeholder="MM:SS"
-                    className="h-6 text-xs w-14"
-                  />
-                  <Button size="sm" className="h-6 w-6 p-0" onClick={handleSaveEdit}>
-                    <Check className="h-3 w-3" />
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleCancelEdit}>
-                    <X className="h-3 w-3" />
-                  </Button>
+                  <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+                    <Input
+                      value={editSegmentName}
+                      onChange={(e) => setEditSegmentName(e.target.value)}
+                      className="h-7 text-xs"
+                      placeholder="Segment name..."
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveEdit();
+                        if (e.key === 'Escape') handleCancelEdit();
+                      }}
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="h-3 w-3 text-muted-foreground" />
+                      <Input
+                        value={editSegmentDuration}
+                        onChange={(e) => setEditSegmentDuration(e.target.value)}
+                        placeholder="MM:SS"
+                        className="h-6 text-xs w-16 font-mono"
+                      />
+                      <span className="text-[10px] text-muted-foreground">duration</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <Button size="sm" className="h-6 w-6 p-0" onClick={handleSaveEdit}>
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleCancelEdit}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </>
               ) : (
                 <>
                   <div 
-                    className="flex-1 min-w-0"
-                    onClick={() => onSegmentClick?.(segment.id)}
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() => handleStartEdit(segment)}
                   >
                     <div className="flex items-center gap-1">
                       <span className="text-xs font-medium truncate">{segment.name}</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                       <Clock className="h-2.5 w-2.5" />
-                      <span>{formatDuration(segment.targetDuration)}</span>
+                      <span className="font-mono">{formatDuration(segment.targetDuration)}</span>
                       <span className="opacity-50">•</span>
                       <span>{segment.cueCount} cues</span>
                     </div>
                   </div>
                   
-                  {/* Actions */}
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Actions - always visible */}
+                  <div className="flex items-center gap-0.5">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-5 w-5 p-0"
+                      className="h-6 w-6 p-0 opacity-60 hover:opacity-100"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleStartEdit(segment);
                       }}
                     >
-                      <Pencil className="h-2.5 w-2.5" />
+                      <Pencil className="h-3 w-3" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                      className="h-6 w-6 p-0 text-destructive/60 hover:text-destructive hover:opacity-100"
                       onClick={(e) => {
                         e.stopPropagation();
                         onSegmentDelete?.(segment.id);
                       }}
                     >
-                      <Trash2 className="h-2.5 w-2.5" />
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
                 </>
