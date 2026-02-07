@@ -87,7 +87,9 @@ const SegmentRail: React.FC<SegmentRailProps> = ({
   const [editMode, setEditMode] = useState<'name' | 'duration' | null>(null);
   const [editValue, setEditValue] = useState('');
   const [resizingSegment, setResizingSegment] = useState<{ id: string; startX: number; originalDuration: number } | null>(null);
-  const [draggingSegment, setDraggingSegment] = useState<{ id: string; startX: number; originalIndex: number } | null>(null);
+  
+  // HTML5 Drag and drop state
+  const [draggedSegmentId, setDraggedSegmentId] = useState<string | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -204,64 +206,65 @@ const SegmentRail: React.FC<SegmentRailProps> = ({
     };
   }, [resizingSegment, pixelsPerSecond, onSegmentUpdate]);
 
-  // Handle drag reorder
-  const handleDragStart = useCallback((e: React.MouseEvent, segmentId: string, index: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDraggingSegment({ id: segmentId, startX: e.clientX, originalIndex: index });
-    document.body.style.cursor = 'grabbing';
-    document.body.style.userSelect = 'none';
+  // HTML5 Drag and drop handlers
+  const handleDragStart = useCallback((e: React.DragEvent, segmentId: string, index: number) => {
+    setDraggedSegmentId(segmentId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/x-segment-id', segmentId);
+    e.dataTransfer.setData('application/x-segment-source', 'timeline');
+    e.dataTransfer.setData('text/plain', segmentId);
   }, []);
 
-  // Drag reorder effect
-  useEffect(() => {
-    if (!draggingSegment || !onSegmentReorder) return;
+  const handleDragEnd = useCallback(() => {
+    setDraggedSegmentId(null);
+    setDropTargetIndex(null);
+  }, []);
 
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!containerRef.current) return;
-      
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const x = e.clientX - containerRect.left;
-      
-      // Find which segment the mouse is over
-      let targetIndex = 0;
-      let accumulatedX = 0;
-      
-      for (let i = 0; i < segments.length; i++) {
-        const segWidth = (segments[i].endTime - segments[i].startTime) * pixelsPerSecond;
-        const midPoint = accumulatedX + segWidth / 2;
-        
-        if (x > midPoint) {
-          targetIndex = i + 1;
-        }
-        accumulatedX += segWidth;
-      }
-      
-      setDropTargetIndex(targetIndex !== draggingSegment.originalIndex ? targetIndex : null);
-    };
-
-    const handleMouseUp = () => {
-      if (dropTargetIndex !== null && dropTargetIndex !== draggingSegment.originalIndex) {
-        // Adjust target index if moving forward
-        const adjustedIndex = dropTargetIndex > draggingSegment.originalIndex 
-          ? dropTargetIndex - 1 
-          : dropTargetIndex;
-        onSegmentReorder(draggingSegment.id, adjustedIndex);
-      }
-      
-      setDraggingSegment(null);
-      setDropTargetIndex(null);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
+  const handleDragOver = useCallback((e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
     
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [draggingSegment, dropTargetIndex, segments, pixelsPerSecond, onSegmentReorder]);
+    // Only show drop indicator if we have segment data
+    const segmentId = e.dataTransfer.types.includes('application/x-segment-id');
+    if (segmentId && dropTargetIndex !== targetIndex) {
+      setDropTargetIndex(targetIndex);
+    }
+  }, [dropTargetIndex]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Only clear if leaving the container entirely
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (!containerRef.current?.contains(relatedTarget)) {
+      setDropTargetIndex(null);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    
+    const segmentId = e.dataTransfer.getData('application/x-segment-id') || e.dataTransfer.getData('text/plain');
+    if (!segmentId || !onSegmentReorder) {
+      setDropTargetIndex(null);
+      return;
+    }
+    
+    const sourceIndex = segments.findIndex(s => s.id === segmentId);
+    
+    // If segment exists in our list, reorder it
+    if (sourceIndex !== -1) {
+      if (sourceIndex !== targetIndex && sourceIndex !== targetIndex - 1) {
+        // Adjust target index if moving forward
+        const adjustedIndex = targetIndex > sourceIndex ? targetIndex - 1 : targetIndex;
+        onSegmentReorder(segmentId, adjustedIndex);
+      }
+    } else {
+      // Segment is from another source (like the bin), just reorder to target position
+      onSegmentReorder(segmentId, targetIndex);
+    }
+    
+    setDraggedSegmentId(null);
+    setDropTargetIndex(null);
+  }, [segments, onSegmentReorder]);
 
   const getStatusIcon = (status: SegmentStatus) => {
     switch (status) {
@@ -294,11 +297,17 @@ const SegmentRail: React.FC<SegmentRailProps> = ({
       ref={containerRef} 
       className={cn("relative h-10", className)}
       style={{ width: timelineWidth }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        // Handle drag over the container for the "end" drop zone
+      }}
+      onDragLeave={handleDragLeave}
     >
       {segmentStats.map((segment, index) => {
         const left = segment.startTime * pixelsPerSecond;
         const width = (segment.endTime - segment.startTime) * pixelsPerSecond;
         const isEditing = editingSegmentId === segment.id;
+        const isDragging = draggedSegmentId === segment.id;
 
         return (
           <div key={segment.id}>
@@ -373,34 +382,48 @@ const SegmentRail: React.FC<SegmentRailProps> = ({
                 </Button>
               </div>
             ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div
-                    className={cn(
-                      "absolute top-1 bottom-1 rounded-md border cursor-pointer transition-all group",
-                      "hover:brightness-110 hover:shadow-sm",
-                      "flex items-center gap-1.5 px-1 overflow-hidden",
-                      getStatusBg(segment.status),
-                      draggingSegment?.id === segment.id && "opacity-50 ring-2 ring-primary"
-                    )}
-                    style={{
-                      left,
-                      width: Math.max(width, 60),
-                      backgroundColor: segment.color ? `${segment.color}20` : undefined,
-                      borderColor: segment.color ? `${segment.color}40` : undefined,
-                    }}
-                    onClick={() => onSegmentClick?.(segment.id)}
-                  >
-                    {/* Drag handle */}
-                    {onSegmentReorder && (
-                      <div
-                        className="flex-shrink-0 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity hover:text-foreground"
-                        onMouseDown={(e) => handleDragStart(e, segment.id, index)}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                      </div>
-                    )}
+              <>
+                {/* Drop indicator before this segment */}
+                {dropTargetIndex === index && (
+                  <div 
+                    className="absolute top-0 bottom-0 w-1 bg-primary rounded-full z-20"
+                    style={{ left: left - 2 }}
+                  />
+                )}
+                
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      draggable={!isEditing && !!onSegmentReorder}
+                      onDragStart={(e) => handleDragStart(e, segment.id, index)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDrop={(e) => handleDrop(e, index)}
+                      className={cn(
+                        "absolute top-1 bottom-1 rounded-md border transition-all group",
+                        "hover:brightness-110 hover:shadow-sm",
+                        "flex items-center gap-1.5 px-1 overflow-hidden",
+                        getStatusBg(segment.status),
+                        isDragging && "opacity-50 ring-2 ring-primary",
+                        !isEditing && onSegmentReorder && "cursor-grab active:cursor-grabbing"
+                      )}
+                      style={{
+                        left,
+                        width: Math.max(width, 60),
+                        backgroundColor: segment.color ? `${segment.color}20` : undefined,
+                        borderColor: segment.color ? `${segment.color}40` : undefined,
+                      }}
+                      onClick={() => onSegmentClick?.(segment.id)}
+                    >
+                      {/* Drag handle */}
+                      {onSegmentReorder && (
+                        <div
+                          className="flex-shrink-0 opacity-50 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                      )}
                     
                     {getStatusIcon(segment.status)}
                     <span 
@@ -457,10 +480,27 @@ const SegmentRail: React.FC<SegmentRailProps> = ({
                   </div>
                 </TooltipContent>
               </Tooltip>
+              </>
+            )}
+            
+            {/* Drop indicator after last segment */}
+            {index === segments.length - 1 && dropTargetIndex === segments.length && (
+              <div 
+                className="absolute top-0 bottom-0 w-1 bg-primary rounded-full z-20"
+                style={{ left: left + width + 2 }}
+              />
             )}
           </div>
         );
       })}
+      
+      {/* Drop zone for entire rail - catches drops at the end */}
+      <div
+        className="absolute top-0 bottom-0 right-0"
+        style={{ left: totalSegmentWidth, width: Math.max(100, timelineWidth - totalSegmentWidth) }}
+        onDragOver={(e) => handleDragOver(e, segments.length)}
+        onDrop={(e) => handleDrop(e, segments.length)}
+      />
 
       {/* Add segment button at the end */}
       {onSegmentCreate && (

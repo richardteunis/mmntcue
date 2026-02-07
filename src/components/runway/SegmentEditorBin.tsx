@@ -119,32 +119,17 @@ const SegmentEditorBin: React.FC<SegmentEditorBinProps> = ({
     setEditSegmentDuration('');
   }, []);
 
-  const handleMoveSegment = useCallback((segmentId: string, direction: 'up' | 'down') => {
-    const currentIndex = segments.findIndex(s => s.id === segmentId);
-    if (currentIndex === -1) return;
-    
-    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (newIndex < 0 || newIndex >= segments.length) return;
-    
-    onSegmentReorder?.(segmentId, newIndex);
-  }, [segments, onSegmentReorder]);
-
   // Drag and drop handlers
   const handleDragStart = useCallback((e: React.DragEvent, segmentId: string) => {
     if (disabled) return;
     setDraggedSegmentId(segmentId);
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/x-segment-id', segmentId);
+    e.dataTransfer.setData('application/x-segment-source', 'bin');
     e.dataTransfer.setData('text/plain', segmentId);
-    // Add a slight delay to show the dragging state
-    setTimeout(() => {
-      const element = e.target as HTMLElement;
-      element.style.opacity = '0.5';
-    }, 0);
   }, [disabled]);
 
-  const handleDragEnd = useCallback((e: React.DragEvent) => {
-    const element = e.target as HTMLElement;
-    element.style.opacity = '1';
+  const handleDragEnd = useCallback(() => {
     setDraggedSegmentId(null);
     setDragOverIndex(null);
   }, []);
@@ -157,28 +142,40 @@ const SegmentEditorBin: React.FC<SegmentEditorBinProps> = ({
     }
   }, [dragOverIndex]);
 
-  const handleDragLeave = useCallback(() => {
-    setDragOverIndex(null);
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Only clear if leaving the container
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    const container = (e.currentTarget as HTMLElement).closest('[data-segment-bin]');
+    if (!container?.contains(relatedTarget)) {
+      setDragOverIndex(null);
+    }
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent, targetIndex: number) => {
     e.preventDefault();
-    if (!draggedSegmentId) return;
     
-    const sourceIndex = segments.findIndex(s => s.id === draggedSegmentId);
-    if (sourceIndex === -1 || sourceIndex === targetIndex) {
-      setDraggedSegmentId(null);
+    const segmentId = e.dataTransfer.getData('application/x-segment-id') || e.dataTransfer.getData('text/plain');
+    if (!segmentId) {
       setDragOverIndex(null);
       return;
     }
     
-    onSegmentReorder?.(draggedSegmentId, targetIndex);
+    const sourceIndex = segments.findIndex(s => s.id === segmentId);
+    if (sourceIndex !== -1 && sourceIndex !== targetIndex && sourceIndex !== targetIndex - 1) {
+      // Adjust target index if moving forward
+      const adjustedIndex = targetIndex > sourceIndex ? targetIndex - 1 : targetIndex;
+      onSegmentReorder?.(segmentId, adjustedIndex);
+    } else if (sourceIndex === -1) {
+      // Segment is from another source, just reorder to target position
+      onSegmentReorder?.(segmentId, targetIndex);
+    }
+    
     setDraggedSegmentId(null);
     setDragOverIndex(null);
-  }, [draggedSegmentId, segments, onSegmentReorder]);
+  }, [segments, onSegmentReorder]);
 
   return (
-    <div className="flex flex-col h-full bg-card/50 rounded-lg border border-border">
+    <div data-segment-bin className="flex flex-col h-full bg-card/50 rounded-lg border border-border">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
         <div className="flex items-center gap-2">
