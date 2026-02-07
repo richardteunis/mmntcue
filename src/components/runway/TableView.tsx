@@ -432,11 +432,17 @@ const TableView: React.FC<TableViewProps> = ({
                       </Button>
                     </CollapsibleTrigger>
                     
-                    {/* Segment color indicator */}
-                    <div 
-                      className="w-3 h-3 rounded-full flex-shrink-0"
+                    {/* Segment number */}
+                    <div className="w-8 h-8 rounded flex items-center justify-center text-sm font-bold flex-shrink-0"
                       style={{ backgroundColor: segment.color || '#6366f1' }}
-                    />
+                    >
+                      {segIndex + 1}
+                    </div>
+                    
+                    {/* Segment start time */}
+                    <div className="text-center min-w-[70px] flex-shrink-0">
+                      <div className="font-mono text-sm font-semibold">{formatDuration(segment.startTime)}</div>
+                    </div>
                     
                     {/* Segment name and count */}
                     <div className="flex-1 min-w-0">
@@ -510,42 +516,57 @@ const TableView: React.FC<TableViewProps> = ({
                         <TableHeader>
                           <TableRow className="hover:bg-transparent bg-card">
                             <TableHead className="w-[50px] text-center text-xs bg-card">#</TableHead>
+                            <TableHead className="w-[70px] text-xs bg-card">Start</TableHead>
+                            <TableHead className="w-[70px] text-xs bg-card">Duration</TableHead>
                             <TableHead className="text-xs bg-card">Cue Name</TableHead>
-                            <TableHead className="w-[80px] text-xs bg-card">Duration</TableHead>
                             <TableHead className="w-[60px] text-xs bg-card">Type</TableHead>
                             {!goMode && <TableHead className="text-xs bg-card">Notes</TableHead>}
                             {!goMode && <TableHead className="w-[100px] text-right text-xs bg-card">Actions</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {segmentCues.map((cue, cueIndex) => (
-                            <TableRow
-                              key={cue.id}
-                              className={cn(
-                                "cursor-pointer transition-colors group",
-                                selectedCueId === cue.id && "bg-primary/10 border-l-2 border-l-primary",
-                                cueIndex % 2 === 1 && selectedCueId !== cue.id && "bg-muted/30"
-                              )}
-                              onClick={() => onCueSelect(cue.id, cue)}
-                            >
-                              <TableCell className="text-center font-mono text-xs text-muted-foreground">
-                                {segIndex + 1}.{cueIndex + 1}
-                              </TableCell>
-                              <TableCell className="py-2">
-                                <div className={cn("font-medium", goMode && "text-base")}>
-                                  {cue.name}
-                                </div>
-                              </TableCell>
-                              <TableCell className="py-2">
-                                <div className="font-mono text-xs">
-                                  {formatDuration(timeToSeconds(cue.duration))}
-                                </div>
-                              </TableCell>
-                              <TableCell className="py-2">
-                                <span className="text-xs text-muted-foreground capitalize">
-                                  {CUE_TYPE_LABELS[cue.cue_type || cue.type] || cue.type}
-                                </span>
-                              </TableCell>
+                          {segmentCues.map((cue, cueIndex) => {
+                            const cueStartSeconds = timeToSeconds(cue.start_time);
+                            // Check if this cue starts at the same time as the previous cue
+                            const prevCue = cueIndex > 0 ? segmentCues[cueIndex - 1] : null;
+                            const sameStartAsPrev = prevCue && timeToSeconds(prevCue.start_time) === cueStartSeconds;
+                            
+                            return (
+                              <TableRow
+                                key={cue.id}
+                                className={cn(
+                                  "cursor-pointer transition-colors group",
+                                  selectedCueId === cue.id && "bg-primary/10 border-l-2 border-l-primary",
+                                  cueIndex % 2 === 1 && selectedCueId !== cue.id && "bg-muted/30"
+                                )}
+                                onClick={() => onCueSelect(cue.id, cue)}
+                              >
+                                <TableCell className="text-center font-mono text-xs text-muted-foreground">
+                                  {segIndex + 1}.{cueIndex + 1}
+                                </TableCell>
+                                <TableCell className="py-2">
+                                  <div className={cn(
+                                    "font-mono text-xs",
+                                    sameStartAsPrev && "text-muted-foreground/50"
+                                  )}>
+                                    {sameStartAsPrev ? '↳' : formatDuration(cueStartSeconds)}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-2">
+                                  <div className="font-mono text-xs">
+                                    {formatDuration(timeToSeconds(cue.duration))}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-2">
+                                  <div className={cn("font-medium", goMode && "text-base")}>
+                                    {cue.name}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-2">
+                                  <span className="text-xs text-muted-foreground capitalize">
+                                    {CUE_TYPE_LABELS[cue.cue_type || cue.type] || cue.type}
+                                  </span>
+                                </TableCell>
                               {!goMode && (
                                 <TableCell className="py-2">
                                   <div className="text-xs text-muted-foreground truncate max-w-[200px]">
@@ -593,7 +614,8 @@ const TableView: React.FC<TableViewProps> = ({
                                 </TableCell>
                               )}
                             </TableRow>
-                          ))}
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     )}
@@ -627,11 +649,14 @@ const TableView: React.FC<TableViewProps> = ({
                         <TableCell className="w-[50px] text-center font-mono text-xs text-muted-foreground">
                           —
                         </TableCell>
+                        <TableCell className="w-[70px] py-2">
+                          <div className="font-mono text-xs">{formatDuration(timeToSeconds(cue.start_time))}</div>
+                        </TableCell>
+                        <TableCell className="w-[70px] py-2">
+                          <div className="font-mono text-xs">{formatDuration(timeToSeconds(cue.duration))}</div>
+                        </TableCell>
                         <TableCell className="py-2">
                           <div className="font-medium">{cue.name}</div>
-                        </TableCell>
-                        <TableCell className="w-[80px] py-2">
-                          <div className="font-mono text-xs">{formatDuration(timeToSeconds(cue.duration))}</div>
                         </TableCell>
                         <TableCell className="w-[60px] py-2">
                           <span className="text-xs text-muted-foreground capitalize">
