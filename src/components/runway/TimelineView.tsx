@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { cn } from '@/lib/utils';
+import { cn, getCueColorVariation } from '@/lib/utils';
 import { Play, Pause, SkipForward, RotateCcw, ZoomIn, ZoomOut, Hand, Volume2, Settings2, GripVertical, Magnet, Scissors, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { CueStatus } from '@/hooks/useShowState';
@@ -1072,7 +1072,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                 )}
                 
                 {/* Cue bars */}
-                {cuesByTrack[track.id]?.map(cue => {
+                {cuesByTrack[track.id]?.map((cue, cueIndexInTrack) => {
                   const startX = timeToSeconds(cue.time) * pixelsPerSecond;
                   const width = Math.max(timeToSeconds(cue.duration) * pixelsPerSecond, MIN_CUE_WIDTH);
                   const animation = animatingCues.find(a => a.id === cue.id);
@@ -1086,10 +1086,15 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   const isNextCue = nextCueId === cue.id;
                   const isFired = cueStatus === 'fired' || cueStatus === 'skipped';
                   
-                  // Color priority: custom cue color > segment color > track color
-                  const cueColor = (cue.color && cue.color.startsWith('#')) 
+                  // Color priority: custom cue color > varied track color
+                  // If cue has explicit color, use it; otherwise vary the track color
+                  const trackCuesCount = cuesByTrack[track.id]?.length || 1;
+                  const baseColor = (cue.color && cue.color.startsWith('#')) 
                     ? cue.color 
                     : (cue.segmentColor || track.color);
+                  const cueColor = (cue.color && cue.color.startsWith('#'))
+                    ? cue.color
+                    : getCueColorVariation(baseColor, cueIndexInTrack, trackCuesCount);
                   
                   return (
                     <Tooltip key={cue.id}>

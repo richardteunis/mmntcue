@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { cn } from '@/lib/utils';
+import { cn, getCueColorVariation } from '@/lib/utils';
 import { 
   ChevronDown, 
   ChevronRight, 
@@ -732,6 +732,17 @@ const Timeline: React.FC<TimelineProps> = ({
               const isNextCue = nextCueId === cue.id;
               const isFired = cueStatus === 'fired' || cueStatus === 'skipped';
               
+              // Calculate cue index within its track for color variation
+              const cuesOfSameType = filteredCues.filter(c => c.type === cue.type);
+              const cueIndexInTrack = cuesOfSameType.findIndex(c => c.id === cue.id);
+              const trackColor = TRACK_COLUMNS.find(t => t.id === cue.type)?.color?.replace('bg-', '') || 'runway-teal';
+              const trackColorHex = trackColor === 'runway-teal' ? '#14B8A6' 
+                : trackColor === 'runway-success' ? '#22C55E'
+                : trackColor === 'runway-highlight' ? '#EAB308'
+                : trackColor === 'runway-warning' ? '#F97316'
+                : '#888888';
+              const variedColor = getCueColorVariation(cue.color || trackColorHex, cueIndexInTrack, cuesOfSameType.length);
+              
               return (
                 <TableRow 
                   key={cue.id}
@@ -801,6 +812,11 @@ const Timeline: React.FC<TimelineProps> = ({
                   </TableCell>
                   <TableCell className="py-3 border-r border-border/50">
                     <div className="flex items-center gap-2">
+                      {/* Color indicator for track variation */}
+                      <div 
+                        className="w-3 h-3 rounded-full flex-shrink-0 border border-white/20"
+                        style={{ backgroundColor: variedColor }}
+                      />
                       <GripVertical 
                         size={14} 
                         className="opacity-30 group-hover:opacity-70 cursor-grab active:cursor-grabbing text-muted-foreground" 
