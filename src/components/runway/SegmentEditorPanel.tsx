@@ -10,9 +10,7 @@ import {
   Plus, 
   GripVertical, 
   Trash2, 
-  Palette,
   Clock,
-  X,
   Maximize2,
   Check
 } from 'lucide-react';
@@ -109,29 +107,23 @@ const SegmentEditorPanel: React.FC<SegmentEditorPanelProps> = ({
         className="w-[400px] sm:max-w-[400px] p-0 flex flex-col"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <LayoutList className="h-4 w-4 text-primary" />
-            <SheetTitle className="text-base">Segments</SheetTitle>
-            <span className="text-xs text-muted-foreground">({segments.length})</span>
+        <SheetHeader className="px-4 py-3 border-b border-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <LayoutList className="h-4 w-4 text-primary" />
+              <SheetTitle className="text-base">Segments</SheetTitle>
+              <span className="text-xs text-muted-foreground">({segments.length})</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground mr-2">
+                Total: {formatDuration(totalDuration)}
+              </span>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                <Maximize2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-muted-foreground mr-2">
-              Total: {formatDuration(totalDuration)}
-            </span>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-              <Maximize2 className="h-3.5 w-3.5" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-7 w-7 p-0"
-              onClick={() => onOpenChange(false)}
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
+        </SheetHeader>
 
         {/* Add New Segment */}
         <div className="px-4 py-3 border-b border-border/50 bg-muted/30">

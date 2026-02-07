@@ -14,7 +14,6 @@ import {
   FileText,
   Plus,
   Upload,
-  X,
   Maximize2
 } from 'lucide-react';
 import { useShowAssets } from '@/hooks/useAssets';
@@ -98,36 +97,30 @@ const MediaBinPanel: React.FC<MediaBinPanelProps> = ({
         className="w-[400px] sm:max-w-[400px] p-0 flex flex-col"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <Package className="h-4 w-4 text-primary" />
-            <SheetTitle className="text-base">Media Bin</SheetTitle>
-            {assets.length > 0 && (
-              <span className="text-xs text-muted-foreground">({assets.length})</span>
-            )}
+        <SheetHeader className="px-4 py-3 border-b border-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Package className="h-4 w-4 text-primary" />
+              <SheetTitle className="text-base">Media Bin</SheetTitle>
+              {assets.length > 0 && (
+                <span className="text-xs text-muted-foreground">({assets.length})</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={onAddMedia}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                <Maximize2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={onAddMedia}
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-              <Maximize2 className="h-3.5 w-3.5" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-7 w-7 p-0"
-              onClick={() => onOpenChange(false)}
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
+        </SheetHeader>
 
         {/* Search and Filters */}
         <div className="flex items-center gap-2 px-4 py-2 border-b border-border/50">
