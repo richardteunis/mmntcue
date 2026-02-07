@@ -143,6 +143,7 @@ const Dashboard: React.FC = () => {
     loading: segmentsLoading, 
     createSegment, 
     updateSegment: updateDbSegment, 
+    updateSegmentDuration: updateDbSegmentDuration,
     deleteSegment: deleteDbSegment, 
     reorderSegment: reorderDbSegment 
   } = useSegments(activeShowId);
@@ -1340,29 +1341,33 @@ const Dashboard: React.FC = () => {
                         onSegmentReorder={handleSegmentReorder}
                       />
                     ) : (
-                      <Timeline 
-                        className="flex-1 min-h-0 overflow-hidden"
-                        onCueSelect={handleCueSelect}
+                      <TableView 
+                        cues={cues}
+                        segments={dbSegments}
                         selectedCueId={selectedCueId}
-                        onCueChange={handleCueUpdate}
-                        selectedCue={selectedCue}
-                        cues={timelineCues}
-                        showCountdown={showCountdown}
-                        animatingCues={animatingCues}
+                        onCueSelect={(id, cue) => {
+                          setSelectedCueId(id);
+                          setSelectedCue(cue ? cueToTimelineCue(cue) : null);
+                        }}
+                        onCueUpdate={async (cue) => {
+                          await updateCue(cue.id, {
+                            name: cue.name,
+                            duration: cue.duration,
+                            notes: cue.notes,
+                          });
+                        }}
                         onCueDelete={handleCueDelete}
                         onCueDuplicate={handleCueDuplicate}
-                        onCueReorder={handleCueReorder}
-                        selectedCueIds={selectedCueIds}
-                        onSelectCue={handleSelectCue}
-                        onBulkUpdate={handleBulkUpdate}
-                        onViewportChange={handleViewportScroll}
-                        scrollRef={timelineScrollRef}
-                        onAssetDropOnCue={handleAssetDropOnCue}
-                        onAssetDropToCreate={(asset) => handleAssetDropToCreate(asset, 'audio', 0)}
-                        getCueStatus={showState.getCueStatus}
-                        nextCueId={showState.nextCue?.id}
-                        playbackState={playback}
-                        segments={showSegments}
+                        onEditCue={(cue) => {
+                          setEditingCue(cueToTimelineCue(cue));
+                          setIsAddEditPanelOpen(true);
+                        }}
+                        onSegmentDurationUpdate={async (segmentId, newDuration) => {
+                          await updateDbSegmentDuration(segmentId, newDuration);
+                        }}
+                        showCountdown={showCountdown}
+                        currentTimeSeconds={playback.currentTimeSeconds}
+                        isLive={showMode === 'live'}
                       />
                     )}
                   </div>
