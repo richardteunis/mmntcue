@@ -7,6 +7,7 @@ export interface Segment {
   show_id: string;
   name: string;
   target_duration: number;
+  start_time: number;
   order_index: number;
   color: string | null;
   created_at: string;
@@ -59,6 +60,12 @@ export function useSegments(showId: string | null) {
   const createSegment = useCallback(async (name: string, targetDuration: number) => {
     if (!showId) return null;
 
+    // Calculate start_time based on existing segments
+    const lastSegment = segments[segments.length - 1];
+    const startTime = lastSegment 
+      ? (lastSegment.start_time || 0) + lastSegment.target_duration 
+      : 0;
+
     try {
       const { data, error } = await supabase
         .from('show_segments')
@@ -66,6 +73,7 @@ export function useSegments(showId: string | null) {
           show_id: showId,
           name,
           target_duration: targetDuration,
+          start_time: startTime,
           order_index: segments.length,
         })
         .select()
@@ -84,10 +92,10 @@ export function useSegments(showId: string | null) {
       });
       return null;
     }
-  }, [showId, segments.length, toast]);
+  }, [showId, segments, toast]);
 
   // Update segment
-  const updateSegment = useCallback(async (segmentId: string, updates: { name?: string; target_duration?: number; color?: string }) => {
+  const updateSegment = useCallback(async (segmentId: string, updates: { name?: string; target_duration?: number; color?: string; start_time?: number }) => {
     try {
       const { data, error } = await supabase
         .from('show_segments')

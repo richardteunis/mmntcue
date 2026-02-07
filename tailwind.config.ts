@@ -74,6 +74,17 @@ export default {
 					error: '#EF4444',
 					darkGray: '#374151',
 					mediumGray: '#6B7280',
+				},
+				cue: {
+					standby: 'hsl(var(--cue-standby))',
+					fired: 'hsl(var(--cue-fired))',
+					skipped: 'hsl(var(--cue-skipped))',
+					audio: 'hsl(var(--cue-audio))',
+					video: 'hsl(var(--cue-video))',
+					lights: 'hsl(var(--cue-lights))',
+					stage: 'hsl(var(--cue-stage))',
+					vog: 'hsl(var(--cue-vog))',
+					'segment-marker': 'hsl(var(--cue-segment-marker))',
 				}
 			},
 			borderRadius: {

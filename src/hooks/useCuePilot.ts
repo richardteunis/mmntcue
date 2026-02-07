@@ -256,7 +256,7 @@ export function useCuePilot(showId: string | null, cues: Cue[], segments: Segmen
 
             case 'update':
               await supabase.from('cues')
-                .update(change.changes as Partial<Cue>)
+                .update(change.changes as any)
                 .eq('id', change.id);
               break;
 
