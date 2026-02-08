@@ -12,6 +12,7 @@ interface HomeViewProps {
   onCreateShow: () => void;
   recentShows?: { id: string; name: string; updatedAt: string }[];
   onSelectShow?: (showId: string, showName: string) => void;
+  onOpenROSImport?: () => void;
 }
 
 const SHOW_TEMPLATES = [
@@ -32,7 +33,7 @@ const QUICK_TIPS = [
   { icon: Layers, title: 'Multi-track timeline', description: 'Organize cues by audio, video, lighting & more' },
 ];
 
-const HomeView: React.FC<HomeViewProps> = ({ onCreateShow, recentShows = [], onSelectShow }) => {
+const HomeView: React.FC<HomeViewProps> = ({ onCreateShow, recentShows = [], onSelectShow, onOpenROSImport }) => {
   const [isAIDialogOpen, setIsAIDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [eventName, setEventName] = useState('');
@@ -274,16 +275,19 @@ const HomeView: React.FC<HomeViewProps> = ({ onCreateShow, recentShows = [], onS
               </CardHeader>
             </Card>
 
-            <Card className="group cursor-pointer border border-border hover:border-secondary/50 bg-gradient-to-br from-secondary/5 to-transparent hover:from-secondary/10 transition-all duration-200 opacity-60 pointer-events-none">
+            <Card 
+              className="group cursor-pointer border border-border hover:border-secondary/50 bg-gradient-to-br from-secondary/5 to-transparent hover:from-secondary/10 transition-all duration-200" 
+              onClick={onOpenROSImport}
+            >
               <CardHeader className="pb-2">
-                <div className="h-10 w-10 rounded-lg bg-secondary/10 flex items-center justify-center mb-1">
+                <div className="h-10 w-10 rounded-lg bg-secondary/10 flex items-center justify-center mb-1 group-hover:bg-secondary/20 transition-colors">
                   <FileUp className="h-5 w-5 text-secondary" />
                 </div>
                 <CardTitle className="text-base flex items-center gap-2">
                   Import ROS
-                  <span className="text-[10px] uppercase px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold">Soon</span>
+                  <span className="text-[10px] uppercase px-1.5 py-0.5 rounded-full bg-secondary/20 text-secondary font-semibold">New</span>
                 </CardTitle>
-                <CardDescription className="text-sm">From spreadsheet or file</CardDescription>
+                <CardDescription className="text-sm">From document or spreadsheet</CardDescription>
               </CardHeader>
             </Card>
           </div>

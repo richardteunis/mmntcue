@@ -1115,6 +1115,7 @@ const Dashboard: React.FC = () => {
                 document.dispatchEvent(new CustomEvent('open-create-show-modal'));
               }}
               onSelectShow={handleShowSelect}
+              onOpenROSImport={() => setIsROSImportOpen(true)}
             />
           ) : (
           <div className="flex flex-1 overflow-hidden relative">
