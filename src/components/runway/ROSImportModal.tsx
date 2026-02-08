@@ -8,11 +8,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, FileSpreadsheet, Link2, AlertCircle, Check, X, Save, ChevronRight, Loader2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, Link2, AlertCircle, Check, Save, ChevronRight, Loader2, FileText, Sparkles } from 'lucide-react';
 import { useROSImport } from '@/hooks/useROSImport';
 import { useROSSync } from '@/hooks/useROSSync';
+import { useAIROSImport } from '@/hooks/useAIROSImport';
 import { cn } from '@/lib/utils';
-import type { ColumnMapping, ALL_TARGET_FIELDS } from '@/types/ros';
+import type { ColumnMapping } from '@/types/ros';
 
 interface ROSImportModalProps {
   open: boolean;
@@ -40,7 +41,7 @@ const TARGET_FIELDS: { key: keyof ColumnMapping; label: string; required?: boole
 
 export default function ROSImportModal({ open, onOpenChange, showId, onImportComplete }: ROSImportModalProps) {
   const [step, setStep] = useState<'upload' | 'mapping' | 'preview'>('upload');
-  const [activeTab, setActiveTab] = useState<'csv' | 'sheet'>('csv');
+  const [activeTab, setActiveTab] = useState<'document' | 'csv' | 'sheet'>('document');
   const [templateName, setTemplateName] = useState('');
   const [sheetUrl, setSheetUrl] = useState('');
   const [sheetName, setSheetName] = useState('');
@@ -68,6 +69,16 @@ export default function ROSImportModal({ open, onOpenChange, showId, onImportCom
     fetchSyncSources
   } = useROSSync(showId);
 
+  const {
+    isParsing: isAIParsing,
+    isImporting: isAIImporting,
+    parseResult: aiParseResult,
+    documentName,
+    parseDocument,
+    importItems: importAIItems,
+    reset: resetAI
+  } = useAIROSImport(showId);
+
   useEffect(() => {
     if (open) {
       fetchTemplates();
@@ -89,14 +100,25 @@ export default function ROSImportModal({ open, onOpenChange, showId, onImportCom
     setStep('mapping');
   }, [parseFile]);
 
+  const handleDocumentSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    await parseDocument(file);
+  }, [parseDocument]);
+
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith('.csv')) {
+    if (!file) return;
+
+    if (activeTab === 'document') {
+      await parseDocument(file);
+    } else if (file.name.endsWith('.csv')) {
       await parseFile(file);
       setStep('mapping');
     }
-  }, [parseFile]);
+  }, [activeTab, parseDocument, parseFile]);
 
   const handleMappingChange = useCallback((field: keyof ColumnMapping, value: string) => {
     setMapping(prev => ({ ...prev, [field]: value || undefined }));
@@ -118,14 +140,25 @@ export default function ROSImportModal({ open, onOpenChange, showId, onImportCom
     }
   }, [importRows, onImportComplete, onOpenChange, reset]);
 
+  const handleAIImport = useCallback(async () => {
+    if (!aiParseResult?.items) return;
+    const success = await importAIItems(aiParseResult.items);
+    if (success) {
+      onImportComplete();
+      onOpenChange(false);
+      resetAI();
+    }
+  }, [aiParseResult, importAIItems, onImportComplete, onOpenChange, resetAI]);
+
   const handleClose = useCallback(() => {
     onOpenChange(false);
     reset();
+    resetAI();
     setStep('upload');
     setSheetUrl('');
     setSheetName('');
     setTemplateName('');
-  }, [onOpenChange, reset]);
+  }, [onOpenChange, reset, resetAI]);
 
   const validRowCount = previewRows.filter(r => r.isValid).length;
   const invalidRowCount = previewRows.length - validRowCount;
@@ -139,22 +172,71 @@ export default function ROSImportModal({ open, onOpenChange, showId, onImportCom
             Import Run of Show
           </DialogTitle>
           <DialogDescription>
-            Upload a CSV file or connect a Google Sheet to import your run of show.
+            Upload a document, CSV, or connect a Google Sheet to import your run of show.
           </DialogDescription>
         </DialogHeader>
 
-        {step === 'upload' && (
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'csv' | 'sheet')}>
-            <TabsList className="grid w-full grid-cols-2">
+        {step === 'upload' && !aiParseResult && (
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'document' | 'csv' | 'sheet')}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="document" className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                AI Import
+              </TabsTrigger>
               <TabsTrigger value="csv" className="gap-2">
-                <Upload className="h-4 w-4" />
-                CSV Upload
+                <FileSpreadsheet className="h-4 w-4" />
+                CSV
               </TabsTrigger>
               <TabsTrigger value="sheet" className="gap-2">
                 <Link2 className="h-4 w-4" />
-                Connect Sheet
+                Sheet
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="document" className="mt-4">
+              <div
+                className={cn(
+                  "border-2 border-dashed rounded-lg p-12 text-center transition-colors",
+                  "hover:border-accent/50 hover:bg-accent/5",
+                  isAIParsing && "pointer-events-none opacity-50"
+                )}
+                onDrop={handleDrop}
+                onDragOver={(e) => e.preventDefault()}
+              >
+                {isAIParsing ? (
+                  <>
+                    <Loader2 className="h-12 w-12 mx-auto mb-4 text-accent animate-spin" />
+                    <p className="text-lg font-medium mb-2">Analyzing document with AI...</p>
+                    <p className="text-sm text-muted-foreground">Extracting cues, timing, and technical notes</p>
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-lg font-medium mb-2">Drop your document here</p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Supports TXT, MD, or any text-based document
+                    </p>
+                    <Input
+                      type="file"
+                      accept=".txt,.md,.doc,.docx,.rtf"
+                      onChange={handleDocumentSelect}
+                      className="max-w-xs mx-auto"
+                    />
+                  </>
+                )}
+              </div>
+              <div className="mt-4 p-3 rounded-lg bg-accent/10 border border-accent/20">
+                <div className="flex items-start gap-2">
+                  <Sparkles className="h-4 w-4 text-accent mt-0.5 shrink-0" />
+                  <div className="text-sm">
+                    <p className="font-medium text-accent">AI-Powered Extraction</p>
+                    <p className="text-muted-foreground">
+                      Upload any schedule, agenda, or production document. AI will automatically extract cues, timing, speakers, and technical notes.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
 
             <TabsContent value="csv" className="mt-4">
               <div
@@ -228,7 +310,7 @@ export default function ROSImportModal({ open, onOpenChange, showId, onImportCom
                   <div className="space-y-2 mt-2">
                     {syncSources.map(source => (
                       <div key={source.id} className="flex items-center gap-2 text-sm">
-                        <Check className="h-4 w-4 text-green-500" />
+                        <Check className="h-4 w-4 text-emerald-500" />
                         <span>{source.source_name}</span>
                         <span className="text-muted-foreground">
                           {source.last_synced_at
@@ -257,6 +339,92 @@ export default function ROSImportModal({ open, onOpenChange, showId, onImportCom
               </Button>
             </TabsContent>
           </Tabs>
+        )}
+
+        {/* AI Parse Results Preview */}
+        {aiParseResult && step === 'upload' && (
+          <div className="flex-1 flex flex-col gap-4 min-h-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-accent" />
+                  AI extracted {aiParseResult.items.length} items from {documentName}
+                </p>
+                {aiParseResult.metadata?.show_name && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Detected show: {aiParseResult.metadata.show_name}
+                    {aiParseResult.metadata.event_date && ` • ${aiParseResult.metadata.event_date}`}
+                    {aiParseResult.metadata.venue && ` • ${aiParseResult.metadata.venue}`}
+                  </p>
+                )}
+              </div>
+              <Badge variant="secondary" className="bg-accent/20 text-accent">
+                AI Parsed
+              </Badge>
+            </div>
+
+            <ScrollArea className="flex-1 border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">#</TableHead>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Start Time</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Speaker</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {aiParseResult.items.slice(0, 50).map((item, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {index + 1}
+                      </TableCell>
+                      <TableCell className="font-medium">{item.title}</TableCell>
+                      <TableCell className="font-mono text-sm">{item.start_time || '-'}</TableCell>
+                      <TableCell className="font-mono text-sm">{item.duration || '-'}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {item.item_type || 'cue'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{item.speaker || '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+
+            {aiParseResult.items.length > 50 && (
+              <p className="text-sm text-muted-foreground text-center">
+                Showing first 50 of {aiParseResult.items.length} items
+              </p>
+            )}
+
+            <div className="flex justify-between pt-4 border-t">
+              <Button variant="ghost" onClick={() => { resetAI(); }}>
+                Back
+              </Button>
+              <Button 
+                onClick={handleAIImport} 
+                disabled={isAIImporting || aiParseResult.items.length === 0}
+                className="gap-2"
+              >
+                {isAIImporting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    Import {aiParseResult.items.length} Items
+                    <ChevronRight className="h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         )}
 
         {step === 'mapping' && parseResult && (
